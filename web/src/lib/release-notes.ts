@@ -24,9 +24,9 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     date: "Sep 28, 2026",
     title: "The dashboard opens faster",
     highlights: [
-      "Your home screen appears first; Fleet and Admin data finish loading in the background.",
-      "A first visit downloads less than half the code it used to — chat and the drone game load after.",
-      "Opening the app skips one sign-in check it used to do twice.",
+      "Team chat has moved into the ☰ menu — open it from there. It only connects while it's open.",
+      "Your home screen appears first; Fleet and Admin load their data when you open them.",
+      "A first visit downloads less than half the code it used to.",
     ],
   },
   {

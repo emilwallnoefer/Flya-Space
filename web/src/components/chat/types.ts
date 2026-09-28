@@ -16,6 +16,12 @@ export type ChatWidgetProps = {
   bottomOffsetRem?: number;
   /** When true, this user can mark feature/change requests as done. */
   isAdmin?: boolean;
+  /**
+   * Menu mode: the widget opens straight to the panel, renders no floating
+   * pill, and calls this once the panel has finished closing so the caller can
+   * unmount it — which is what tears down the realtime subscription.
+   */
+  onClose?: () => void;
 };
 
 export type SendState = "idle" | "sending";

@@ -102,7 +102,7 @@ export function ChatWidget(props: ChatWidgetProps) {
           otherwise visibly stick out behind the bottom-right corner of the
           floating "iPhone" panel. */}
       <AnimatePresence>
-        {!open ? (
+        {!open && !props.onClose ? (
           <m.button
             key="chat-trigger"
             type="button"
@@ -137,7 +137,7 @@ export function ChatWidget(props: ChatWidgetProps) {
         {liveAnnouncement}
       </div>
 
-      <AnimatePresence>
+      <AnimatePresence onExitComplete={props.onClose}>
         {open ? (
           <>
             <m.div

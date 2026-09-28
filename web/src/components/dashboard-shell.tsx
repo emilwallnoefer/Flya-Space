@@ -31,10 +31,12 @@ const AdminPanel = dynamic(
   () => import("@/components/admin-panel").then((m) => m.AdminPanel),
   { ssr: false, loading: PanelLoading },
 );
-// Team chat is a floating pill, never the first thing anyone needs, and it is
-// what pulls supabase-js (realtime included) into the browser — the largest
-// single library the dashboard ships. Loading it after hydration keeps all of
-// that off the first paint; the pill simply appears a moment later.
+// Team chat lives in the burger menu and is mounted only while it is open. It
+// is what pulls supabase-js (realtime included) into the browser, and while
+// mounted it holds a postgres_changes subscription — a standing cost on the
+// database for every open dashboard tab, which the 0.5 GB instance cannot
+// spare (it swaps, and the first queries after a quiet spell stall for
+// seconds). Nothing chat-related loads or connects until someone clicks it.
 const ChatWidget = dynamic(() => import("@/components/chat-widget").then((m) => m.ChatWidget), {
   ssr: false,
 });
@@ -202,8 +204,7 @@ export function DashboardShell({
   // The floating chat pill shares the bottom-right corner with the first-launch
   // and "What's new" popups. Their height varies per release, so measure the
   // visible one and lift the pill just above it instead of guessing a fixed rem.
-  const bottomPopupRef = useRef<HTMLDivElement | null>(null);
-  const [bottomPopupHeight, setBottomPopupHeight] = useState(0);
+  const [chatOpen, setChatOpen] = useState(false);
   const [settingsReadmeOpenToken, setSettingsReadmeOpenToken] = useState(0);
   const [gmailStatus, setGmailStatus] = useState<{ connected: boolean; gmail_email?: string | null }>(
     initialSettings?.gmail ?? { connected: false },
@@ -349,33 +350,6 @@ export function DashboardShell({
     [activeModule, availableModules],
   );
 
-  const bottomPopupVisible = showProgramReadmePrompt || showWhatsNew;
-
-  useEffect(() => {
-    // No reset when the popup hides: `chatBottomOffsetRem` already ignores the
-    // measurement while `bottomPopupVisible` is false, so zeroing it here only
-    // bought an extra render (and was a synchronous setState in an effect).
-    if (!bottomPopupVisible) return;
-    const el = bottomPopupRef.current;
-    if (!el) return;
-    const update = () => setBottomPopupHeight(el.offsetHeight);
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [bottomPopupVisible, showProgramReadmePrompt, showWhatsNew]);
-
-  // Popups sit at bottom-4 (16px); park the chat pill 12px above the measured
-  // top edge. Until the first measurement lands, fall back to the old fixed
-  // offsets so the pill never starts on top of the popup.
-  const chatBottomOffsetRem = !bottomPopupVisible
-    ? 1
-    : bottomPopupHeight > 0
-      ? (16 + bottomPopupHeight + 12) / 16
-      : showProgramReadmePrompt
-        ? 11
-        : 12;
-
   function dismissProgramReadmePrompt() {
     setShowProgramReadmePrompt(false);
     try {
@@ -427,6 +401,10 @@ export function DashboardShell({
             if (module !== activeModule) playUiSound("switchWhoosh");
             switchModule(module);
             setShowComposer(true);
+          }}
+          onOpenChat={() => {
+            playUiSound("switchWhoosh");
+            setChatOpen(true);
           }}
         />
 
@@ -630,11 +608,10 @@ export function DashboardShell({
         </AnimatePresence>
 
       </section>
-      <ChatWidget bottomOffsetRem={chatBottomOffsetRem} isAdmin={isAdmin} />
+      {chatOpen ? <ChatWidget isAdmin={isAdmin} onClose={() => setChatOpen(false)} /> : null}
       <OfflineGameCard />
       {showProgramReadmePrompt ? (
         <div
-          ref={bottomPopupRef}
           className="fixed bottom-4 right-4 z-[120] w-[min(92vw,22rem)] rounded-xl border border-glass/20 bg-surface/92 p-3 shadow-xl backdrop-blur-xl"
         >
           <div className="flex items-start justify-between gap-3">
@@ -669,7 +646,6 @@ export function DashboardShell({
       ) : null}
       {showWhatsNew ? (
         <div
-          ref={bottomPopupRef}
           className="fixed bottom-4 right-4 z-[120] w-[min(92vw,22rem)] rounded-xl border border-glass/20 bg-surface/92 p-3 shadow-xl backdrop-blur-xl"
         >
           <div className="flex items-start justify-between gap-3">
