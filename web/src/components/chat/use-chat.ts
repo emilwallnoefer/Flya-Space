@@ -44,8 +44,10 @@ import { useChatVotes } from "./hooks/use-chat-votes";
  *  votes and undo-delete live in `./hooks/`; this orchestrator owns the message
  *  list, scroll/unread bookkeeping, composer, and the optimistic
  *  send/edit/mark-done flows, and wires the pieces together. */
-export function useChat({ bottomOffsetRem = 1, isAdmin = false }: ChatWidgetProps) {
-  const [open, setOpen] = useState(false);
+export function useChat({ bottomOffsetRem = 1, isAdmin = false, onClose }: ChatWidgetProps) {
+  // In menu mode (`onClose` given) the widget is mounted by a click, so it
+  // starts open; the floating-pill mode starts closed.
+  const [open, setOpen] = useState(onClose != null);
   const [messages, setMessages] = useState<ChatMessageRow[]>([]);
   const [presence, setPresence] = useState<ChatPresenceUser[]>([]);
   const [draft, setDraft] = useState("");

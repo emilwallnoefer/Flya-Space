@@ -121,31 +121,33 @@ export default async function DashboardPage({
 
   // Admin tables (users + current-week overview). Gated on the email-based admin
   // check (equivalent to guardAdmin) before touching the service-role client.
-  const adminUsersPromise: Promise<AdminListedUser[] | null> = isAdmin
+  // Fleet and Admin are prefetched only when the URL opens them directly
+  // (`?module=`, e.g. the fleet reminder mails). Otherwise they sit behind a
+  // click and fetch their own data when opened: building them on every load
+  // was database work for panels most visits never open, and the database is
+  // a 0.5 GB instance that swaps — every query it can skip is memory it does
+  // not have to page back in.
+  const opensAdmin = requestedModule === "admin";
+  const opensFleet = requestedModule === "fleet";
+
+  const adminUsersPromise: Promise<AdminListedUser[] | null> = isAdmin && opensAdmin
     ? fetchAdminUsers(createAdminClient()).catch((error) => {
         console.error("Dashboard SSR: fetchAdminUsers failed", error);
         return null;
       })
     : Promise.resolve(null);
   const adminOverviewPromise: Promise<AdminTimeOverview | null> =
-    isAdmin && weekStartDate
+    isAdmin && opensAdmin && weekStartDate
       ? fetchAdminTimeOverview(createAdminClient(), weekStartDate).catch((error) => {
           console.error("Dashboard SSR: fetchAdminTimeOverview failed", error);
           return null;
         })
       : Promise.resolve(null);
 
-  // Fleet was the one panel that fetched its own board on open, so opening the
-  // calendar meant downloading its code and only THEN asking for data — on a
-  // fresh function instance that meant a cold start and a first TLS handshake
-  // to the database before anything appeared. Prefetching it here rides along
-  // with the prefetches above at no extra wall-clock cost, and the panel paints
-  // seeded.
-  //
-  // `autoLink: true` matters: it is the onboarding step that matches a person to
-  // their legacy holder name, and it used to run on the panel's own fetch. Now
-  // that the panel no longer makes one, this is where it has to happen.
-  const initialFleetPromise: Promise<FleetBoardPayload | null> = userId
+  // `autoLink: true` matters: it is the onboarding step that matches a person
+  // to their legacy holder name. When the board is not prefetched, the panel's
+  // own GET /api/fleet runs it instead, so it still happens on first open.
+  const initialFleetPromise: Promise<FleetBoardPayload | null> = userId && opensFleet
     ? buildFleetBoard(
         createAdminClient(),
         {
@@ -162,14 +164,13 @@ export default async function DashboardPage({
       })
     : Promise.resolve(null);
 
-  const [initialWeek, initialSettings, initialAdminUsers, initialAdminOverview, initialFleet] =
-    await Promise.all([
-      initialWeekPromise,
-      initialSettingsPromise,
-      adminUsersPromise,
-      adminOverviewPromise,
-      initialFleetPromise,
-    ]);
+  // Only what the landing view needs holds the first paint: the week (the
+  // Time landing for sales/HR) and the Gmail status (the Mail landing's navbar
+  // pill). When Fleet or Admin was requested, their promises are handed to the
+  // shell unawaited — they are the slow ones (the fleet board runs the holder
+  // auto-link and then its own queries, the admin list pages through the Auth
+  // admin API) — and stream in after the page is already on screen.
+  const [initialWeek, initialSettings] = await Promise.all([initialWeekPromise, initialSettingsPromise]);
 
   return (
     <DashboardShell
@@ -178,9 +179,9 @@ export default async function DashboardPage({
       isAdmin={isAdmin}
       initialWeek={initialWeek}
       initialSettings={initialSettings}
-      initialAdminUsers={initialAdminUsers}
-      initialAdminOverview={initialAdminOverview}
-      initialFleet={initialFleet}
+      initialAdminUsers={adminUsersPromise}
+      initialAdminOverview={adminOverviewPromise}
+      initialFleet={initialFleetPromise}
       initialModule={requestedModule}
     />
   );

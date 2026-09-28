@@ -2,9 +2,8 @@
 
 import { AnimatePresence, m } from "framer-motion";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuthNavbar } from "@/components/auth-navbar";
-import { ChatWidget } from "@/components/chat-widget";
 import { OfflineGameCard } from "@/components/offline-game-card";
 import { MailComposerPanel } from "@/components/mail-composer/mail-composer-panel";
 import { useMailComposer } from "@/components/mail-composer/use-mail-composer";
@@ -32,11 +31,41 @@ const AdminPanel = dynamic(
   () => import("@/components/admin-panel").then((m) => m.AdminPanel),
   { ssr: false, loading: PanelLoading },
 );
+// Team chat lives in the burger menu and is mounted only while it is open. It
+// is what pulls supabase-js (realtime included) into the browser, and while
+// mounted it holds a postgres_changes subscription — a standing cost on the
+// database for every open dashboard tab, which the 0.5 GB instance cannot
+// spare (it swaps, and the first queries after a quiet spell stall for
+// seconds). Nothing chat-related loads or connects until someone clicks it.
+const ChatWidget = dynamic(() => import("@/components/chat-widget").then((m) => m.ChatWidget), {
+  ssr: false,
+});
 // Fleet is beta and behind a click for everyone, so it stays out of the first bundle.
 const FleetPanel = dynamic(
   () => import("@/components/fleet/fleet-panel").then((m) => m.FleetPanel),
   { ssr: false, loading: PanelLoading },
 );
+
+// Fleet and Admin sit behind a click, so the server does not hold the first
+// paint for their data: it streams in as a promise after the shell is already
+// on screen. The panel suspends only if it is opened before the data arrives.
+function StreamedFleetPanel({ board }: { board: Promise<FleetBoardResponse | null> }) {
+  return <FleetPanel initialBoard={use(board)} />;
+}
+
+function StreamedAdminPanel({
+  canManageUsers,
+  users,
+  overview,
+}: {
+  canManageUsers: boolean;
+  users: Promise<AdminListedUser[] | null>;
+  overview: Promise<AdminTimeOverview | null>;
+}) {
+  return <AdminPanel canManageUsers={canManageUsers} initialUsers={use(users)} initialOverview={use(overview)} />;
+}
+
+const RESOLVED_NULL: Promise<null> = Promise.resolve(null);
 
 type DashboardShellProps = {
   email: string;
@@ -45,11 +74,11 @@ type DashboardShellProps = {
   initialWeek?: WeekResponse | null;
   /** SSR-prefetched Settings data (Gmail status + travel mapping + signature). */
   initialSettings?: InitialSettingsData | null;
-  /** SSR-prefetched admin data, present only for admins. */
-  initialAdminUsers?: AdminListedUser[] | null;
-  initialAdminOverview?: AdminTimeOverview | null;
-  /** SSR-prefetched Fleet board, so the calendar paints without a fetch. */
-  initialFleet?: FleetBoardResponse | null;
+  /** SSR-prefetched admin data, streamed (resolves to null for non-admins). */
+  initialAdminUsers?: Promise<AdminListedUser[] | null>;
+  initialAdminOverview?: Promise<AdminTimeOverview | null>;
+  /** SSR-prefetched Fleet board, streamed so the calendar paints without a fetch. */
+  initialFleet?: Promise<FleetBoardResponse | null>;
   /**
    * Module to open on load, parsed server-side from `?module=`. It is what makes
    * a reload (and the fleet reminder deep links) land on the view the user left,
@@ -137,9 +166,9 @@ export function DashboardShell({
   isAdmin = false,
   initialWeek = null,
   initialSettings = null,
-  initialAdminUsers = null,
-  initialAdminOverview = null,
-  initialFleet = null,
+  initialAdminUsers = RESOLVED_NULL,
+  initialAdminOverview = RESOLVED_NULL,
+  initialFleet = RESOLVED_NULL,
   initialModule = null,
 }: DashboardShellProps) {
   // The role is decided entirely on the server: it lives in `app_metadata`,
@@ -175,8 +204,7 @@ export function DashboardShell({
   // The floating chat pill shares the bottom-right corner with the first-launch
   // and "What's new" popups. Their height varies per release, so measure the
   // visible one and lift the pill just above it instead of guessing a fixed rem.
-  const bottomPopupRef = useRef<HTMLDivElement | null>(null);
-  const [bottomPopupHeight, setBottomPopupHeight] = useState(0);
+  const [chatOpen, setChatOpen] = useState(false);
   const [settingsReadmeOpenToken, setSettingsReadmeOpenToken] = useState(0);
   const [gmailStatus, setGmailStatus] = useState<{ connected: boolean; gmail_email?: string | null }>(
     initialSettings?.gmail ?? { connected: false },
@@ -322,33 +350,6 @@ export function DashboardShell({
     [activeModule, availableModules],
   );
 
-  const bottomPopupVisible = showProgramReadmePrompt || showWhatsNew;
-
-  useEffect(() => {
-    // No reset when the popup hides: `chatBottomOffsetRem` already ignores the
-    // measurement while `bottomPopupVisible` is false, so zeroing it here only
-    // bought an extra render (and was a synchronous setState in an effect).
-    if (!bottomPopupVisible) return;
-    const el = bottomPopupRef.current;
-    if (!el) return;
-    const update = () => setBottomPopupHeight(el.offsetHeight);
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [bottomPopupVisible, showProgramReadmePrompt, showWhatsNew]);
-
-  // Popups sit at bottom-4 (16px); park the chat pill 12px above the measured
-  // top edge. Until the first measurement lands, fall back to the old fixed
-  // offsets so the pill never starts on top of the popup.
-  const chatBottomOffsetRem = !bottomPopupVisible
-    ? 1
-    : bottomPopupHeight > 0
-      ? (16 + bottomPopupHeight + 12) / 16
-      : showProgramReadmePrompt
-        ? 11
-        : 12;
-
   function dismissProgramReadmePrompt() {
     setShowProgramReadmePrompt(false);
     try {
@@ -400,6 +401,10 @@ export function DashboardShell({
             if (module !== activeModule) playUiSound("switchWhoosh");
             switchModule(module);
             setShowComposer(true);
+          }}
+          onOpenChat={() => {
+            playUiSound("switchWhoosh");
+            setChatOpen(true);
           }}
         />
 
@@ -568,13 +573,17 @@ export function DashboardShell({
                   {activeModule === "time" ? (
                     <TimeTrackerPanel initialWeek={prefetchedWeek} />
                   ) : activeModule === "fleet" ? (
-                    <FleetPanel initialBoard={initialFleet} />
+                    <Suspense fallback={<PanelLoading />}>
+                      <StreamedFleetPanel board={initialFleet} />
+                    </Suspense>
                   ) : activeModule === "admin" ? (
-                    <AdminPanel
-                      canManageUsers={canManageUsers}
-                      initialUsers={initialAdminUsers}
-                      initialOverview={initialAdminOverview}
-                    />
+                    <Suspense fallback={<PanelLoading />}>
+                      <StreamedAdminPanel
+                        canManageUsers={canManageUsers}
+                        users={initialAdminUsers}
+                        overview={initialAdminOverview}
+                      />
+                    </Suspense>
                   ) : activeModule === "settings" ? (
                     // SSR-prefetched settings seed both the navbar Gmail pill above
                     // and the panel itself, so opening Settings fires none of its
@@ -599,11 +608,10 @@ export function DashboardShell({
         </AnimatePresence>
 
       </section>
-      <ChatWidget bottomOffsetRem={chatBottomOffsetRem} isAdmin={isAdmin} />
+      {chatOpen ? <ChatWidget isAdmin={isAdmin} onClose={() => setChatOpen(false)} /> : null}
       <OfflineGameCard />
       {showProgramReadmePrompt ? (
         <div
-          ref={bottomPopupRef}
           className="fixed bottom-4 right-4 z-[120] w-[min(92vw,22rem)] rounded-xl border border-glass/20 bg-surface/92 p-3 shadow-xl backdrop-blur-xl"
         >
           <div className="flex items-start justify-between gap-3">
@@ -638,7 +646,6 @@ export function DashboardShell({
       ) : null}
       {showWhatsNew ? (
         <div
-          ref={bottomPopupRef}
           className="fixed bottom-4 right-4 z-[120] w-[min(92vw,22rem)] rounded-xl border border-glass/20 bg-surface/92 p-3 shadow-xl backdrop-blur-xl"
         >
           <div className="flex items-start justify-between gap-3">
