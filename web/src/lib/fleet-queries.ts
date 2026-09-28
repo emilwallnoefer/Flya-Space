@@ -8,6 +8,7 @@ import {
   holderLabelMatchesPerson,
   isBlocking,
   isBookable,
+  mondayOf,
   normalizeHolderLabel,
   orderQueue,
   type ReliabilityScore,
@@ -257,9 +258,9 @@ export async function fetchFleetBoard(
 ): Promise<FleetBoard> {
   const now = args.now ?? new Date();
   const today = todayInZurich(now);
-  // Default the calendar to start today, not at a week boundary: the question
-  // people open this to answer is "what can I take now".
-  const windowStart = args.windowStart ?? today;
+  // The window always starts on the Monday of the requested (or current) week,
+  // so a Friday still shows the whole week and the board rolls over on Monday.
+  const windowStart = mondayOf(args.windowStart ?? today);
   const windowDays = args.windowDays ?? DEFAULT_WINDOW_DAYS;
 
   const [

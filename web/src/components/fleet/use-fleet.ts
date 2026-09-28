@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { NoticeTone } from "@/components/ui";
-import { addDays, isBookable, toDateKey } from "@/lib/fleet-rules";
+import { addDays, isBookable, mondayOf, toDateKey } from "@/lib/fleet-rules";
 import type {
   FleetAsset,
   FleetAssetCategory,
@@ -21,8 +21,11 @@ import type {
 
 /** Four weeks of day columns: a month of planning that still fits a laptop. */
 export const WINDOW_DAYS = 28;
-/** How far the ← / → buttons jump. */
-export const WINDOW_STEP_DAYS = 14;
+/**
+ * How far the ← / → buttons jump. The window always starts on a Monday, so the
+ * current week stays whole until the next one begins.
+ */
+export const WINDOW_STEP_DAYS = 7;
 
 /** Where the "show finished bookings" preference is remembered, per browser. */
 const SHOW_PAST_KEY = "fleet:show-past";
@@ -44,7 +47,7 @@ export function useFleet(initialBoard: FleetBoardResponse | null) {
 
   const [tab, setTab] = useState<FleetTab>("calendar");
   const [windowStart, setWindowStart] = useState<string>(
-    () => initialBoard?.window_start ?? toDateKey(new Date()),
+    () => initialBoard?.window_start ?? mondayOf(toDateKey(new Date())),
   );
   const [categoryFilter, setCategoryFilter] = useState<FleetAssetCategory | "all">("all");
   /**

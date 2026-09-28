@@ -20,6 +20,16 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-09-28-fleet-weeks",
+    date: "Sep 28, 2026",
+    title: "The Fleet calendar shows whole weeks",
+    highlights: [
+      "The calendar always starts on Monday, so on a Friday you still see the whole week.",
+      "It moves on to the next week when Monday comes, and ← / → step one week at a time.",
+      "Every day column is the same width again.",
+    ],
+  },
+  {
     version: "2026-09-23-elios-offline",
     date: "Sep 23, 2026",
     title: "Lost your connection? Fly instead",
