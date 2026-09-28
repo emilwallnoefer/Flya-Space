@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { EliosGame } from "@/components/elios-game";
+import { LazyEliosGame, preloadEliosGame } from "@/components/elios-game-lazy";
 import { flushPendingScore } from "@/lib/elios-score-sync";
 import { readOnline, readOnlineOnServer, subscribeOnline } from "@/lib/online-status";
 
@@ -31,6 +31,12 @@ export function OfflineGameCard() {
       void flushPendingScore();
     };
     void flushPendingScore();
+    // The game is not in the dashboard's first bundle. Fetch it once the page
+    // is idle so it is already cached when the connection drops — by then it
+    // is too late to download it.
+    // (Safari has no requestIdleCallback; a timeout is close enough there.)
+    if ("requestIdleCallback" in window) window.requestIdleCallback(preloadEliosGame, { timeout: 5000 });
+    else setTimeout(preloadEliosGame, 2000);
     window.addEventListener("offline", onOffline);
     window.addEventListener("online", onOnline);
     return () => {
@@ -68,7 +74,7 @@ export function OfflineGameCard() {
           ✕
         </button>
       </div>
-      <EliosGame className="mt-3" leaderboard />
+      <LazyEliosGame className="mt-3" leaderboard />
     </div>
   );
 }

@@ -8,7 +8,7 @@ import {
   TRAINING_DISCIPLINES,
 } from "@/lib/training-disciplines";
 import type { UserRole } from "@/lib/user-role";
-import { EliosGame } from "@/components/elios-game";
+import { LazyEliosGame } from "@/components/elios-game-lazy";
 import { AssetChecklist } from "./asset-checklist";
 import { ComposerChoiceRow, composerSegmentClass, ProgressiveField } from "./composer-fields";
 import { LivePreview } from "./live-preview";
@@ -566,7 +566,7 @@ export function MailComposerPanel({
               <p className="text-[11px] uppercase tracking-[0.15em] text-accent-soft/75">
                 {loading ? "Writing your draft" : "While you wait"}
               </p>
-              <EliosGame className="mt-2" leaderboard paused={mailIsWriting} />
+              <LazyEliosGame className="mt-2" leaderboard paused={mailIsWriting} />
             </div>
           }
         />

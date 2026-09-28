@@ -4,7 +4,6 @@ import { AnimatePresence, m } from "framer-motion";
 import dynamic from "next/dynamic";
 import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuthNavbar } from "@/components/auth-navbar";
-import { ChatWidget } from "@/components/chat-widget";
 import { OfflineGameCard } from "@/components/offline-game-card";
 import { MailComposerPanel } from "@/components/mail-composer/mail-composer-panel";
 import { useMailComposer } from "@/components/mail-composer/use-mail-composer";
@@ -32,6 +31,13 @@ const AdminPanel = dynamic(
   () => import("@/components/admin-panel").then((m) => m.AdminPanel),
   { ssr: false, loading: PanelLoading },
 );
+// Team chat is a floating pill, never the first thing anyone needs, and it is
+// what pulls supabase-js (realtime included) into the browser — the largest
+// single library the dashboard ships. Loading it after hydration keeps all of
+// that off the first paint; the pill simply appears a moment later.
+const ChatWidget = dynamic(() => import("@/components/chat-widget").then((m) => m.ChatWidget), {
+  ssr: false,
+});
 // Fleet is beta and behind a click for everyone, so it stays out of the first bundle.
 const FleetPanel = dynamic(
   () => import("@/components/fleet/fleet-panel").then((m) => m.FleetPanel),

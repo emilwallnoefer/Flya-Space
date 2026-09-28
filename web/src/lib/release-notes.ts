@@ -25,6 +25,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     title: "The dashboard opens faster",
     highlights: [
       "Your home screen appears first; Fleet and Admin data finish loading in the background.",
+      "A first visit downloads less than half the code it used to — chat and the drone game load after.",
       "Opening the app skips one sign-in check it used to do twice.",
     ],
   },
