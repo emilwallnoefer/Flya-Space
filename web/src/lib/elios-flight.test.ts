@@ -204,6 +204,7 @@ describe("what you see is what you hit", () => {
 });
 
 describe("every kind stays flyable", () => {
+  // 20 s timeout: ~2.4 s alone, but the full parallel suite on a busy machine pushed it past the 5 s default.
   it("keeps a MIN_PASSAGE-tall way through, unbroken from one side to the other", () => {
     // Sweep the drone across the obstacle a column at a time. A passage only
     // counts if it connects to one that was reachable in the previous column,
@@ -229,7 +230,7 @@ describe("every kind stays flyable", () => {
         }
       }
     }
-  });
+  }, 20000);
 
   it("never buries the opening in the floor or ceiling", () => {
     for (const kind of OBSTACLE_KINDS) {
