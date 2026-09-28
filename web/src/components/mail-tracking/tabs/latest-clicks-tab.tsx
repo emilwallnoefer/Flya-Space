@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FreshnessPill } from "@/components/freshness-pill";
-import { Badge, Button, Notice } from "@/components/ui";
+import { Badge, ButtonLink, Notice } from "@/components/ui";
 import { fmtAbsolute, fmtRelative, parseUserAgent, pickTrustedHost } from "../format";
 import type { LatestClick, LatestClicksResponse } from "../types";
 
@@ -62,6 +62,8 @@ export function LatestClicksTab({ showBots }: { showBots: boolean }) {
   }, [fetchPage]);
 
   const hasMore = clicks.length < total;
+  const csvParams = new URLSearchParams({ days: String(days), format: "csv" });
+  if (showBots) csvParams.set("include_bots", "1");
 
   return (
     <section className="space-y-4">
@@ -84,18 +86,14 @@ export function LatestClicksTab({ showBots }: { showBots: boolean }) {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <Button
+          <ButtonLink
             variant="glass-quiet"
             size="sm"
             disabled={clicks.length === 0}
-            onClick={() => {
-              const params = new URLSearchParams({ days: String(days), format: "csv" });
-              if (showBots) params.set("include_bots", "1");
-              window.location.href = `/api/admin/mail-tracking/clicks?${params.toString()}`;
-            }}
+            href={`/api/admin/mail-tracking/clicks?${csvParams.toString()}`}
           >
             Export CSV
-          </Button>
+          </ButtonLink>
           <FreshnessPill updatedAt={updatedAt} loading={loading} />
         </div>
       </div>
