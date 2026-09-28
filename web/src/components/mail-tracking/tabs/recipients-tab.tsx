@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FreshnessPill } from "@/components/freshness-pill";
-import { Badge, Button, Notice } from "@/components/ui";
+import { Badge, ButtonLink, Notice } from "@/components/ui";
 import { StatTile } from "../stat-tile";
 import { fmtAbsolute, fmtRelative, pickTrustedHost } from "../format";
 import type {
@@ -170,16 +170,9 @@ export function RecipientsTab({ showBots }: { showBots: boolean }) {
             className="w-full rounded-lg border border-glass/15 bg-panel/60 px-3 py-1.5 text-xs text-ink placeholder:text-ink-5 focus:border-amber-300/40 focus:outline-none"
           />
         </div>
-        <Button
-          variant="glass-quiet"
-          size="sm"
-          disabled={recipients.length === 0}
-          onClick={() => {
-            window.location.href = csvUrl;
-          }}
-        >
+        <ButtonLink variant="glass-quiet" size="sm" disabled={recipients.length === 0} href={csvUrl}>
           Export CSV
-        </Button>
+        </ButtonLink>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">

@@ -265,6 +265,10 @@ export function useSettings(
       const response = await fetch("/api/account/delete", { method: "POST" });
       const payload = (await response.json()) as { ok?: boolean; error?: string };
       if (!response.ok || !payload.ok) throw new Error(payload.error || "Could not delete account.");
+      // A full load, not router.push: like sign-out (POST /logout → 303), it
+      // must drop the client router cache, which still holds pages rendered
+      // for the account that no longer exists.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = "/login";
     } catch (err) {
       setError((err as Error).message || "Could not delete account.");

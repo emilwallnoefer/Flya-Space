@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Notice } from "@/components/ui";
+import { ButtonLink, Notice } from "@/components/ui";
 import {
   useCallback,
   useEffect,
@@ -410,16 +410,14 @@ export function AdminPanel({ canManageUsers = true, initialUsers = null, initial
                     />
                     <span className="ml-auto text-xs text-ink-3/80">{weekRangeLabel}</span>
                     <FreshnessPill updatedAt={overviewUpdatedAt} loading={overviewLoading} />
-                    <Button
+                    <ButtonLink
                       variant="glass-quiet"
                       size="sm"
                       disabled={!overview || overview.users.length === 0}
-                      onClick={() => {
-                        window.location.href = `/api/admin/time-overview?week=${encodeURIComponent(weekStart)}&format=csv`;
-                      }}
+                      href={`/api/admin/time-overview?week=${encodeURIComponent(weekStart)}&format=csv`}
                     >
                       Export CSV
-                    </Button>
+                    </ButtonLink>
                   </div>
 
                   {overviewError ? (

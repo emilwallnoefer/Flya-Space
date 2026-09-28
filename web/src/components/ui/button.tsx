@@ -50,3 +50,34 @@ export function Button({ variant = "glass", size = "md", className, type = "butt
     />
   );
 }
+
+export type ButtonLinkProps = ComponentPropsWithRef<"a"> & {
+  href: string;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  /** Anchors cannot be disabled, so a disabled ButtonLink renders a disabled Button. */
+  disabled?: boolean;
+};
+
+/**
+ * Button styling on a plain `<a>`, for actions that are a full document load by
+ * design: a file download from an API route, or leaving an error boundary for a
+ * fresh copy of the page. In-app navigation belongs to `next/link`.
+ */
+export function ButtonLink({ variant = "glass", size = "md", disabled, className, children, ...props }: ButtonLinkProps) {
+  if (disabled) {
+    return (
+      <Button variant={variant} size={size} className={className} disabled>
+        {children}
+      </Button>
+    );
+  }
+  return (
+    <a
+      className={cn("ease-fluid inline-block text-center", SIZE_CLASSES[size], VARIANT_CLASSES[variant], FOCUS_CLASSES, className)}
+      {...props}
+    >
+      {children}
+    </a>
+  );
+}

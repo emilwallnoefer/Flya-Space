@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Button } from "@/components/ui";
+import { Button, ButtonLink } from "@/components/ui";
 
 /** Route-level error boundary for the onboarding segment. */
 export default function OnboardingError({
@@ -28,9 +28,9 @@ export default function OnboardingError({
           <Button variant="accent" size="lg" onClick={reset}>
             Try again
           </Button>
-          <Button variant="glass" size="lg" onClick={() => window.location.assign("/dashboard")}>
+          <ButtonLink variant="glass" size="lg" href="/dashboard">
             Back to dashboard
-          </Button>
+          </ButtonLink>
         </div>
       </div>
     </main>
