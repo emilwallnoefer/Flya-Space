@@ -20,6 +20,15 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-09-28-faster-launch",
+    date: "Sep 28, 2026",
+    title: "The dashboard opens faster",
+    highlights: [
+      "Your home screen appears first; Fleet and Admin data finish loading in the background.",
+      "Opening the app skips one sign-in check it used to do twice.",
+    ],
+  },
+  {
     version: "2026-09-28-fleet-weeks",
     date: "Sep 28, 2026",
     title: "The Fleet calendar shows whole weeks",

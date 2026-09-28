@@ -2,7 +2,7 @@
 
 import { AnimatePresence, m } from "framer-motion";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuthNavbar } from "@/components/auth-navbar";
 import { ChatWidget } from "@/components/chat-widget";
 import { OfflineGameCard } from "@/components/offline-game-card";
@@ -38,6 +38,27 @@ const FleetPanel = dynamic(
   { ssr: false, loading: PanelLoading },
 );
 
+// Fleet and Admin sit behind a click, so the server does not hold the first
+// paint for their data: it streams in as a promise after the shell is already
+// on screen. The panel suspends only if it is opened before the data arrives.
+function StreamedFleetPanel({ board }: { board: Promise<FleetBoardResponse | null> }) {
+  return <FleetPanel initialBoard={use(board)} />;
+}
+
+function StreamedAdminPanel({
+  canManageUsers,
+  users,
+  overview,
+}: {
+  canManageUsers: boolean;
+  users: Promise<AdminListedUser[] | null>;
+  overview: Promise<AdminTimeOverview | null>;
+}) {
+  return <AdminPanel canManageUsers={canManageUsers} initialUsers={use(users)} initialOverview={use(overview)} />;
+}
+
+const RESOLVED_NULL: Promise<null> = Promise.resolve(null);
+
 type DashboardShellProps = {
   email: string;
   initialRole: UserRole | null;
@@ -45,11 +66,11 @@ type DashboardShellProps = {
   initialWeek?: WeekResponse | null;
   /** SSR-prefetched Settings data (Gmail status + travel mapping + signature). */
   initialSettings?: InitialSettingsData | null;
-  /** SSR-prefetched admin data, present only for admins. */
-  initialAdminUsers?: AdminListedUser[] | null;
-  initialAdminOverview?: AdminTimeOverview | null;
-  /** SSR-prefetched Fleet board, so the calendar paints without a fetch. */
-  initialFleet?: FleetBoardResponse | null;
+  /** SSR-prefetched admin data, streamed (resolves to null for non-admins). */
+  initialAdminUsers?: Promise<AdminListedUser[] | null>;
+  initialAdminOverview?: Promise<AdminTimeOverview | null>;
+  /** SSR-prefetched Fleet board, streamed so the calendar paints without a fetch. */
+  initialFleet?: Promise<FleetBoardResponse | null>;
   /**
    * Module to open on load, parsed server-side from `?module=`. It is what makes
    * a reload (and the fleet reminder deep links) land on the view the user left,
@@ -137,9 +158,9 @@ export function DashboardShell({
   isAdmin = false,
   initialWeek = null,
   initialSettings = null,
-  initialAdminUsers = null,
-  initialAdminOverview = null,
-  initialFleet = null,
+  initialAdminUsers = RESOLVED_NULL,
+  initialAdminOverview = RESOLVED_NULL,
+  initialFleet = RESOLVED_NULL,
   initialModule = null,
 }: DashboardShellProps) {
   // The role is decided entirely on the server: it lives in `app_metadata`,
@@ -568,13 +589,17 @@ export function DashboardShell({
                   {activeModule === "time" ? (
                     <TimeTrackerPanel initialWeek={prefetchedWeek} />
                   ) : activeModule === "fleet" ? (
-                    <FleetPanel initialBoard={initialFleet} />
+                    <Suspense fallback={<PanelLoading />}>
+                      <StreamedFleetPanel board={initialFleet} />
+                    </Suspense>
                   ) : activeModule === "admin" ? (
-                    <AdminPanel
-                      canManageUsers={canManageUsers}
-                      initialUsers={initialAdminUsers}
-                      initialOverview={initialAdminOverview}
-                    />
+                    <Suspense fallback={<PanelLoading />}>
+                      <StreamedAdminPanel
+                        canManageUsers={canManageUsers}
+                        users={initialAdminUsers}
+                        overview={initialAdminOverview}
+                      />
+                    </Suspense>
                   ) : activeModule === "settings" ? (
                     // SSR-prefetched settings seed both the navbar Gmail pill above
                     // and the panel itself, so opening Settings fires none of its

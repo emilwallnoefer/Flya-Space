@@ -162,14 +162,14 @@ export default async function DashboardPage({
       })
     : Promise.resolve(null);
 
-  const [initialWeek, initialSettings, initialAdminUsers, initialAdminOverview, initialFleet] =
-    await Promise.all([
-      initialWeekPromise,
-      initialSettingsPromise,
-      adminUsersPromise,
-      adminOverviewPromise,
-      initialFleetPromise,
-    ]);
+  // Only what the landing view needs holds the first paint: the week (the
+  // Time landing for sales/HR) and the Gmail status (the Mail landing's navbar
+  // pill). Fleet and Admin are behind a click, and they are the slow ones —
+  // the fleet board runs the holder auto-link and then its own queries, the
+  // admin list pages through the Auth admin API — so their promises are handed
+  // to the shell unawaited and stream in after the page is already on screen.
+  // All of them were started above, so they still run in parallel.
+  const [initialWeek, initialSettings] = await Promise.all([initialWeekPromise, initialSettingsPromise]);
 
   return (
     <DashboardShell
@@ -178,9 +178,9 @@ export default async function DashboardPage({
       isAdmin={isAdmin}
       initialWeek={initialWeek}
       initialSettings={initialSettings}
-      initialAdminUsers={initialAdminUsers}
-      initialAdminOverview={initialAdminOverview}
-      initialFleet={initialFleet}
+      initialAdminUsers={adminUsersPromise}
+      initialAdminOverview={adminOverviewPromise}
+      initialFleet={initialFleetPromise}
       initialModule={requestedModule}
     />
   );
