@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Input, Select } from "@/components/ui";
-import { addDays, toDateKey } from "@/lib/fleet-rules";
+import { addDays, mondayOf } from "@/lib/fleet-rules";
 import {
   HOLDER_ANY,
   HOLDER_NOBODY,
@@ -50,6 +50,7 @@ export function FleetToolbar({
     setSearch,
     windowStart,
     setWindowStart,
+    today,
     showPast,
     toggleShowPast,
   } = state;
@@ -169,7 +170,7 @@ export function FleetToolbar({
               >
                 ←
               </Button>
-              <Button size="xs" variant="ghost" onClick={() => setWindowStart(toDateKey(new Date()))}>
+              <Button size="xs" variant="ghost" onClick={() => setWindowStart(mondayOf(today))}>
                 Today
               </Button>
               <Button
@@ -182,14 +183,14 @@ export function FleetToolbar({
               </Button>
             </div>
 
-            {/* Stepping 14 days at a time makes older history unreachable in
-                practice — a year back is 26 clicks. Jump straight there. */}
+            {/* Stepping a week at a time makes older history unreachable in
+                practice — a year back is 52 clicks. Jump straight there. */}
             <div className="w-[8.75rem] shrink-0">
               <Input
                 type="date"
                 value={windowStart}
                 onChange={(event) => {
-                  if (event.target.value) setWindowStart(event.target.value);
+                  if (event.target.value) setWindowStart(mondayOf(event.target.value));
                 }}
                 aria-label="Jump to date"
                 className="px-2 py-1.5 text-xs [color-scheme:dark]"

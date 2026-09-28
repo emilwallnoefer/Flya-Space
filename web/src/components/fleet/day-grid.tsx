@@ -143,7 +143,20 @@ export function DayGrid({
 
   return (
     <div className="overflow-x-auto rounded-xl border border-glass/10 bg-glass/[0.03]">
-      <table className="w-full border-separate border-spacing-0 text-left" style={{ minWidth: `${14 + days.length * 2.1}rem` }}>
+      {/* `table-fixed` + an explicit colgroup: with the auto layout the browser
+          sized each day column to fit whatever sat above it, so the month-band
+          headers (colSpan) stretched the days under a short band and squeezed
+          the rest. Fixed layout splits the width evenly across every day. */}
+      <table
+        className="w-full table-fixed border-separate border-spacing-0 text-left"
+        style={{ minWidth: `${13 + days.length * 2.1}rem` }}
+      >
+        <colgroup>
+          <col className="w-52" />
+          {days.map((day) => (
+            <col key={day.key} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             <th

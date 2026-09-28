@@ -4,6 +4,7 @@ import { checkRateLimit, createRateLimitHeaders, getClientIp } from "@/lib/secur
 import { DEFAULT_WINDOW_DAYS, todayInZurich } from "@/lib/fleet-queries";
 import { buildDemoBoard } from "@/lib/fleet-demo";
 import { buildFleetBoard } from "@/lib/fleet-board";
+import { mondayOf } from "@/lib/fleet-rules";
 import { parseBoardWindow } from "./window";
 import { isMissingFleetTable } from "./missing-table";
 import { postSchema, type PostPayload } from "./handlers/schemas";
@@ -70,7 +71,7 @@ export async function GET(request: Request) {
           viewerId: viewer.id,
           viewerName: viewer.email?.split("@")[0] ?? "You",
           today,
-          windowStart: windowStart ?? today,
+          windowStart: mondayOf(windowStart ?? today),
           windowDays,
         }),
         is_admin: viewer.isAdmin,

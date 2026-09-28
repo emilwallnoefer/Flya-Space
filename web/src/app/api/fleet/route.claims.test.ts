@@ -53,7 +53,8 @@ describe("the write hands back the refreshed board", () => {
       "?start=2026-10-01&days=14",
     );
     const board = res.body.board as { window_start: string; window_days: number };
-    expect(board.window_start).toBe("2026-10-01");
+    // Snapped to that week's Monday: the board always shows whole weeks.
+    expect(board.window_start).toBe("2026-09-28");
     expect(board.window_days).toBe(14);
   });
 
