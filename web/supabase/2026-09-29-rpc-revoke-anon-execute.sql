@@ -103,27 +103,35 @@ do $$
 declare
   leaked text;
 begin
-  select string_agg(p.proname, ', ' order by p.proname) into leaked
-  from pg_proc p
-  join pg_namespace n on n.oid = p.pronamespace
-  where n.nspname = 'public'
-    and p.prosecdef
-    and p.prorettype <> 'trigger'::regtype
-    and has_function_privilege('anon', p.oid, 'EXECUTE');
+  -- `leaked := (select ...)`, not `select ... into leaked`: the Supabase SQL
+  -- editor reads SELECT INTO as creating a table and splices an
+  -- `ALTER TABLE leaked ENABLE ROW LEVEL SECURITY` into the middle of this
+  -- block, which breaks the dollar quoting.
+  leaked := (
+    select string_agg(p.proname, ', ' order by p.proname)
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.prosecdef
+      and p.prorettype <> 'trigger'::regtype
+      and has_function_privilege('anon', p.oid, 'EXECUTE')
+  );
   if leaked is not null then
     raise exception 'anon can still execute SECURITY DEFINER functions: %', leaked;
   end if;
 
-  select string_agg(p.proname, ', ' order by p.proname) into leaked
-  from pg_proc p
-  join pg_namespace n on n.oid = p.pronamespace
-  where n.nspname = 'public'
-    and p.proname in (
-      'tt_admin_overview', 'tt_workspace_summary', 'mail_recipient_recent',
-      'mail_recipient_week', 'mail_recipient_search', 'mail_overview_stats',
-      'mail_click_timeline', 'mail_link_leaderboard'
-    )
-    and has_function_privilege('authenticated', p.oid, 'EXECUTE');
+  leaked := (
+    select string_agg(p.proname, ', ' order by p.proname)
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname in (
+        'tt_admin_overview', 'tt_workspace_summary', 'mail_recipient_recent',
+        'mail_recipient_week', 'mail_recipient_search', 'mail_overview_stats',
+        'mail_click_timeline', 'mail_link_leaderboard'
+      )
+      and has_function_privilege('authenticated', p.oid, 'EXECUTE')
+  );
   if leaked is not null then
     raise exception 'authenticated can still execute admin functions: %', leaked;
   end if;
