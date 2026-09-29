@@ -79,7 +79,7 @@ Each item: **what** · **impact** · **fix** · **effort**.
 - **Impact:** anyone holding the public anon key (it is in every page's JS) reads every employee's weekly hours and overtime balance, and every external mail recipient's name, company, sends and click history. RLS does not help — definer functions bypass it.
 - **Fix:** `supabase/2026-09-29-rpc-revoke-anon-execute.sql` revokes from `public, anon, authenticated` (admin RPCs) or `public, anon` (the two user RPCs), and changes the default privileges so future functions start with no EXECUTE for anyone. A closing `do` block raises if anon can still run any definer function, so a clean apply is itself the verification. `rls-smoke.mjs` check 7 probes all ten with the bare anon key and passes only on `42501`.
 - **Lesson:** run-3's T0.6 fix revoked `tt_resolve_audit_user_id` from all three roles — the right pattern — but the same bug in the other RPCs was not looked for, and the live verification only checked the two functions it had touched. Grep for the pattern, not the instance.
-- **Effort:** XS. **Applied by hand?** ⚠️ yes, required — not yet applied.
+- **Effort:** XS. **✅ APPLIED and VERIFIED 2026-09-29** in the SQL editor (the closing guard block passed). Re-probed live with the bare anon key afterwards: all ten functions answer `401 / 42501`.
 
 ### Tier 1 — Hardening (defense-in-depth)
 
