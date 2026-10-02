@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { forbidHeldAccount } from "@/lib/app-access";
 
 type ProgressRow = {
   progress: Record<string, number> | null;
@@ -15,6 +16,8 @@ export async function GET() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const held = forbidHeldAccount(user);
+  if (held) return held;
 
   const { data, error } = await supabase
     .from("onboarding_progress")
@@ -45,6 +48,8 @@ export async function PUT(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const held = forbidHeldAccount(user);
+  if (held) return held;
 
   const parsed = putBodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

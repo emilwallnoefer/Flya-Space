@@ -28,6 +28,8 @@ export type FakeUser = {
   id: string;
   email: string | null;
   user_metadata?: Record<string, unknown> | null;
+  /** Where the role lives (service-role writable only). See lib/app-access.ts. */
+  app_metadata?: Record<string, unknown> | null;
 };
 
 type Filter =

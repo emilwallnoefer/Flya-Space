@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { sanitizeText } from "@/lib/security/input-sanitize";
 import { z } from "zod";
 import { MAIL_SIGNATURE_DEFAULT_NAME } from "@/lib/mail-signature-presets";
+import { forbidHeldAccount } from "@/lib/app-access";
 
 const bodySchema = z.object({
   signature_name: z.string().min(1).max(120),
@@ -25,6 +26,8 @@ export async function GET() {
   } = await supabase.auth.getUser();
 
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const held = forbidHeldAccount(user);
+  if (held) return held;
   return NextResponse.json({ signature_name: readNameFromMetadata(user.user_metadata) });
 }
 
@@ -35,6 +38,8 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const held = forbidHeldAccount(user);
+  if (held) return held;
 
   const json = await request.json();
   const parsed = bodySchema.safeParse(json);

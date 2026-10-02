@@ -50,6 +50,9 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const viewer = await resolveViewer();
   if (!viewer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!viewer.hasAccess) {
+    return NextResponse.json({ error: "Your account is waiting for an admin to assign a role." }, { status: 403 });
+  }
 
   const boardWindow = parseBoardWindow(request, DEFAULT_WINDOW_DAYS);
   if (!boardWindow) return NextResponse.json({ error: "Invalid start date." }, { status: 400 });
@@ -85,6 +88,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const viewer = await resolveViewer();
   if (!viewer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!viewer.hasAccess) {
+    return NextResponse.json({ error: "Your account is waiting for an admin to assign a role." }, { status: 403 });
+  }
 
   const clientIp = getClientIp(request);
   const limit = await checkRateLimit(`fleet-write:${viewer.id}:${clientIp}`, {

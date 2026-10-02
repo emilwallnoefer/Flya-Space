@@ -12,6 +12,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { forbidHeldAccount } from "@/lib/app-access";
 
 type TrackingMeta = {
   recipient_name: string;
@@ -68,6 +69,8 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const held = forbidHeldAccount(user);
+  if (held) return held;
 
   const clientIp = getClientIp(request);
   const limitResult = await checkRateLimit(`gmail-draft:${user.id}:${clientIp}`, {

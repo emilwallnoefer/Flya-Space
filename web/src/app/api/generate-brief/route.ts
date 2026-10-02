@@ -8,6 +8,7 @@ import { checkRateLimit, createRateLimitHeaders, getClientIp } from "@/lib/secur
 import { MAIL_SIGNATURE_DEFAULT_NAME } from "@/lib/mail-signature-presets";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { forbidHeldAccount } from "@/lib/app-access";
 
 /**
  * Brief mode endpoint. Mirrors /api/generate but generates the email with Claude (Opus 4.8)
@@ -45,6 +46,8 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const held = forbidHeldAccount(user);
+  if (held) return held;
 
   try {
     const rawPayload = await request.json();

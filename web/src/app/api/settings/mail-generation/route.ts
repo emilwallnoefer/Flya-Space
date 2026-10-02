@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { forbidHeldAccount } from "@/lib/app-access";
 
 /**
  * Persists which mail generator the composer uses:
@@ -26,6 +27,8 @@ export async function GET() {
   } = await supabase.auth.getUser();
 
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const held = forbidHeldAccount(user);
+  if (held) return held;
   return NextResponse.json({ mode: readModeFromMetadata(user.user_metadata) });
 }
 
@@ -36,6 +39,8 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const held = forbidHeldAccount(user);
+  if (held) return held;
 
   const json = await request.json();
   const parsed = bodySchema.safeParse(json);

@@ -89,6 +89,16 @@ Each item: **what** · **impact** · **fix** · **effort**.
 - **Still open (run-4 F3):** the hook stops outsiders, but a held or role-revoked *employee* still reaches every non-admin route and the `to authenticated` RLS policies. That needs a server-side role check.
 - **Effort:** XS.
 
+**T0.12 — The role gate was a page, not a boundary** _(MEDIUM, run-4 F3)_
+- **What:** `dashboard/page.tsx` showed held accounts (no role, not admin) the role gate, and `/settings` redirected them — but no API route and no team-wide RLS policy checked for a role. A held account (an unapproved new hire, or an employee whose role an admin removed with `role: null`) could still call every module's API and read team chat, attachments and the fleet tables directly with its own token.
+- **Impact:** after T0.11 this is limited to `@flyability.com` accounts, but "remove their role" did not lock anyone out.
+- **Fix:**
+  - `src/lib/app-access.ts` — `hasAppAccess()` / `forbidHeldAccount()`, called after the session check in every non-admin route (16 handlers in 12 files, plus fleet, both Gmail OAuth legs, the certificate request and the time-tracker week read). Left open by decision: `/api/elios-score` (the game is on the role gate) and `/api/account/delete`.
+  - `supabase/2026-10-02-require-role.sql` — `public.has_app_role()` (reads the role from the token) added to the chat, votes, attachment and fleet policies. Admins pass by having a role; the database cannot see `ADMIN_EMAILS`.
+  - `lib/supabase/middleware.ts` reissues the session token when its role differs from the live one, so a role change reaches the database on the next page load instead of after up to an hour.
+- **Verified:** unit tests for the access rule and a held-account fleet test; the migration tested on a local Postgres with Supabase-style roles (a member keeps every read and write, a held or unknown-role account gets none, re-run safe).
+- **Effort:** S. **Applied by hand?** ⚠️ the SQL file — required.
+
 ### Tier 1 — Hardening (defense-in-depth)
 
 **T1.1 — Security headers.** `next.config.ts` sets none. Add a `headers()` block: `Content-Security-Policy` (the mitigating layer for T0.2), `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`. Effort: S (CSP tuning is the only real work).

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { sanitizeColumnLetter } from "@/lib/security/input-sanitize";
 import { z } from "zod";
+import { forbidHeldAccount } from "@/lib/app-access";
 
 type TravelMapping = {
   clientColumn: string;
@@ -39,6 +40,8 @@ export async function GET() {
   } = await supabase.auth.getUser();
 
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const held = forbidHeldAccount(user);
+  if (held) return held;
   return NextResponse.json(readMappingFromUserMetadata(user.user_metadata));
 }
 
@@ -49,6 +52,8 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const held = forbidHeldAccount(user);
+  if (held) return held;
 
   const payload = await request.json();
   const parsed = travelMappingSchema.safeParse(payload);
@@ -108,6 +113,8 @@ export async function DELETE() {
   } = await supabase.auth.getUser();
 
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const held = forbidHeldAccount(user);
+  if (held) return held;
 
   // updateUser merges metadata shallowly, so overwrite the key with null —
   // the travel fetch treats a non-object mapping as "no personal mapping".
