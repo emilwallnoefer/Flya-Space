@@ -20,6 +20,16 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-02-flight-data-drive",
+    date: "Oct 2, 2026",
+    title: "Flight data links go through Google Drive",
+    highlights: [
+      "Paste a Google Drive link in the flight-data field — the field now says so.",
+      "Mail tracking counts training links and Drive flight-data links. Other links still work in the mail but aren't counted.",
+      "Tracked links you've already sent keep working.",
+    ],
+  },
+  {
     version: "2026-09-28-faster-launch",
     date: "Sep 28, 2026",
     title: "The dashboard opens faster",
