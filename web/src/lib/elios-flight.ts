@@ -34,7 +34,6 @@ import {
   FIRST_EVENT,
   LEL_FALL,
   LEL_TIME,
-  LOST_TIME,
   RTS_SPEED,
   RTS_TIME,
   SIGNAL_LAG,
@@ -116,15 +115,16 @@ export const MODE_SPECS: Record<
 const mps = (metres: number) => metres / METRES_PER_UNIT;
 
 /**
- * The run speeds up as it goes: 1.5 m/s at the start, +0.06 m/s for every
- * obstacle cleared, up to 6 m/s about 75 obstacles in. Obstacles stay the same
+ * The run speeds up as it goes: 1.5 m/s at the start, +0.03 m/s for every
+ * obstacle cleared, up to 4.5 m/s about 100 obstacles in — fast enough to be
+ * hard, slow enough that ATTI's drift stays flyable. Obstacles stay the same
  * distance apart, so only the time to read one shrinks. The cap is held down
  * by the double web frame, whose second hole has to stay reachable at the
  * fastest the run gets (the test suite checks it).
  */
 export const START_SPEED = mps(1.5);
-export const SPEED_PER_OBSTACLE = mps(0.06);
-export const MAX_SPEED = mps(6);
+export const SPEED_PER_OBSTACLE = mps(0.03);
+export const MAX_SPEED = mps(4.5);
 /** How quickly the forward speed settles on a new pace. */
 export const SPEED_TAU = 0.8;
 
@@ -305,8 +305,8 @@ export type Obstacle = {
   solids: readonly Solid[];
   /** Scored once, when the drone is fully past the trailing edge. */
   passed: boolean;
-  /** A cable hanging from the roof in the gap behind this obstacle, this long. */
-  cable?: number;
+  /** A cable hanging from the roof in the gap behind this obstacle. */
+  cable?: Cable;
   /** The middle of the widest way through, for the autopilot. */
   lane?: number;
   /** A pick-up floating in the gap behind this obstacle. */
@@ -314,6 +314,47 @@ export type Obstacle = {
 };
 
 export type Pickup = { kind: PickupKind; y: number; taken: boolean };
+
+/**
+ * A cable hanging from the roof: a pendulum, `length` long, swinging at
+ * `angle` radians from straight down (positive swings toward the drone's
+ * side, which is behind it) with angular speed `spin`. The drone's own
+ * downwash pulls a nearby cable toward it — the way a loose line gets sucked
+ * into a real drone's propellers.
+ */
+export type Cable = { length: number; angle: number; spin: number };
+
+/** Where a cable's free end is, in world units. */
+export function cableTip(o: Pick<Obstacle, "x" | "width">, cable: Cable): Vec {
+  return [gapX(o) - Math.sin(cable.angle) * cable.length, Math.cos(cable.angle) * cable.length];
+}
+
+/** How strongly gravity swings a cable back (world units per second squared), and how quickly a swing dies. */
+export const CABLE_GRAVITY = 700;
+export const CABLE_DAMPING = 0.7;
+/** The downwash reaches this far from the drone's centre, and pulls this hard right underneath it. */
+export const SUCTION_REACH = 46;
+export const SUCTION = 900;
+
+/** One step of a cable's swing, with the drone's downwash pulling at it. */
+export function swingCable(o: Pick<Obstacle, "x" | "width">, cable: Cable, droneY: number, dt: number): Cable {
+  const [tx, ty] = cableTip(o, cable);
+  // Gravity pulls the end back under the anchor.
+  let alpha = -(CABLE_GRAVITY / cable.length) * Math.sin(cable.angle) - CABLE_DAMPING * cable.spin;
+  // The downwash: a pull on the end toward the drone, fading out to its reach.
+  const dx = DRONE_X - tx;
+  const dy = droneY - ty;
+  const d = Math.hypot(dx, dy);
+  if (d < SUCTION_REACH && d > 1e-6) {
+    const pull = SUCTION * (1 - d / SUCTION_REACH);
+    // Only the part of the pull along the arc swings it; the cable takes the rest.
+    const along = (dx / d) * -Math.cos(cable.angle) + (dy / d) * -Math.sin(cable.angle);
+    alpha += (pull * along) / cable.length;
+  }
+  const spin = cable.spin + alpha * dt;
+  const angle = Math.max(-1.3, Math.min(1.3, cable.angle + spin * dt));
+  return { ...cable, angle, spin };
+}
 
 /** The middle of the clear gap behind an obstacle, where a cable hangs. */
 export function gapX(o: Pick<Obstacle, "x" | "width">): number {
@@ -1029,6 +1070,10 @@ export type GameState = {
   light: number;
   /** Id of the obstacle the next pick-up is built on. */
   nextPickupAt: number;
+  /** Seconds left of being knocked about after hitting something; the sticks do nothing meanwhile. */
+  stun: number;
+  /** What the drone hit this step and recovered from; null on a clean step. */
+  bump: Impact | null;
 };
 
 type LoggedInput = { at: number; climb: boolean; descend: boolean };
@@ -1060,6 +1105,8 @@ export function createGame(startZone = 0, events = false): GameState {
     auto: 0,
     light: 0,
     nextPickupAt: PICKUP_EVERY,
+    stun: 0,
+    bump: null,
   };
 }
 
@@ -1079,13 +1126,6 @@ export function gustAt(mode: FlightMode, elapsed: number): number {
   const g = MODE_SPECS[mode].gust;
   if (g === 0) return 0;
   return g * wander(Number.isFinite(elapsed) ? elapsed : 0, 0.4);
-}
-
-/** Cancel Return-to-Signal inside its countdown: fly on over the weak link instead. */
-export function cancelRts(state: GameState): GameState {
-  const e = state.event;
-  if (!e || e.kind !== "SIGNAL" || e.phase !== "lost") return state;
-  return { ...state, event: { ...e, phase: "active", t: 0, escalates: false } };
 }
 
 /** A press from `idle` launches the run; everything after it is held input to `stepGame`. */
@@ -1130,14 +1170,18 @@ export function stepGame(state: GameState, input: StepInput): GameState {
     : state.inputLog;
 
   let s: GameState = { ...state, inputLog };
-  for (let i = 0; i < steps && s.status === "flying"; i += 1) s = subStep(s, input, dt / steps);
-  return s;
+  let bump: Impact | null = null;
+  for (let i = 0; i < steps && s.status === "flying"; i += 1) {
+    s = subStep(s, input, dt / steps);
+    bump ??= s.bump;
+  }
+  return { ...s, bump };
 }
 
 /** What the aircraft actually receives: over a weak link, what the pilot did a moment ago. */
 function receivedInput(state: GameState, input: StepInput): Pick<StepInput, "climb" | "descend"> {
   const e = state.event;
-  const lagging = !!e && e.kind === "SIGNAL" && (e.phase === "active" || e.phase === "lost");
+  const lagging = !!e && e.kind === "SIGNAL" && e.phase === "active";
   if (!lagging) return input;
   let late: LoggedInput | undefined;
   for (const entry of state.inputLog) if (entry.at <= state.elapsed - SIGNAL_LAG) late = entry;
@@ -1206,6 +1250,9 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     const next = state.obstacles.find((o) => o.x + o.width > DRONE_X - DRONE_RADIUS);
     const lane = next?.lane ?? WORLD_HEIGHT / 2;
     velocity = Math.max(-170, Math.min(170, (lane - state.y) * 7));
+  } else if (state.stun > 0) {
+    // Knocked about: the aircraft sinks while it gets itself back together.
+    velocity = state.velocity + (KNOCK_DROP - state.velocity) * (1 - Math.exp(-dt / 0.1));
   } else {
     // Altitude hold in every mode: up and down ask for a climb rate, nothing
     // asks to stay. ATTI gets there slowly and wanders on its own; a draft
@@ -1223,7 +1270,12 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
   if (!flownForYou) speed += gustAt(mode, elapsed) * dt;
   speed = returning ? -RTS_SPEED : Math.max(0, speed);
 
-  let obstacles = state.obstacles.map((o) => ({ ...o, x: o.x - speed * dt })).filter((o) => o.x + o.width > -4);
+  let obstacles = state.obstacles
+    .map((o) => {
+      const moved = { ...o, x: o.x - speed * dt };
+      return o.cable ? { ...moved, cable: swingCable(moved, o.cable, state.y, dt) } : moved;
+    })
+    .filter((o) => o.x + o.width > -4);
 
   // ---- New obstacles, with what the run is putting in the gaps.
   let { buildZone, buildCount, nextId, nextPickupAt } = state;
@@ -1243,7 +1295,10 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     const built = buildObstacle(kind, input.placeDraw, seed);
     const draw = input.eventDraw ?? 0.5;
     // While cables hang in this stretch, every gap gets one.
-    const cable = event?.kind === "CABLES" ? 40 + detailDraw(input.placeDraw) * (MAX_CABLE - 40) : undefined;
+    const cable: Cable | undefined =
+      event?.kind === "CABLES"
+        ? { length: 40 + detailDraw(input.placeDraw) * (MAX_CABLE - 40), angle: 0, spin: (detailDraw(draw) - 0.5) * 1.2 }
+        : undefined;
     let pickup: Pickup | undefined;
     if (state.events && nextId >= nextPickupAt && !cable) {
       pickup = { kind: draw < 0.6 ? "REPEAT" : "LIGHT", y: 50 + detailDraw(draw) * 100, taken: false };
@@ -1307,13 +1362,13 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
         if (ev.t >= WARNING_TIME) ev = { ...ev, phase: "active", t: 0 };
       } else if (ev.phase === "active") {
         ev = { ...ev, left: ev.left - Math.max(0, speed) * dt };
+        // The link drops out entirely, and the aircraft starts flying itself
+        // back the same instant — no countdown to watch on a black screen.
         if (ev.kind === "SIGNAL" && ev.escalates && ev.left < EVENT_SPECS.SIGNAL.length / 2) {
-          ev = { ...ev, phase: "lost", t: 0 };
+          ev = { ...ev, phase: "rts", t: 0 };
         } else if (ev.left <= 0) {
           ev = null;
         }
-      } else if (ev.phase === "lost") {
-        if (ev.t >= LOST_TIME) ev = { ...ev, phase: "rts", t: 0 };
       } else if (ev.t >= RTS_TIME) {
         // Back in signal: the pilot has the sticks again, standing still.
         ev = null;
@@ -1328,15 +1383,28 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     else if (lel >= 1) ended = { what: "GAS", x: DRONE_X, y };
   }
 
-  // ---- Contact. No cage to bounce off: touching anything ends the run.
+  // ---- Contact. Steel or the roof knocks the drone away and down, and it
+  // recovers; the floor, or a cable in the propellers, brings it down for good.
   // Repeat Flight and Return-to-Signal fly a safe path, so only stay inside the world.
-  let impact: Impact | null;
+  let impact: Impact | null = ended;
+  let bump: Impact | null = null;
+  let stun = Math.max(0, state.stun - dt);
   if (flownForYou) {
     y = Math.min(Math.max(y, DRONE_RADIUS + 1), WORLD_HEIGHT - DRONE_RADIUS - 1);
-    impact = ended;
-  } else {
-    // A cable is as fatal as steel.
-    impact = ended ?? cableAt(y, obstacles) ?? contactAt(y, obstacles);
+  } else if (!impact) {
+    impact = cableAt(y, obstacles) ?? (hitsGround(y) ? { what: "FLOOR", x: DRONE_X, y: WORLD_HEIGHT } : null);
+    if (!impact) {
+      const knocked = knockAway(y, obstacles);
+      if (knocked.bump) {
+        ({ y, obstacles, bump } = knocked);
+        velocity = KNOCK_DROP;
+        stun = KNOCK_TIME;
+        // It loses its way forward too, and has to pick the pace back up.
+        speed *= KNOCK_SPEED;
+        // Knocked into the floor is the end of it.
+        if (hitsGround(y)) impact = { what: "FLOOR", x: DRONE_X, y: WORLD_HEIGHT };
+      }
+    }
   }
   const crashed = impact !== null;
 
@@ -1365,18 +1433,57 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     auto,
     light,
     nextPickupAt,
+    stun: crashed ? 0 : stun,
+    bump,
   };
 }
 
-/** A cable the cage has caught, if any. */
-function cableAt(y: number, obstacles: readonly Obstacle[]): Impact | null {
+/** How fast a knocked drone sinks, how long the sticks are dead, and how much forward speed it keeps. */
+export const KNOCK_DROP = 85;
+export const KNOCK_TIME = 0.45;
+export const KNOCK_SPEED = 0.35;
+
+/**
+ * Push the drone clear of whatever steel (or roof) it is touching. The drone
+ * cannot move sideways — the world moves past it — so a push along x is
+ * applied to the obstacles instead. A few passes cover being wedged between
+ * two surfaces. Reports the first thing touched as `bump`.
+ */
+function knockAway(y0: number, obstacles0: Obstacle[]): { y: number; obstacles: Obstacle[]; bump: Impact | null } {
+  let y = y0;
+  let obstacles = obstacles0;
+  let bump: Impact | null = null;
+  for (let pass = 0; pass < 4; pass += 1) {
+    const contact = contactAt(y, obstacles);
+    if (!contact || contact.what === "FLOOR") break;
+    bump ??= contact;
+    if (contact.what === "CEILING") {
+      y = DRONE_RADIUS + 0.5;
+      continue;
+    }
+    // Normal from the contact point to the drone's centre; a centre already
+    // inside the steel has no usable normal, so back straight out of it.
+    const dx = DRONE_X - contact.x;
+    const dy = y - contact.y;
+    const d = Math.hypot(dx, dy);
+    const [nx, ny, depth] = d > 1e-6 ? [dx / d, dy / d, DRONE_RADIUS - d] : [-1, 0, DRONE_RADIUS];
+    const push = depth + 0.5 + KNOCK_GAP;
+    y += ny * push;
+    if (nx !== 0) obstacles = obstacles.map((o) => ({ ...o, x: o.x - nx * push }));
+  }
+  return { y: Math.max(y, DRONE_RADIUS + 0.5), obstacles, bump };
+}
+
+/** Clear air a knock leaves between the drone and what it hit, so it is not straight back in. */
+const KNOCK_GAP = 3;
+
+/** A cable caught in the propellers, if any: anywhere along it, not just its end. */
+export function cableAt(y: number, obstacles: readonly Pick<Obstacle, "x" | "width" | "cable">[]): Impact | null {
   for (const o of obstacles) {
     if (!o.cable) continue;
-    const cx = gapX(o);
-    if (Math.abs(cx - DRONE_X) > DRONE_RADIUS) continue;
-    // The cage's lowest point on the cable's line, against the cable's end.
-    const reach = Math.sqrt(Math.max(0, DRONE_RADIUS ** 2 - (cx - DRONE_X) ** 2));
-    if (y - reach < o.cable) return { what: "CABLE", x: cx, y: Math.min(o.cable, y) };
+    const ax = gapX(o);
+    const [tx, ty] = cableTip(o, o.cable);
+    if (distanceToSegment(DRONE_X, y, ax, 0, tx, ty) < DRONE_RADIUS) return { what: "CABLE", x: tx, y: Math.min(ty, y) };
   }
   return null;
 }

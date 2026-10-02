@@ -7,6 +7,7 @@ import {
   ZONE_NAMES,
   clearance,
   AUTO_TIME,
+  KNOCK_TIME,
   LIGHT_TIME,
   MODE_SPECS,
   gapX,
@@ -116,8 +117,11 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
     return sprite;
   };
 
-  const spawnCrash = (impact: Impact, droneY: number) => {
-    const count = 34;
+  /** When the drone last got knocked, for the shake and so a scrape does not smoke every frame. */
+  let knockAt = -10;
+
+  const spawnCrash = (impact: Impact, droneY: number, knock = false) => {
+    const count = knock ? 14 : 34;
     // Dust thrown back off the surface, toward the side the drone came from.
     let nx = DRONE_X - impact.x;
     let ny = droneY - impact.y;
@@ -137,8 +141,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
         size: 0.3 + Math.random() * 0.9,
       };
     });
-    // A crash is the end of the run and owns the screen.
-    debris = thrown;
+    // A crash is the end of the run and owns the screen; a knock adds to what is settling.
+    debris = knock ? [...debris, ...thrown] : thrown;
   };
 
   const frame = (state: GameState, dt: number, t: number) => {
@@ -172,7 +176,11 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
     const hover = state.status === "idle" ? Math.sin(t * 2.1) * 1.3 : 0;
     const droneY = state.y + hover;
     const tilt =
-      state.status === "idle" ? Math.sin(t * 1.3) * 0.04 : Math.max(-0.42, Math.min(0.55, state.velocity / 460));
+      state.status === "idle"
+        ? Math.sin(t * 1.3) * 0.04
+        : Math.max(-0.42, Math.min(0.55, state.velocity / 460)) +
+          // Knocked: it wobbles while it rights itself.
+          (state.stun > 0 ? Math.sin(t * 34) * 0.3 * (state.stun / KNOCK_TIME) : 0);
 
     if (state.status === "crashed" && state.impact && state.impact !== lastImpact) {
       lastImpact = state.impact;
@@ -180,6 +188,10 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
       spawnCrash(state.impact, state.y);
     }
     if (state.status !== "crashed") lastImpact = null;
+    if (state.bump && t - knockAt > 0.15) {
+      knockAt = t;
+      spawnCrash(state.bump, state.y, true);
+    }
 
     if (state.droneZone !== shownZone) {
       // A new space: title it — unless this is simply the first frame.
@@ -188,7 +200,14 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
     }
 
     const since = t - crashAt;
-    const shake = options.reducedMotion ? 0 : since < 0.32 ? (1 - since / 0.32) * 1.8 : 0;
+    const sinceKnock = t - knockAt;
+    const shake = options.reducedMotion
+      ? 0
+      : since < 0.32
+        ? (1 - since / 0.32) * 1.8
+        : sinceKnock < 0.25
+          ? (1 - sinceKnock / 0.25) * 1.1
+          : 0;
     const sx = shake ? (Math.random() - 0.5) * shake : 0;
     const sy = shake ? (Math.random() - 0.5) * shake : 0;
 
@@ -226,7 +245,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
       ctx.drawImage(sprite.canvas, o.x + sprite.x0, sprite.y0, sprite.w, sprite.h);
       drawObstacleMotion(ctx, o, t);
     }
-    drawCables(ctx, state.obstacles, t);
+    drawCables(ctx, state.obstacles);
 
     light.render(
       beam,
@@ -320,7 +339,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
 
     // A lost or stuttering video link, over everything but the HUD.
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    const lost = state.event?.kind === "SIGNAL" && state.event.phase === "lost" && state.status === "flying";
+    const lost = state.event?.kind === "SIGNAL" && state.event.phase === "rts" && state.status === "flying";
     if (lost) drawLostFeed(ctx, t);
     else if (state.event?.kind === "SIGNAL" && state.status === "flying" && state.event.phase !== "warning") {
       drawStatic(ctx, t, 0.4);

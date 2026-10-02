@@ -8,9 +8,8 @@
  *   Draft                 a shaft or stack blows through; Assist holds
  *                         position against it, ATTI is carried by it
  *   Weak signal (T01)     the video lags; it can drop out entirely (T13),
- *                         and after five seconds — three here — the drone
- *                         flies itself back along its path (Return-to-Signal)
- *                         unless the pilot cancels
+ *                         and the drone flies itself back along its path
+ *                         (Return-to-Signal) until it has signal again
  *   Lighting error (S16)  the panel goes dark; only the lidar sees
  *   Hanging cables        rigging hanging into the gaps; go under it
  *   Radiation (E04)       a hot band across the space: the dose builds the
@@ -123,10 +122,9 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
 
 /**
  * `warning` is the second of notice before it bites. A signal event can go on
- * from `active` to `lost` (the countdown to Return-to-Signal) and `rts` (the
- * drone flying itself back).
+ * from `active` to `rts`: the link is gone and the drone flies itself back.
  */
-export type EventPhase = "warning" | "active" | "lost" | "rts";
+export type EventPhase = "warning" | "active" | "rts";
 
 export type ActiveEvent = {
   kind: EventKind;
@@ -151,9 +149,8 @@ export const LEL_TIME = 2.2;
 export const LEL_FALL = 0.6;
 /** How late the controls arrive over a weak link. */
 export const SIGNAL_LAG = 0.3;
-/** The window to cancel Return-to-Signal (five seconds on the real aircraft), and how long it flies back. */
-export const LOST_TIME = 3;
-export const RTS_TIME = 1.6;
+/** How long Return-to-Signal flies back before the link comes back. */
+export const RTS_TIME = 2;
 export const RTS_SPEED = mps(1.5);
 /** How far into a run the first event waits. */
 export const FIRST_EVENT = 650;

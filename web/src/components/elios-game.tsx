@@ -19,7 +19,6 @@ import {
   ZONES,
   ZONE_MODE,
   ZONE_NAMES,
-  cancelRts,
   createGame,
   crashLine,
   flap,
@@ -123,7 +122,7 @@ function newRun(zone: number): GameState {
   return kind ? { ...run, queued: kind, nextEventAt: 250 } : run;
 }
 
-/** Keys: ↑/W/Space/Enter climb, ↓/S descend; R cancels Return-to-Signal. */
+/** Keys: ↑/W/Space/Enter climb, ↓/S descend. */
 function heldKeyFor(key: string): keyof Held | null {
   if (key === " " || key === "Enter" || key === "ArrowUp" || key === "w" || key === "W") return "climb";
   if (key === "ArrowDown" || key === "s" || key === "S") return "descend";
@@ -254,11 +253,6 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
     setHud(hudOf(stateRef.current, null));
   }, [paused]);
 
-  /** Inside the Return-to-Signal countdown: keep the sticks and fly on blind. */
-  const keepControl = useCallback(() => {
-    stateRef.current = cancelRts(stateRef.current);
-    setHud(hudOf(stateRef.current));
-  }, []);
 
   const hold = useCallback((key: keyof Held, on: boolean) => {
     heldRef.current = { ...heldRef.current, [key]: on };
@@ -384,18 +378,13 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "r" || e.key === "R") {
-        e.preventDefault();
-        keepControl();
-        return;
-      }
       const key = heldKeyFor(e.key);
       if (!key) return;
       e.preventDefault();
       if (!e.repeat && stateRef.current.status !== "flying") press();
       hold(key, true);
     },
-    [press, hold, keepControl],
+    [press, hold],
   );
 
   const onKeyUp = useCallback(
@@ -450,20 +439,6 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
           className="block h-auto w-full touch-none select-none"
           style={{ aspectRatio: `${WORLD_WIDTH} / ${WORLD_HEIGHT}` }}
         />
-        {hud.status === "flying" && hud.event === "SIGNAL:lost" ? (
-          <button
-            type="button"
-            onPointerDown={(e) => {
-              // Inside the canvas wrapper: do not also count as a press on the game.
-              e.stopPropagation();
-              e.preventDefault();
-              keepControl();
-            }}
-            className="absolute bottom-[18%] left-1/2 -translate-x-1/2 rounded-full border border-white/40 bg-black/70 px-3 py-1.5 text-[11px] font-semibold text-white"
-          >
-            Cancel RTS · keep flying
-          </button>
-        ) : null}
         {hud.status !== "flying" ? (
           // The scene behind is always dark, whatever the app theme, so the
           // title card uses fixed light text rather than theme tokens. It

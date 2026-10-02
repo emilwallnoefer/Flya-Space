@@ -6,6 +6,8 @@ import {
   FLAP_VELOCITY,
   GRAVITY,
   KIND_LABELS,
+  KNOCK_DROP,
+  KNOCK_TIME,
   MAX_SPEED,
   METRES_PER_UNIT,
   MODE_SPECS,
@@ -407,9 +409,9 @@ describe("idle and crashed states are frozen", () => {
 });
 
 describe("the pace", () => {
-  it("starts at 1.5 m/s and tops out at 6", () => {
+  it("starts at 1.5 m/s and tops out at 4.5", () => {
     expect(speedFor(0) * METRES_PER_UNIT).toBeCloseTo(1.5, 9);
-    expect(MAX_SPEED * METRES_PER_UNIT).toBeCloseTo(6, 9);
+    expect(MAX_SPEED * METRES_PER_UNIT).toBeCloseTo(4.5, 9);
     expect(speedFor(1e6)).toBe(MAX_SPEED);
   });
 
@@ -418,7 +420,9 @@ describe("the pace", () => {
       expect(speedFor(n)).toBeGreaterThanOrEqual(speedFor(n - 1));
       expect(speedFor(n) - speedFor(n - 1)).toBeLessThan(3);
     }
-    expect(speedFor(40)).toBeGreaterThan(speedFor(0) * 2);
+    expect(speedFor(60)).toBeGreaterThan(speedFor(0) * 2);
+    // …and takes a long run to get there.
+    expect(speedFor(60)).toBeLessThan(MAX_SPEED);
   });
 
   it("treats junk as the start of a run", () => {
@@ -487,12 +491,12 @@ describe("physics", () => {
     let y = DRONE_RADIUS + 1;
     while (y < WORLD_HEIGHT - DRONE_RADIUS && !hitsObstacle(y, { ...pendant, x: DRONE_X - 4 })) y += 1;
     const s = stepGame({ ...flap(createGame()), y, speed: MAX_SPEED, obstacles: [pendant] }, { ...INPUT, dt: 0.05 });
-    expect(s.status).toBe("crashed");
-    expect(s.impact?.what).toBe("PENDANT");
+    expect(s.bump?.what).toBe("PENDANT");
+    expect(s.obstacles.some((o) => hitsObstacle(s.y, o))).toBe(false);
   });
 });
 
-describe("crash detection — there is no cage", () => {
+describe("contact", () => {
   it("crashes into the floor and the ceiling", () => {
     expect(hitsGround(WORLD_HEIGHT - DRONE_RADIUS)).toBe(true);
     expect(hitsCeiling(DRONE_RADIUS)).toBe(true);
@@ -500,7 +504,7 @@ describe("crash detection — there is no cage", () => {
     expect(hitsCeiling(WORLD_HEIGHT / 2)).toBe(false);
   });
 
-  it("parks the drone inside the world, not through a surface, and says it hit the floor", () => {
+  it("ends the run on the floor, parked inside the world", () => {
     const s = fly(noSteel({ ...flap(createGame()), y: WORLD_HEIGHT - 20 }), 90, { descend: true });
     expect(s.status).toBe("crashed");
     expect(s.y).toBeLessThanOrEqual(WORLD_HEIGHT - DRONE_RADIUS);
@@ -508,17 +512,38 @@ describe("crash detection — there is no cage", () => {
     expect(s.impact?.what).toBe("FLOOR");
   });
 
-  it("crashes on contact even at the slowest pace", () => {
+  it("knocks the drone clear of steel and down a little, and keeps it flying", () => {
     const pendant = at("PENDANT", 1, 7, 10);
     const s = stepGame({ ...flap(createGame()), y: 40, obstacles: [pendant] }, INPUT);
-    expect(s.speed).toBe(0);
-    expect(s.status).toBe("crashed");
-    expect(s.impact?.what).toBe("PENDANT");
-    expect(Math.hypot((s.impact?.x ?? 0) - DRONE_X, (s.impact?.y ?? 0) - s.y)).toBeLessThanOrEqual(DRONE_RADIUS + 1);
+    expect(s.status).toBe("flying");
+    expect(s.bump?.what).toBe("PENDANT");
+    expect(s.stun).toBeCloseTo(KNOCK_TIME, 1);
+    expect(s.velocity).toBe(KNOCK_DROP);
+    expect(s.speed).toBeLessThan(START_SPEED);
+    expect(s.obstacles.some((o) => hitsObstacle(s.y, o))).toBe(false);
   });
 
-  it("leaves no impact on a clean frame", () => {
-    expect(stepGame(flap(createGame()), INPUT).impact).toBeNull();
+  it("gives the sticks back once it has righted itself, having dropped only a little", () => {
+    const knocked = { ...noSteel(flap(createGame())), y: 100, stun: KNOCK_TIME, velocity: KNOCK_DROP };
+    const righted = fly(noSteel(knocked), Math.ceil(KNOCK_TIME * 60) + 1);
+    expect(righted.stun).toBe(0);
+    expect(righted.y - 100).toBeGreaterThan(15);
+    expect(righted.y - 100).toBeLessThan(60);
+    // The sticks do nothing while it is knocked, and work again after.
+    expect(fly(noSteel(knocked), 10, { climb: true }).y).toBeGreaterThan(100);
+    expect(fly(noSteel(righted), 30, { climb: true }).y).toBeLessThan(righted.y - 5);
+  });
+
+  it("ends the run if the knock drops it into the floor", () => {
+    const s = fly(noSteel({ ...flap(createGame()), y: WORLD_HEIGHT - 30, stun: KNOCK_TIME, velocity: KNOCK_DROP }), 60);
+    expect(s.status).toBe("crashed");
+    expect(s.impact?.what).toBe("FLOOR");
+  });
+
+  it("leaves no bump on a clean frame", () => {
+    const s = stepGame(flap(createGame()), INPUT);
+    expect(s.impact).toBeNull();
+    expect(s.bump).toBeNull();
   });
 });
 

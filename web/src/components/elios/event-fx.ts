@@ -2,6 +2,7 @@ import {
   DRONE_X,
   WORLD_HEIGHT,
   WORLD_WIDTH,
+  cableTip,
   gapX,
   GAS_LAYER,
   RADIATION_REACH,
@@ -9,7 +10,7 @@ import {
   type GameState,
   type Obstacle,
 } from "@/lib/elios-flight";
-import { EVENT_SPECS, LOST_TIME, isLive } from "@/lib/elios-events";
+import { EVENT_SPECS, isLive } from "@/lib/elios-events";
 import { rgba, type RGB } from "./look";
 
 /**
@@ -24,20 +25,26 @@ import { rgba, type RGB } from "./look";
 const W = WORLD_WIDTH;
 const H = WORLD_HEIGHT;
 
-/** Cables hang from the roof in the gaps; drawn before the light so the beam picks them out. */
-export function drawCables(ctx: CanvasRenderingContext2D, obstacles: readonly Obstacle[], t: number) {
+/**
+ * Cables hang from the roof in the gaps, swinging where the rules say they
+ * are — drawn with a little sag toward the swing, so they read as rope.
+ * Drawn before the light so the beam picks them out.
+ */
+export function drawCables(ctx: CanvasRenderingContext2D, obstacles: readonly Obstacle[]) {
   ctx.save();
   for (const o of obstacles) {
     if (!o.cable) continue;
     const x = gapX(o);
-    if (x < -6 || x > W + 6) continue;
-    // A slow sway, a few tenths of a unit: it hangs, it does not dance.
-    const sway = Math.sin(t * 1.3 + o.id) * 0.8;
+    if (x < -40 || x > W + 40) continue;
+    const [tx, ty] = cableTip(o, o.cable);
+    // The middle lags the end a little, the way a rope bends when it swings.
+    const mx = x + (tx - x) * 0.4 + o.cable.spin * 2;
+    const my = ty * 0.5;
     ctx.strokeStyle = "rgba(20,18,16,0.95)";
     ctx.lineWidth = 2.6;
     ctx.beginPath();
     ctx.moveTo(x, 0);
-    ctx.quadraticCurveTo(x + sway * 0.5, o.cable * 0.5, x + sway, o.cable);
+    ctx.quadraticCurveTo(mx, my, tx, ty);
     ctx.stroke();
     // A lit edge, so it reads against a dark wall as well as a bright one.
     ctx.strokeStyle = "rgba(255,214,150,0.7)";
@@ -46,10 +53,19 @@ export function drawCables(ctx: CanvasRenderingContext2D, obstacles: readonly Ob
     // A shackle on the end, so it reads as rigging rather than a crack.
     ctx.fillStyle = "rgba(255,190,90,0.95)";
     ctx.beginPath();
-    ctx.arc(x + sway, o.cable + 1.6, 2.4, 0, Math.PI * 2);
+    ctx.arc(tx, ty + 1.6, 2.4, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
+}
+
+/**
+ * How far ahead you can make anything out in dust or the dark: further the
+ * faster you go, so the time to react stays about the same — roughly a second
+ * and a half of flight, never less than a little way past the drone.
+ */
+export function sightFor(speed: number): number {
+  return Math.min(W - DRONE_X, Math.max(95, 40 + Math.abs(speed) * 1.5));
 }
 
 /** Points along an obstacle's outline, as the lidar would return them. */
@@ -99,14 +115,16 @@ export function drawEventWorld(
   ctx.save();
   switch (e.kind) {
     case "DUST": {
-      // Thick enough that the beam is all you have: a thin veil near the
-      // lamp, a wall of it beyond about two obstacles' reach.
-      ctx.fillStyle = rgba(mote, 0.14);
+      // Thick: a veil even right at the lamp, and a wall of it past what the
+      // light reaches — which reaches further the faster you go.
+      const sight = sightFor(state.speed);
+      ctx.fillStyle = rgba(mote, 0.28);
       ctx.fillRect(0, 0, W, H);
-      const g = ctx.createRadialGradient(DRONE_X + 30, droneY, 20, DRONE_X + 30, droneY, 170);
+      const cx = DRONE_X + sight * 0.35;
+      const g = ctx.createRadialGradient(cx, droneY, 10, cx, droneY, sight);
       g.addColorStop(0, rgba(mote, 0));
-      g.addColorStop(0.55, rgba(mote, 0.3));
-      g.addColorStop(1, rgba(mote, 0.7));
+      g.addColorStop(0.6, rgba(mote, 0.45));
+      g.addColorStop(1, rgba(mote, 0.92));
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
       break;
@@ -116,7 +134,7 @@ export function drawEventWorld(
       // and the lidar's points on whatever is within its reach.
       ctx.fillStyle = "rgba(0,0,0,0.94)";
       ctx.fillRect(0, 0, W, H);
-      const reach = 150;
+      const reach = sightFor(state.speed);
       for (const o of state.obstacles) {
         if (o.x > DRONE_X + reach || o.x + o.width < DRONE_X - 40) continue;
         for (const [x, y] of lidarPoints(o, 4)) {
@@ -255,19 +273,16 @@ export function drawEventHud(ctx: CanvasRenderingContext2D, state: GameState, t:
     const spec = EVENT_SPECS[e.kind];
     const warn = e.phase === "warning";
     const on = !warn || Math.floor(t * 6) % 2 === 0;
-    const danger = e.kind === "GAS" || e.kind === "RADIATION" || e.phase === "lost";
+    const danger = e.kind === "GAS" || e.kind === "RADIATION" || e.phase === "rts";
     const colour = danger ? "rgba(255,120,100,0.98)" : "rgba(255,206,110,0.98)";
     if (on) {
       ctx.font = "700 6.5px ui-monospace, SFMono-Regular, Menlo, monospace";
-      const title = e.phase === "lost" ? "T13 CONNECTION LOST" : e.phase === "rts" ? "T05 RETURN TO SIGNAL" : `${spec.code} ${spec.title.toUpperCase()}`;
+      const title = e.phase === "rts" ? "T13 CONNECTION LOST · T05 RETURN TO SIGNAL" : `${spec.code} ${spec.title.toUpperCase()}`;
       label(`⚠ ${title}`, W / 2, 14, colour);
     }
     ctx.font = "600 5px ui-sans-serif, system-ui, sans-serif";
-    if (e.phase === "lost") {
-      const left = Math.max(0, Math.ceil(LOST_TIME - e.t));
-      label(`Return-to-Signal in ${left}… press R to cancel and fly on`, W / 2, 23, "rgba(255,255,255,0.9)");
-    } else if (e.phase === "rts") {
-      label("Flying itself back to signal", W / 2, 23, "rgba(255,255,255,0.85)");
+    if (e.phase === "rts") {
+      label("Flying itself back along its path until the link returns", W / 2, 23, "rgba(255,255,255,0.85)");
     } else {
       label(spec.hint, W / 2, 23, "rgba(255,255,255,0.8)");
     }
@@ -283,7 +298,7 @@ export function drawEventHud(ctx: CanvasRenderingContext2D, state: GameState, t:
   ctx.restore();
 }
 
-/** The whole screen for a lost link: the feed is gone, only static and the countdown. */
+/** The whole screen for a lost link: the feed is gone, only static while it flies itself back. */
 export function drawLostFeed(ctx: CanvasRenderingContext2D, t: number) {
   ctx.save();
   ctx.fillStyle = "rgba(6,8,10,0.97)";

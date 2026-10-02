@@ -9,7 +9,8 @@ import {
   WORLD_HEIGHT,
   ZONES,
   buildObstacle,
-  cancelRts,
+  cableAt,
+  cableTip,
   createGame,
   doseRate,
   flap,
@@ -19,6 +20,7 @@ import {
   radiationBand,
   speedFor,
   stepGame,
+  swingCable,
   type GameState,
   type Obstacle,
   type PickupKind,
@@ -29,7 +31,6 @@ import {
   EVENT_KINDS,
   EVENT_SPECS,
   FIRST_EVENT,
-  LOST_TIME,
   RTS_TIME,
   WARNING_TIME,
   eventGap,
@@ -165,31 +166,24 @@ describe("weak signal and Return-to-Signal", () => {
     expect(fly(s, 40, { climb: true }).y).toBeLessThan(WORLD_HEIGHT / 2 - 5);
   });
 
-  it("drops out halfway when it escalates, counts down, then flies itself back safely", () => {
+  it("drops out halfway when it escalates and flies itself back that instant, safely", () => {
     let s = inEvent("SIGNAL", "BOILER", {}, { escalates: true, left: EVENT_SPECS.SIGNAL.length / 2 + 1 });
     s = fly(s, 2);
-    expect(s.event?.phase).toBe("lost");
-    s = fly(s, Math.ceil(LOST_TIME * 60) + 1);
+    // No countdown: the moment the link goes, it is already flying back.
     expect(s.event?.phase).toBe("rts");
+    expect(s.speed).toBeLessThan(0);
     // Real steel all around while it returns: it retraces a safe path.
     let back = s;
     for (let i = 0; i < Math.ceil(RTS_TIME * 60) + 2; i += 1) back = stepGame(back, { ...INPUT, climb: true });
     expect(back.status).toBe("flying");
     expect(back.event).toBeNull();
   });
-
-  it("can be cancelled inside the countdown, and only then", () => {
-    const lost = inEvent("SIGNAL", "BOILER", {}, { phase: "lost", t: 0 });
-    expect(cancelRts(lost).event?.phase).toBe("active");
-    expect(cancelRts(lost).event?.escalates).toBe(false);
-    const fine = flying("BOILER");
-    expect(cancelRts(fine)).toBe(fine);
-  });
 });
 
 describe("hanging cables", () => {
-  const cabled = (cable: number, y: number): GameState => {
+  const cabled = (length: number, y: number, angle = 0): GameState => {
     const built = buildObstacle("PLATEN", 0.5, 1);
+    const cable = { length, angle, spin: 0 };
     const o: Obstacle = { id: 1, x: 0, kind: "PLATEN", zone: 0, seed: 1, passed: true, ...built, solids: [], cable };
     const placed = { ...o, x: DRONE_X - (gapX(o) - o.x) };
     return { ...flying("BOILER", { y }), obstacles: [placed] };
@@ -211,8 +205,43 @@ describe("hanging cables", () => {
 
   it("hang in every gap built while the event lasts", () => {
     const s = fly(inEvent("CABLES", "BOILER"), 60 * 8);
-    expect(s.obstacles.some((o) => (o.cable ?? 0) > 0)).toBe(true);
-    for (const o of s.obstacles) if (o.cable) expect(o.cable).toBeLessThanOrEqual(MAX_CABLE);
+    expect(s.obstacles.some((o) => !!o.cable)).toBe(true);
+    for (const o of s.obstacles) if (o.cable) expect(o.cable.length).toBeLessThanOrEqual(MAX_CABLE);
+  });
+
+  it("swing back to hanging straight on their own", () => {
+    const o = { x: 200, width: 20 };
+    let c = { length: 70, angle: 0.8, spin: 0 };
+    for (let i = 0; i < 60 * 8; i += 1) c = swingCable(o, c, 190, 1 / 60);
+    expect(Math.abs(c.angle)).toBeLessThan(0.1);
+  });
+
+  it("get sucked toward the drone when it flies close", () => {
+    // A cable just ahead of the drone, its end a little below and in front.
+    const o = { x: DRONE_X + 18 - (20 + 56), width: 20 };
+    const still = { length: 70, angle: 0, spin: 0 };
+    const [tx] = cableTip(o, still);
+    expect(tx).toBeGreaterThan(DRONE_X);
+    let c = still;
+    for (let i = 0; i < 30; i += 1) c = swingCable(o, c, 85, 1 / 60);
+    // Positive angle swings the end back toward the drone.
+    expect(c.angle).toBeGreaterThan(0.05);
+    // Far from the drone, nothing pulls it.
+    let far = still;
+    for (let i = 0; i < 30; i += 1) far = swingCable(o, far, 190, 1 / 60);
+    expect(far.angle).toBeCloseTo(0, 6);
+  });
+
+  it("snag the drone anywhere along their length, not just at the end", () => {
+    // Anchored just ahead and swung back over the drone: its middle crosses
+    // the drone's line while its end hangs well below.
+    const built = buildObstacle("PLATEN", 0.5, 1);
+    const anchor = DRONE_X + 20;
+    const cable = { length: 80, angle: 0.5, spin: 0 };
+    const o: Obstacle = { id: 1, x: anchor - built.width - 56, kind: "PLATEN", zone: 0, seed: 1, passed: true, ...built, solids: [], cable };
+    const [tx, ty] = cableTip(o, cable);
+    expect(Math.hypot(tx - DRONE_X, ty - 35)).toBeGreaterThan(DRONE_RADIUS * 2);
+    expect(cableAt(35, [o])?.what).toBe("CABLE");
   });
 });
 
@@ -298,5 +327,33 @@ describe("pick-ups", () => {
   it("is missed if the drone flies past too far above or below it", () => {
     const s = stepGame(withPickup("REPEAT", { y: 160 }), INPUT);
     expect(s.auto).toBe(0);
+  });
+});
+
+describe("a long run with everything switched on", () => {
+  it("never throws, never goes non-finite, and survives the knocks along the way", () => {
+    for (const zone of ZONES) {
+      let s = flying(zone);
+      let knocks = 0;
+      for (let i = 0; i < 60 * 120; i += 1) {
+        // A clumsy pilot: climbs and descends in turns, and hits things now and then.
+        const phase = Math.floor(i / 40) % 3;
+        s = stepGame(s, {
+          dt: 1 / 60,
+          kindDraw: (i * 0.6180339887) % 1,
+          placeDraw: (i * 0.4142135624) % 1,
+          styleDraw: (i * 0.7320508075) % 1,
+          eventDraw: (i * 0.5772156649) % 1,
+          climb: phase === 0 || s.y > WORLD_HEIGHT - 50,
+          descend: phase === 2 && s.y < WORLD_HEIGHT - 50,
+        });
+        if (s.bump) knocks += 1;
+        expect(Number.isFinite(s.y) && Number.isFinite(s.speed) && Number.isFinite(s.velocity), `${zone} @ ${i}`).toBe(true);
+        for (const o of s.obstacles) if (o.cable) expect(Number.isFinite(o.cable.angle)).toBe(true);
+        // A crash just starts another run, so the whole two minutes get flown.
+        if (s.status === "crashed") s = { ...flying(zone), nextId: s.nextId };
+      }
+      expect(knocks, zone).toBeGreaterThan(0);
+    }
   });
 });
