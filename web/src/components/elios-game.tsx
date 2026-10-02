@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createRenderer } from "@/components/elios/renderer";
 import type { LeaderboardRow } from "@/lib/elios-leaderboard";
 import {
@@ -10,7 +10,6 @@ import {
   submitEliosScore,
 } from "@/lib/elios-score-sync";
 import {
-  BEST_SCORE_KEY,
   FLIGHT_MODES,
   KIND_LABELS,
   METRES_PER_UNIT,
@@ -19,77 +18,86 @@ import {
   WORLD_WIDTH,
   ZONES,
   ZONE_NAMES,
-  createGame,
-  crashLine,
+  allowedModes,
+  batteryLeft,
+  createMission,
   flap,
-  isNewBest,
   nudgeThrottle,
-  parseStoredBest,
   setMode,
   stepGame,
   type FlightMode,
   type GameState,
   type Impact,
 } from "@/lib/elios-flight";
+import {
+  MISSIONS,
+  buildPlan,
+  isUnlocked,
+  missionStars,
+  nextMission,
+  parseProgress,
+  recordStars,
+  type Progress,
+} from "@/lib/elios-missions";
 
 /**
- * "Fly where people can't" — the Elios 3 flies through the confined spaces it
- * really inspects, a boiler, a ballast tank, a mine stope, a sewer and a
- * storage tank, past what a pilot meets in each of them.
+ * "Fly where people can't" — the Elios 3 flies inspection missions through the
+ * confined spaces it really works in: a boiler, a ballast tank, a mine stope,
+ * a sewer and a storage tank.
  *
  * This file is input, the frame loop and the chrome around the canvas. The
- * rules live in `lib/elios-flight.ts` and are unit-tested; the look — real
- * Flyability photographs, the drone as the only light — lives in
- * `components/elios/`. The game itself stays inert: the only network it
- * touches is the leaderboard, and only when a caller opts in.
- *
- * A run flown without a connection still counts: its score waits in
- * localStorage (`lib/elios-score-sync.ts`) and is posted the moment the
- * browser is back online.
+ * rules live in `lib/elios-flight.ts`, the missions in `lib/elios-missions.ts`,
+ * both unit-tested; the look — real Flyability photographs, the drone as the
+ * only light — lives in `components/elios/`. The game itself stays inert: the
+ * only network it touches is the leaderboard, and only when a caller opts in.
  */
 
 /**
- * Flight-modes preview: scores flown under the new rules are kept off the live
- * board until the release that resets it. Flip this with that release.
+ * Missions preview: nothing flown under the new rules reaches the live board,
+ * and the board is not shown, until the release that decides what it ranks.
  */
 const POST_SCORES = false;
 
-/** Where the player left the mode switch, so the next visit starts there. */
-const MODE_KEY = "rolegate:elios-mode";
+/** Best stars per mission. */
+const PROGRESS_KEY = "rolegate:elios-missions-v1";
 
-const DEFAULT_MODE: FlightMode = "ASSIST_SPORT";
+/**
+ * Progress lives in localStorage, an external store, so it is read through
+ * `useSyncExternalStore` rather than a state-set inside an effect: setting
+ * state synchronously in a mount effect is what the React Compiler rule
+ * `set-state-in-effect` rejects, and it would render a wrong value for a frame.
+ */
+let progressCache: Progress | undefined;
+const progressListeners = new Set<() => void>();
+const NO_PROGRESS: Progress = {};
 
-/** Read through `useSyncExternalStore`, the same way and for the same reasons as the best score below. */
-let modeCache: FlightMode | undefined;
-const modeListeners = new Set<() => void>();
-
-function readMode(): FlightMode {
-  if (modeCache === undefined) {
-    modeCache = DEFAULT_MODE;
+function readProgress(): Progress {
+  if (progressCache === undefined) {
     try {
-      const raw = window.localStorage.getItem(MODE_KEY);
-      if (raw && (FLIGHT_MODES as readonly string[]).includes(raw)) modeCache = raw as FlightMode;
+      progressCache = parseProgress(window.localStorage.getItem(PROGRESS_KEY));
     } catch {
-      // Private windows: start in the default.
+      // Private windows and blocked site data both throw here.
+      progressCache = NO_PROGRESS;
     }
   }
-  return modeCache;
+  return progressCache;
 }
 
-function writeMode(mode: FlightMode) {
-  modeCache = mode;
+function writeProgress(progress: Progress) {
+  if (progress === progressCache) return;
+  progressCache = progress;
   try {
-    window.localStorage.setItem(MODE_KEY, mode);
+    window.localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
   } catch {
-    // A nicety.
+    // Keeping progress is a nicety, not the point.
   }
-  for (const listener of modeListeners) listener();
+  for (const listener of progressListeners) listener();
 }
 
-function subscribeMode(onChange: () => void) {
-  modeListeners.add(onChange);
+function subscribeProgress(onChange: () => void) {
+  progressListeners.add(onChange);
   return () => {
-    modeListeners.delete(onChange);
+    progressListeners.delete(onChange);
   };
 }
 
@@ -99,7 +107,7 @@ const NOTHING_HELD: Held = { climb: false, descend: false, slower: false, faster
 
 /**
  * Keys. ↑/W/Space/Enter climb (a flap in ATTI MAN), ↓/S descend, ←/→ (A/D)
- * move the throttle; 1–5 pick a mode and M steps through them.
+ * move the throttle; 1–5 pick a mode and M steps through the allowed ones.
  */
 function heldKeyFor(key: string): keyof Held | null {
   if (key === " " || key === "Enter" || key === "ArrowUp" || key === "w" || key === "W") return "climb";
@@ -109,58 +117,12 @@ function heldKeyFor(key: string): keyof Held | null {
   return null;
 }
 
-/** Frame rate while nothing is being flown: waiting for a press, or after a crash has settled. */
+/** Frame rate while nothing is being flown: waiting for a press, or after a run has settled. */
 const RESTING_FPS = 24;
 /** How long the crash dust gets at the full frame rate before the canvas rests. */
 const CRASH_SETTLE_MS = 1500;
 
-/**
- * The best score lives in localStorage, which is an external store, so it is
- * read through `useSyncExternalStore` rather than a state-set inside an effect.
- * That is not ceremony: setting state synchronously in a mount effect is what
- * the React Compiler rule `set-state-in-effect` rejects, and it also renders a
- * wrong value for one frame on every visit.
- *
- * `undefined` means "not read yet" — distinct from `null`, which is a real
- * answer meaning "no score stored".
- */
-let bestCache: number | null | undefined;
-const bestListeners = new Set<() => void>();
-
-function readBest(): number | null {
-  if (bestCache === undefined) {
-    try {
-      bestCache = parseStoredBest(window.localStorage.getItem(BEST_SCORE_KEY));
-    } catch {
-      // Private windows and blocked site data both throw here.
-      bestCache = null;
-    }
-  }
-  return bestCache;
-}
-
-function writeBest(score: number) {
-  bestCache = score;
-  try {
-    window.localStorage.setItem(BEST_SCORE_KEY, String(score));
-  } catch {
-    // Keeping the score is a nicety, not the point.
-  }
-  for (const listener of bestListeners) listener();
-}
-
-function subscribeBest(onChange: () => void) {
-  bestListeners.add(onChange);
-  return () => {
-    bestListeners.delete(onChange);
-  };
-}
-
-/** A different space from the last run's, so going again shows you somewhere new. */
-function nextZone(previous: number): number {
-  const n = ZONES.length;
-  return (previous + 1 + Math.floor(Math.random() * (n - 1))) % n;
-}
+const STAR_LINE = (n: number) => "★".repeat(n) + "☆".repeat(3 - n);
 
 export type EliosGameProps = {
   /** Extra classes for the wrapper — the composer needs different spacing. */
@@ -180,18 +142,49 @@ export type EliosGameProps = {
   paused?: boolean;
 };
 
-type Hud = { status: GameState["status"]; score: number; impact: Impact | null; zone: number };
+type Hud = {
+  /** The mission this was read from; a stale one is recomputed during render. */
+  planId: string | null;
+  status: GameState["status"];
+  impact: Impact | null;
+  zone: number;
+  mode: FlightMode;
+  /** Modes the switch accepts right now, joined: a cheap thing to compare every frame. */
+  allowed: string;
+  stars: number;
+  inspected: number;
+  battery: number;
+};
+
+function hudOf(s: GameState): Hud {
+  return {
+    planId: s.plan?.id ?? null,
+    status: s.status,
+    impact: s.impact,
+    zone: s.droneZone,
+    mode: s.mode,
+    allowed: allowedModes(s).join(","),
+    stars: missionStars(s),
+    inspected: s.inspected,
+    battery: batteryLeft(s),
+  };
+}
 
 export function EliosGame({ className = "mt-4", leaderboard = false, paused = false }: EliosGameProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stateRef = useRef<GameState>(createGame());
-  // Server render has no localStorage, so the server snapshot is always null.
-  const best = useSyncExternalStore(subscribeBest, readBest, () => null);
-  const [hud, setHud] = useState<Hud>({ status: "idle", score: 0, impact: null, zone: 0 });
-  const mode = useSyncExternalStore(subscribeMode, readMode, () => DEFAULT_MODE);
+  const plans = useMemo(() => MISSIONS.map(buildPlan), []);
+  // Server render has no localStorage, so the server snapshot is no progress.
+  const progress = useSyncExternalStore(subscribeProgress, readProgress, () => NO_PROGRESS);
+  /** The mission picked in the list; null until the player picks one, then progress decides. */
+  const [picked, setPicked] = useState<number | null>(null);
+  const missionIndex = picked ?? nextMission(progress);
+  const mission = MISSIONS[missionIndex];
+  const stateRef = useRef<GameState>(createMission(plans[0]));
+  const [hud, setHud] = useState<Hud>(() => hudOf(createMission(plans[0])));
   const heldRef = useRef<Held>(NOTHING_HELD);
   const [board, setBoard] = useState<LeaderboardRow[] | null>(null);
   const pending = useSyncExternalStore(subscribePendingScore, readPendingScore, () => null);
+  const showBoard = POST_SCORES && leaderboard;
 
   /**
    * Refresh the board. Silent on failure: an unapplied migration or a dropped
@@ -210,7 +203,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
   }, []);
 
   useEffect(() => {
-    if (!leaderboard) return;
+    if (!showBoard) return;
     // Fetched inline with a cancel flag rather than by calling loadBoard():
     // the React Compiler treats an effect that calls a setState-bearing
     // callback as a synchronous set, and this shape also stops a late response
@@ -229,18 +222,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
     return () => {
       cancelled = true;
     };
-  }, [leaderboard]);
-
-  // The first space is drawn here rather than during render: the server has
-  // to render the same markup the client hydrates, so nothing random may
-  // happen before mount. Only the canvas shows it, and the canvas is empty
-  // until then anyway.
-  useEffect(() => {
-    const s = stateRef.current;
-    if (s.status === "idle" && s.obstacles.length === 0) {
-      stateRef.current = createGame(Math.floor(Math.random() * ZONES.length), readMode());
-    }
-  }, []);
+  }, [showBoard]);
 
   /**
    * Post a finished run. The server decides whether it is an improvement;
@@ -253,32 +235,50 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
     [loadBoard],
   );
 
-  // Coming back online: post whatever was flown while away, then refresh the
-  // board — which may well have failed to load in the first place.
+  // Coming back online: post whatever was flown while away, then refresh the board.
   useEffect(() => {
-    if (!leaderboard) return;
+    if (!showBoard) return;
     const sync = () => {
       void flushPendingScore().then(() => loadBoard());
     };
     if (readPendingScore() !== null) sync();
     window.addEventListener("online", sync);
     return () => window.removeEventListener("online", sync);
-  }, [leaderboard, loadBoard]);
+  }, [showBoard, loadBoard]);
 
-  /** A press: launches, relaunches after a run, and flaps in ATTI MAN. */
+  // The run on the canvas follows the mission in the list — which, on a first
+  // visit, progress picks after mount. Only refs change here; the overlay
+  // reads the new mission during render until the next HUD update.
+  useEffect(() => {
+    if (stateRef.current.plan?.id === mission.id) return;
+    stateRef.current = createMission(plans[missionIndex]);
+    heldRef.current = NOTHING_HELD;
+  }, [mission.id, missionIndex, plans]);
+
+  /** A press: launches, retries after a run ends, and flaps in ATTI MAN. */
   const press = useCallback(() => {
     if (paused) return;
     const s = stateRef.current;
-    const over = s.status === "crashed" || s.status === "landed";
-    stateRef.current = over ? flap(createGame(nextZone(s.droneZone), s.mode)) : flap(s);
-    const n = stateRef.current;
-    setHud({ status: n.status, score: n.score, impact: null, zone: n.droneZone });
+    const over = s.status !== "idle" && s.status !== "flying";
+    stateRef.current = over && s.plan ? flap(createMission(s.plan)) : flap(s);
+    setHud(hudOf(stateRef.current));
   }, [paused]);
 
   const chooseMode = useCallback((next: FlightMode) => {
     stateRef.current = setMode(stateRef.current, next);
-    writeMode(next);
+    setHud(hudOf(stateRef.current));
   }, []);
+
+  const chooseMission = useCallback(
+    (index: number) => {
+      if (!isUnlocked(index, readProgress()) || stateRef.current.status === "flying") return;
+      setPicked(index);
+      stateRef.current = createMission(plans[index]);
+      heldRef.current = NOTHING_HELD;
+      setHud(hudOf(stateRef.current));
+    },
+    [plans],
+  );
 
   /** A held input; a fresh press of the throttle also steps it, so a tap does something. */
   const hold = useCallback((key: keyof Held, on: boolean) => {
@@ -334,7 +334,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
     let raf = 0;
     let last = performance.now();
     let stopped = false;
-    let crashedAt = -Infinity;
+    let endedAt = -Infinity;
 
     const frame = (now: number) => {
       if (stopped) return;
@@ -342,12 +342,10 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       // Waiting for a press is most of the game's life — the composer shows
       // it for as long as the form is open. The hover and the far-wall drift
       // read the same at a low rate, and drawing the lit canvas at the display
-      // rate cost half a core doing nothing. A run, and the crash dust that
-      // ends one, keep the full rate.
-      const resting =
-        stateRef.current.status === "idle" ||
-        ((stateRef.current.status === "crashed" || stateRef.current.status === "landed") &&
-          now - crashedAt > CRASH_SETTLE_MS);
+      // rate cost half a core doing nothing. A run, and the dust that ends
+      // one, keep the full rate.
+      const status = stateRef.current.status;
+      const resting = status === "idle" || (status !== "flying" && now - endedAt > CRASH_SETTLE_MS);
       if (resting && now - last < 1000 / RESTING_FPS) {
         raf = requestAnimationFrame(frame);
         return;
@@ -369,13 +367,18 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       });
       stateRef.current = after;
 
-      if (before.status === "flying" && (after.status === "crashed" || after.status === "landed")) {
-        crashedAt = now;
-        if (isNewBest(after.score, readBest())) writeBest(after.score);
+      if (before.status === "flying" && after.status !== "flying") {
+        endedAt = now;
+        const stars = missionStars(after);
+        if (after.plan && stars > 0) writeProgress(recordStars(readProgress(), after.plan.id, stars));
         if (POST_SCORES && leaderboard && after.score > 0) void submitScoreRef.current(after.score);
-        setHud({ status: after.status, score: after.score, impact: after.impact, zone: after.droneZone });
-      } else if (after.score !== before.score) {
-        setHud({ status: after.status, score: after.score, impact: null, zone: after.droneZone });
+        setHud(hudOf(after));
+      } else if (
+        after.inspected !== before.inspected ||
+        after.mode !== before.mode ||
+        allowedModes(after).length !== allowedModes(before).length
+      ) {
+        setHud(hudOf(after));
       }
 
       // The renderer's clock is capped separately: a tab coming back from
@@ -418,8 +421,9 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       }
       if (e.key === "m" || e.key === "M") {
         e.preventDefault();
-        const i = FLIGHT_MODES.indexOf(stateRef.current.mode);
-        chooseMode(FLIGHT_MODES[(i + 1) % FLIGHT_MODES.length]);
+        const allowed = allowedModes(stateRef.current);
+        const i = allowed.indexOf(stateRef.current.mode);
+        if (allowed.length > 0) chooseMode(allowed[(i + 1) % allowed.length]);
         return;
       }
       const key = heldKeyFor(e.key);
@@ -461,14 +465,20 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
     hold("descend", false);
   }, [hold]);
 
-  const where = ZONE_NAMES[ZONES[hud.zone]]?.name.toLowerCase();
+  const view = hud.planId === mission.id ? hud : hudOf(createMission(plans[missionIndex]));
+  const where = ZONE_NAMES[ZONES[view.zone]]?.name.toLowerCase();
+  const allowed = view.allowed.split(",");
+  const flying = view.status === "flying";
+  const plan = plans[missionIndex];
+  const totalStars = MISSIONS.reduce((sum, m) => sum + (progress[m.id] ?? 0), 0);
+  const nextOpen = missionIndex + 1 < MISSIONS.length && isUnlocked(missionIndex + 1, progress);
 
   return (
     <div className={className}>
       <div
         role="button"
         tabIndex={0}
-        aria-label="Fly where people can't: fly the Elios 3 through real confined spaces. Space or up to climb, down to descend, left and right for speed, 1 to 5 for the flight mode."
+        aria-label={`Fly where people can't, mission ${missionIndex + 1}: ${mission.title}. Space or up to climb, down to descend, left and right for speed, number keys for the flight mode.`}
         onPointerDown={onPointerDown}
         onPointerUp={release}
         onPointerCancel={release}
@@ -485,58 +495,76 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
           className="block h-auto w-full touch-none select-none"
           style={{ aspectRatio: `${WORLD_WIDTH} / ${WORLD_HEIGHT}` }}
         />
-        {hud.status !== "flying" ? (
+        {!flying ? (
           // The scene behind is always dark, whatever the app theme, so the
           // title card uses fixed light text rather than theme tokens. It
           // sits low, under the drone rather than over it.
-          <div className="pointer-events-none absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/80 via-black/25 to-transparent px-4 pb-[7%] text-center">
-            <div>
+          <div className="pointer-events-none absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/85 via-black/35 to-transparent px-4 pb-[6%] text-center">
+            <div className="max-w-sm">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200/90">
-                Fly where people can&rsquo;t
+                Mission {missionIndex + 1} · {mission.title}
               </p>
-              {hud.status === "landed" ? (
-                <p className="mt-1.5 text-sm font-medium text-white">
-                  Battery flat — {hud.score} cleared in {MODE_SPECS[mode].label}
-                </p>
-              ) : hud.status === "crashed" ? (
+              {view.status === "idle" ? (
                 <>
-                  <p className="mt-1.5 text-sm font-medium text-white">
-                    {hud.score} cleared — {crashLine(hud.score)}
+                  <p className="mt-1.5 text-[12px] leading-snug text-white/90">{mission.brief}</p>
+                  <p className="mt-1 text-[10px] text-white/55">
+                    {plan.pois} to inspect · {plan.battery} s battery ·{" "}
+                    {mission.modes.map((m) => MODE_SPECS[m].label).join(", ")}
                   </p>
-                  {hud.impact && where ? (
+                </>
+              ) : view.status === "complete" ? (
+                <>
+                  <p className="mt-1.5 text-lg leading-none tracking-widest text-amber-200">{STAR_LINE(view.stars)}</p>
+                  <p className="mt-1 text-[11px] text-white/75">
+                    Out through the exit · {view.inspected}/{plan.pois} inspected ·{" "}
+                    {Math.round(view.battery * 100)}% battery left
+                  </p>
+                </>
+              ) : view.status === "landed" ? (
+                <p className="mt-1.5 text-sm font-medium text-white">
+                  Battery flat before the exit — {view.inspected}/{plan.pois} inspected.
+                </p>
+              ) : (
+                <>
+                  <p className="mt-1.5 text-sm font-medium text-white">Mission failed.</p>
+                  {view.impact && where ? (
                     <p className="mt-0.5 text-[11px] text-white/65">
-                      Hit {KIND_LABELS[hud.impact.what]} in the {where}.
+                      Hit {KIND_LABELS[view.impact.what]} in the {where} above 2 m/s — too fast for the cage.
                     </p>
                   ) : null}
                 </>
-              ) : null}
+              )}
               <p className="mt-1.5 text-[11px] text-white/65">
-                Tap or press space to {hud.status === "idle" ? "fly" : "go again"}
+                Tap or press space to {view.status === "idle" ? "launch" : "fly it again"}
               </p>
-              {hud.status === "idle" ? (
-                <p className="mt-1 text-[10px] text-white/50">
-                  {MODE_SPECS[mode].altitudeHold
-                    ? "Hold top half / ↑ to climb, bottom half / ↓ to descend · ← → speed"
-                    : "Tap / space to flap against gravity · ← → speed"}
+              {view.status === "idle" ? (
+                <p className="mt-0.5 text-[10px] text-white/45">
+                  {MODE_SPECS[view.mode].altitudeHold
+                    ? "Hold top half / ↑ to climb, bottom half / ↓ to descend · ← → speed · linger by ⊕ to inspect"
+                    : "Tap / space to flap against gravity · ← → speed · linger by ⊕ to inspect"}
                 </p>
               ) : null}
             </div>
           </div>
         ) : null}
       </div>
+
+      {/* In flight: the mode switch, limited to what the job (and the dust) allows. */}
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {FLIGHT_MODES.map((option, i) => {
+        {mission.modes.map((option) => {
           const spec = MODE_SPECS[option];
-          const on = mode === option;
+          const on = view.mode === option;
+          const usable = allowed.includes(option);
           const limit = option === "ATTI_MAN" ? "unlimited" : `${(spec.maxSpeed * METRES_PER_UNIT).toFixed(1)} m/s max`;
           return (
             <button
               key={option}
               type="button"
               aria-pressed={on}
-              title={`${spec.holds} · ${limit} · key ${i + 1}`}
+              disabled={!usable}
+              title={`${spec.holds} · ${limit} · key ${FLIGHT_MODES.indexOf(option) + 1}${usable ? "" : " · unavailable here"}`}
               onClick={() => chooseMode(option)}
-              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:line-through disabled:opacity-40 ${
                 on ? "border-accent/60 bg-accent/15 text-ink" : "border-glass/20 text-ink-4 hover:text-ink-2"
               }`}
             >
@@ -565,29 +593,72 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
           ))}
         </span>
       </div>
-      <div className="mt-2 flex items-start justify-between gap-3">
-        {best !== null || (leaderboard && pending !== null) ? (
-          <p className="text-[11px] text-ink-5">
-            {best !== null ? `Best ${best}` : null}
-            {best !== null && leaderboard && pending !== null ? " · " : null}
-            {leaderboard && pending !== null ? (
-              <span className="text-ink-5/80">{pending} waiting to post to the board</span>
-            ) : null}
-          </p>
-        ) : (
-          <span />
-        )}
-        {leaderboard && board && board.length > 0 ? (
-          <ol className="min-w-0 text-right text-[11px] leading-5 text-ink-4/80">
-            {board.slice(0, 5).map((row, i) => (
-              <li key={`${row.name}-${i}`} className={row.you ? "text-accent-soft/90" : undefined}>
-                <span className="text-ink-5">{i + 1}.</span> {row.name}{" "}
-                <span className="font-medium text-ink-3">{row.score}</span>
-              </li>
-            ))}
+
+      {/* Between runs: the missions, each opened by flying out the one before. */}
+      {!flying ? (
+        <div className="mt-3">
+          <div className="mb-1.5 flex items-baseline justify-between text-[11px] text-ink-5">
+            <span>Missions</span>
+            <span>
+              {totalStars}/{MISSIONS.length * 3} ★
+              {view.status === "complete" && nextOpen ? (
+                <button
+                  type="button"
+                  onClick={() => chooseMission(missionIndex + 1)}
+                  className="ml-3 font-medium text-accent-soft hover:underline"
+                >
+                  Next mission →
+                </button>
+              ) : null}
+            </span>
+          </div>
+          <ol className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+            {MISSIONS.map((m, i) => {
+              const open = isUnlocked(i, progress);
+              const on = i === missionIndex;
+              const stars = progress[m.id] ?? 0;
+              return (
+                <li key={m.id}>
+                  <button
+                    type="button"
+                    disabled={!open}
+                    aria-current={on ? "true" : undefined}
+                    onClick={() => chooseMission(i)}
+                    className={`w-full rounded-lg border px-2 py-1.5 text-left text-[11px] leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                      on ? "border-accent/60 bg-accent/10 text-ink" : "border-glass/20 text-ink-3 hover:text-ink"
+                    }`}
+                  >
+                    <span className="block truncate font-medium">
+                      {i + 1}. {m.title}
+                    </span>
+                    <span className="text-amber-300/90">{open ? STAR_LINE(stars) : "Locked"}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ol>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
+
+      {showBoard ? (
+        <div className="mt-2 flex items-start justify-between gap-3">
+          {pending !== null ? (
+            <p className="text-[11px] text-ink-5/80">{pending} waiting to post to the board</p>
+          ) : (
+            <span />
+          )}
+          {board && board.length > 0 ? (
+            <ol className="min-w-0 text-right text-[11px] leading-5 text-ink-4/80">
+              {board.slice(0, 5).map((row, i) => (
+                <li key={`${row.name}-${i}`} className={row.you ? "text-accent-soft/90" : undefined}>
+                  <span className="text-ink-5">{i + 1}.</span> {row.name}{" "}
+                  <span className="font-medium text-ink-3">{row.score}</span>
+                </li>
+              ))}
+            </ol>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

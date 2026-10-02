@@ -6,8 +6,12 @@ import {
   ZONES,
   ZONE_NAMES,
   clearance,
+  INSPECT_TIME,
   MODE_SPECS,
+  OBSTACLE_GAP,
+  activeDenial,
   batteryLeft,
+  poiX,
   isCollisionTolerant,
   worldSpeed,
   type GameState,
@@ -235,6 +239,60 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
     drawRims(ctx, state.obstacles, beam);
     light.haze(ctx, look.haze);
 
+    // Dust: a stretch of a mission where the lidar is blind. It hangs over
+    // the obstacles it covers and the gaps behind them.
+    if (state.plan && state.plan.denials.length > 0) {
+      for (const o of state.obstacles) {
+        // Dust starts once `from` obstacles are behind the drone, so it fills
+        // from the back of obstacle `from - 1` to the back of obstacle `to - 1`.
+        const index = o.id - 1;
+        if (!state.plan.denials.some((d) => index >= d.from - 1 && index < d.to - 1)) continue;
+        const next = state.obstacles.find((n) => n.id === o.id + 1);
+        const x0 = o.x + o.width;
+        const x1 = x0 + OBSTACLE_GAP + (next?.width ?? 40);
+        if (x1 < 0 || x0 > W) continue;
+        ctx.fillStyle = rgba(look.mote, 0.16);
+        ctx.fillRect(x0, 0, x1 - x0, H);
+      }
+    }
+
+    // Inspection points on the far wall: amber until inspected, filling as
+    // the drone lingers, green once done.
+    for (const o of state.obstacles) {
+      const poi = o.poi;
+      if (!poi) continue;
+      const px = poiX(o);
+      if (px < -8 || px > W + 8) continue;
+      const r = 4.5;
+      ctx.save();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = poi.done ? "rgba(120,230,150,0.95)" : "rgba(255,200,90,0.9)";
+      ctx.fillStyle = poi.done ? "rgba(120,230,150,0.25)" : "rgba(255,200,90,0.14)";
+      ctx.beginPath();
+      ctx.arc(px, poi.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // The crosshair says "look here" without words.
+      ctx.beginPath();
+      ctx.moveTo(px - r - 2.5, poi.y);
+      ctx.lineTo(px - r + 1.5, poi.y);
+      ctx.moveTo(px + r - 1.5, poi.y);
+      ctx.lineTo(px + r + 2.5, poi.y);
+      ctx.moveTo(px, poi.y - r - 2.5);
+      ctx.lineTo(px, poi.y - r + 1.5);
+      ctx.moveTo(px, poi.y + r - 1.5);
+      ctx.lineTo(px, poi.y + r + 2.5);
+      ctx.stroke();
+      if (!poi.done && poi.dwell > 0) {
+        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = "rgba(120,230,150,0.95)";
+        ctx.beginPath();
+        ctx.arc(px, poi.y, r + 2, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * poi.dwell) / INSPECT_TIME);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     motes.update(dt, scrolled, t);
     motes.draw(ctx, beam, look.mote, look.moteDensity);
 
@@ -283,7 +341,19 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
     ctx.font = "700 15px ui-sans-serif, system-ui, sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    if (state.status !== "idle") label(String(state.score), 9, 7, "rgba(255,255,255,0.92)");
+    if (state.status !== "idle") {
+      // On a mission the number that matters is the inspections; the course
+      // bar along the top says how far there is still to go.
+      const plan = state.plan;
+      label(plan ? `${state.inspected}/${plan.pois}` : String(state.score), 9, 7, "rgba(255,255,255,0.92)");
+      if (plan) {
+        const done = Math.min(1, state.score / plan.course.length);
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        ctx.fillRect(W / 2 - 40, 8, 80, 2.4);
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
+        ctx.fillRect(W / 2 - 39.5, 8.5, 79 * done, 1.4);
+      }
+    }
 
     const zone = ZONE_NAMES[ZONES[here.zone]];
     ctx.font = "600 6px ui-sans-serif, system-ui, sans-serif";
@@ -321,6 +391,11 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
       ctx.textAlign = "left";
       ctx.font = "700 5.5px ui-monospace, SFMono-Regular, Menlo, monospace";
       label(spec.label.toUpperCase(), 9, 31, "rgba(255,255,255,0.75)");
+      const dust = activeDenial(state);
+      if (dust) {
+        ctx.textAlign = "center";
+        label(dust.reason.toUpperCase(), W / 2, 14, "rgba(255,206,110,0.95)");
+      }
       // While the cage still shrugs off contact, say so — and the moment it
       // stops, the label going away is the warning.
       if (caged) {
