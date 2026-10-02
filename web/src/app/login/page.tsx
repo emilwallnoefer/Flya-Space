@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { m } from "framer-motion";
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
 
 export default function LoginPage() {
   const supabaseConfigured = Boolean(
@@ -57,31 +57,6 @@ export default function LoginPage() {
     <main id="main-content" className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-surface px-4 py-8 text-ink">
       <div className="absolute inset-0 aurora-bg" />
       <div className="absolute inset-0 bg-overlay/30 backdrop-blur-xl" />
-      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-        <div className="bubble-layer">
-          {[
-            { left: "9%", size: "8px", duration: "9s", delay: "0s" },
-            { left: "22%", size: "7px", duration: "11.5s", delay: "-2s" },
-            { left: "37%", size: "10px", duration: "10s", delay: "-1.3s" },
-            { left: "54%", size: "8px", duration: "12s", delay: "-3.8s" },
-            { left: "71%", size: "9px", duration: "9.8s", delay: "-2.7s" },
-            { left: "88%", size: "11px", duration: "13.3s", delay: "-5.2s" },
-          ].map((bubble, idx) => (
-            <span
-              key={`${bubble.left}-${idx}`}
-              className="bubble"
-              style={
-                {
-                  "--bubble-left": bubble.left,
-                  "--bubble-size": bubble.size,
-                  "--bubble-duration": bubble.duration,
-                  "--bubble-delay": bubble.delay,
-                } as CSSProperties
-              }
-            />
-          ))}
-        </div>
-      </div>
       <m.section
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

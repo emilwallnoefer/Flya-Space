@@ -1,6 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { Input, Textarea } from "@/components/ui";
 import {
   DISCIPLINE_LABEL,
@@ -15,15 +14,6 @@ import { FlightDataLinkInput } from "./flight-data-link-input";
 import { LivePreview } from "./live-preview";
 import { DAY_DISCIPLINE_KEYS, DAY_SITE_KEYS } from "./types";
 import type { MailComposerState } from "./use-mail-composer";
-
-const COMPOSER_BUBBLES = [
-  { left: "8%", size: "9px", duration: "9s", delay: "0s" },
-  { left: "20%", size: "7px", duration: "11s", delay: "-2.5s" },
-  { left: "36%", size: "10px", duration: "10s", delay: "-1.5s" },
-  { left: "52%", size: "8px", duration: "12s", delay: "-4s" },
-  { left: "68%", size: "9px", duration: "9.5s", delay: "-3s" },
-  { left: "84%", size: "11px", duration: "13s", delay: "-5s" },
-];
 
 /** The Mail Composer module: guided/brief form on the left, live preview on the right. */
 export function MailComposerPanel({
@@ -74,22 +64,6 @@ export function MailComposerPanel({
   return (
     <section className="underwater-panel relative grid items-start gap-6 overflow-hidden rounded-2xl lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
       <div className="relative min-h-0 min-w-0 w-full lg:col-start-1 lg:row-start-1">
-        <div className="bubble-layer pointer-events-none absolute inset-0 z-0" aria-hidden="true">
-          {COMPOSER_BUBBLES.map((bubble, idx) => (
-            <span
-              key={`${bubble.left}-${idx}`}
-              className="bubble"
-              style={
-                {
-                  "--bubble-left": bubble.left,
-                  "--bubble-size": bubble.size,
-                  "--bubble-duration": bubble.duration,
-                  "--bubble-delay": bubble.delay,
-                } as CSSProperties
-              }
-            />
-          ))}
-        </div>
         <div className="glass-card hourlogger-surface relative z-[1] w-full min-w-0 rounded-2xl p-4 md:p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold md:text-xl">Mail Composer</h2>

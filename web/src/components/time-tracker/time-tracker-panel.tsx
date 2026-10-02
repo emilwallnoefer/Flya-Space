@@ -1,6 +1,5 @@
 "use client";
 
-import { type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui";
 import { AnimatedNumber } from "./animated-number";
@@ -30,19 +29,6 @@ function SectionDivider({ label }: { label: string }) {
 }
 
 export function TimeTrackerPanel({ readOnly = false, apiBase, viewingLabel, initialWeek }: TimeTrackerPanelProps = {}) {
-  const bubbles = [
-    { left: "6%", size: "10px", duration: "9s", delay: "0s" },
-    { left: "14%", size: "8px", duration: "12s", delay: "-3s" },
-    { left: "22%", size: "12px", duration: "10s", delay: "-1.2s" },
-    { left: "34%", size: "9px", duration: "11s", delay: "-4s" },
-    { left: "46%", size: "11px", duration: "13s", delay: "-2.2s" },
-    { left: "58%", size: "7px", duration: "8.5s", delay: "-5s" },
-    { left: "68%", size: "10px", duration: "10.5s", delay: "-2.8s" },
-    { left: "79%", size: "8px", duration: "9.5s", delay: "-1.8s" },
-    { left: "88%", size: "12px", duration: "14s", delay: "-6s" },
-    { left: "94%", size: "9px", duration: "11.5s", delay: "-3.5s" },
-  ];
-
   const state = useTimeTracker({ readOnly, apiBase, initialWeek });
   const {
     weekStart,
@@ -63,24 +49,8 @@ export function TimeTrackerPanel({ readOnly = false, apiBase, viewingLabel, init
   return (
     <>
     <section className="underwater-panel relative grid overflow-hidden rounded-2xl transition-[grid-template-columns,gap] duration-500 ease-out gap-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,0fr)] lg:items-start">
-      {/* One grid cell for bubbles + main card so the card stays in the wide column (not the 0fr track). */}
+      {/* One grid cell for the main card so it stays in the wide column (not the 0fr track). */}
       <div className="relative min-h-0 min-w-0 w-full lg:col-start-1 lg:row-start-1">
-        <div className="bubble-layer pointer-events-none absolute inset-0 z-0" aria-hidden="true">
-          {bubbles.map((bubble, idx) => (
-            <span
-              key={`${bubble.left}-${idx}`}
-              className="bubble"
-              style={
-                {
-                  "--bubble-left": bubble.left,
-                  "--bubble-size": bubble.size,
-                  "--bubble-duration": bubble.duration,
-                  "--bubble-delay": bubble.delay,
-                } as CSSProperties
-              }
-            />
-          ))}
-        </div>
         <div className="glass-card hourlogger-surface relative z-[1] w-full min-w-0 rounded-2xl p-4 transition-[width,padding] duration-500 ease-out md:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">

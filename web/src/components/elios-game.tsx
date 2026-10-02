@@ -42,6 +42,11 @@ import {
  * browser is back online.
  */
 
+/** Frame rate while nothing is being flown: waiting for a press, or after a crash has settled. */
+const RESTING_FPS = 24;
+/** How long the crash dust gets at the full frame rate before the canvas rests. */
+const CRASH_SETTLE_MS = 1500;
+
 /**
  * The best score lives in localStorage, which is an external store, so it is
  * read through `useSyncExternalStore` rather than a state-set inside an effect.
@@ -244,9 +249,24 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
     let raf = 0;
     let last = performance.now();
     let stopped = false;
+    let crashedAt = -Infinity;
 
     const frame = (now: number) => {
       if (stopped) return;
+
+      // Waiting for a press is most of the game's life — the composer shows
+      // it for as long as the form is open. The hover and the far-wall drift
+      // read the same at a low rate, and drawing the lit canvas at the display
+      // rate cost half a core doing nothing. A run, and the crash dust that
+      // ends one, keep the full rate.
+      const resting =
+        stateRef.current.status === "idle" ||
+        (stateRef.current.status === "crashed" && now - crashedAt > CRASH_SETTLE_MS);
+      if (resting && now - last < 1000 / RESTING_FPS) {
+        raf = requestAnimationFrame(frame);
+        return;
+      }
+
       const dt = (now - last) / 1000;
       last = now;
 
@@ -260,6 +280,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       stateRef.current = after;
 
       if (before.status === "flying" && after.status === "crashed") {
+        crashedAt = now;
         if (isNewBest(after.score, readBest())) writeBest(after.score);
         if (leaderboard && after.score > 0) void submitScoreRef.current(after.score);
         setHud({ status: "crashed", score: after.score, impact: after.impact, zone: after.droneZone });
@@ -273,11 +294,26 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       raf = requestAnimationFrame(frame);
     };
 
+    // A hidden tab already stops animation frames; a canvas scrolled out of
+    // view does not, so stop the loop while none of it is on screen. The clock
+    // restarts on the way back, so a run picks up where it was left.
+    const visibility = new IntersectionObserver(([entry]) => {
+      if (stopped) return;
+      cancelAnimationFrame(raf);
+      raf = 0;
+      if (entry?.isIntersecting) {
+        last = performance.now();
+        raf = requestAnimationFrame(frame);
+      }
+    });
+    visibility.observe(canvas);
+
     raf = requestAnimationFrame(frame);
     return () => {
       stopped = true;
       cancelAnimationFrame(raf);
       observer.disconnect();
+      visibility.disconnect();
       renderer.dispose();
     };
   }, [leaderboard, paused]);
