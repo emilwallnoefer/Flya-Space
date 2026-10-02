@@ -28,6 +28,36 @@
  * bump of `ELIOS_RULES_VERSION`.
  */
 
+import {
+  COOL_RATE,
+  DOSE_DECAY,
+  DOSE_TIME,
+  DRAFT_ASSIST,
+  DRAFT_ATTI,
+  DRAFT_MANUAL,
+  EVAC_SPEED,
+  EVENT_SPECS,
+  FIRST_EVENT,
+  HEAT_TIME,
+  LEL_FALL,
+  LEL_TIME,
+  LIDAR_RECOVER,
+  LOST_TIME,
+  RTS_SPEED,
+  RTS_TIME,
+  SIGNAL_LAG,
+  WARNING_TIME,
+  deniedModes,
+  detailDraw,
+  erraticJolt,
+  eventGap,
+  isLive,
+  pickEvent,
+  startEvent,
+  type ActiveEvent,
+  type EventKind,
+} from "@/lib/elios-events";
+
 /**
  * Fixed world units. The canvas scales to fit, so the game plays identically at
  * any card width and the constants never need retuning for a new screen size.
@@ -247,7 +277,13 @@ export const ZONE_KINDS: Record<Zone, readonly ObstacleKind[]> = {
 };
 
 /** What the crash screen says you flew into — the name an inspector would use. */
-export const KIND_LABELS: Record<ObstacleKind | "FLOOR" | "CEILING", string> = {
+/** Everything a run can end on: steel, the floor and roof, and what the events bring. */
+export type ImpactKind = ObstacleKind | "FLOOR" | "CEILING" | "CABLE" | "RADIATION" | "GAS";
+
+export const KIND_LABELS: Record<ImpactKind, string> = {
+  CABLE: "a hanging cable",
+  RADIATION: "the radiation dose limit",
+  GAS: "an explosive atmosphere",
   BULKHEAD: "the edge of a manhole",
   PENDANT: "a superheater pendant",
   CLINKER: "a clinker heap",
@@ -292,7 +328,17 @@ export type Obstacle = {
   solids: readonly Solid[];
   /** Scored once, when the drone is fully past the trailing edge. */
   passed: boolean;
+  /** A cable hanging from the roof in the gap behind this obstacle, this long. */
+  cable?: number;
 };
+
+/** The middle of the clear gap behind an obstacle, where a cable hangs. */
+export function gapX(o: Pick<Obstacle, "x" | "width">): number {
+  return o.x + o.width + OBSTACLE_GAP / 2;
+}
+
+/** Cables hang this long at most, so there is always room beneath one. */
+export const MAX_CABLE = 92;
 
 const clamp01 = (n: number) => (Number.isFinite(n) ? Math.min(Math.max(n, 0), 1) : 0.5);
 
@@ -960,7 +1006,7 @@ export function hitsCeiling(y: number): boolean {
 export type GameStatus = "idle" | "flying" | "crashed" | "landed";
 
 /** Where a run ended and what it ended on — the crash screen names it. */
-export type Impact = { what: ObstacleKind | "FLOOR" | "CEILING"; x: number; y: number };
+export type Impact = { what: ImpactKind; x: number; y: number };
 
 export type GameState = {
   status: GameStatus;
@@ -991,9 +1037,34 @@ export type GameState = {
   speed: number;
   /** The throttle setting the forward speed is heading for. */
   target: number;
+  /** Whether things happen to the aircraft on this run (see `elios-events.ts`). */
+  events: boolean;
+  event: ActiveEvent | null;
+  /** World units flown forward this run; events are spaced in it. */
+  travelled: number;
+  nextEventAt: number;
+  /** Meters, 0 to 1: lidar temperature, radiation dose, gas concentration. */
+  heat: number;
+  dose: number;
+  lel: number;
+  /** The lidar overheated and has not cooled down yet: Assist is out. */
+  lidarOff: boolean;
+  /** The mode the pilot was in before an event forced a change; restored when it passes. */
+  forcedFrom: FlightMode | null;
+  /** Recent inputs, so a weak link can deliver them late. */
+  inputLog: readonly LoggedInput[];
+  /** An event that comes next whatever the space — for trying one out. */
+  queued: EventKind | null;
 };
 
-export function createGame(startZone = 0, mode: FlightMode = "ATTI_MAN", target = START_SPEED): GameState {
+type LoggedInput = { at: number; climb: boolean; descend: boolean; throttle: -1 | 0 | 1 };
+
+export function createGame(
+  startZone = 0,
+  mode: FlightMode = "ATTI_MAN",
+  target = START_SPEED,
+  events = false,
+): GameState {
   const zone = ZONES.indexOf(zoneAt(startZone));
   const set = clampTarget(mode, target);
   return {
@@ -1014,7 +1085,42 @@ export function createGame(startZone = 0, mode: FlightMode = "ATTI_MAN", target 
     // A run launches already cruising at its setting rather than from a standstill.
     speed: set,
     target: set,
+    events,
+    event: null,
+    travelled: 0,
+    nextEventAt: FIRST_EVENT,
+    heat: 0,
+    dose: 0,
+    lel: 0,
+    lidarOff: false,
+    forcedFrom: null,
+    inputLog: [],
+    queued: null,
   };
+}
+
+/** Modes the pilot can switch to right now; an event can take some away. */
+export function allowedModes(state: Pick<GameState, "event" | "lidarOff">): readonly FlightMode[] {
+  const denied = deniedModes(state.event, state.lidarOff);
+  return FLIGHT_MODES.filter((m) => !denied.includes(m));
+}
+
+/** The speed setting a forced mode change leaves the aircraft at, at most: 1.5 m/s. */
+export const FORCED_SPEED = mps(1.5);
+
+/** Where a mode the aircraft can no longer fly falls back to. */
+function fallbackFrom(allowed: readonly FlightMode[]): FlightMode {
+  return allowed.includes("ATTI") ? "ATTI" : (allowed[0] ?? "ATTI_MAN");
+}
+
+/**
+ * Cancel Return-to-Signal inside its countdown: the pilot keeps the sticks and
+ * flies on over the weak link instead of being flown back.
+ */
+export function cancelRts(state: GameState): GameState {
+  const e = state.event;
+  if (!e || e.kind !== "SIGNAL" || e.phase !== "lost") return state;
+  return { ...state, event: { ...e, phase: "active", t: 0, escalates: false } };
 }
 
 function clampTarget(mode: FlightMode, target: number): number {
@@ -1029,11 +1135,12 @@ function clampTarget(mode: FlightMode, target: number): number {
  * brake, and dropping out of it leaves you coasting.
  */
 export function setMode(state: GameState, mode: FlightMode): GameState {
-  if (state.mode === mode) return state;
+  if (state.mode === mode || !allowedModes(state).includes(mode)) return state;
   const target = clampTarget(mode, state.target);
   // Before a run there is nothing to slow down from.
   const speed = state.status === "idle" ? target : state.speed;
-  return { ...state, mode, target, speed };
+  // A pilot who picks a mode has taken over from whatever an event forced.
+  return { ...state, mode, target, speed, forcedFrom: null };
 }
 
 /** One tap of the throttle: a quarter metre per second, clipped to the mode. */
@@ -1070,6 +1177,8 @@ export type StepInput = {
   descend?: boolean;
   /** Throttle held: -1 slows the speed setting down, 1 speeds it up. */
   throttle?: -1 | 0 | 1;
+  /** Draw in [0, 1): which event comes next, and its details. */
+  eventDraw?: number;
 };
 
 /** Longest distance anything may move in one sub-step, so a fast run cannot tunnel through steel. */
@@ -1087,7 +1196,18 @@ export function stepGame(state: GameState, input: StepInput): GameState {
   // wide; split the step so every contact is still tested.
   const travel = Math.max(Math.abs(state.speed) + state.recoil, Math.abs(state.velocity), MAX_FALL_SPEED) * dt;
   const steps = Math.min(8, Math.max(1, Math.ceil(travel / MAX_STEP_TRAVEL)));
-  let s = state;
+  // Keep just enough input history for a weak link to deliver it late.
+  const logged: LoggedInput = {
+    at: state.elapsed,
+    climb: !!input.climb,
+    descend: !!input.descend,
+    throttle: input.throttle ?? 0,
+  };
+  const inputLog = state.events
+    ? [...state.inputLog, logged].filter((e) => e.at >= state.elapsed - SIGNAL_LAG - 0.25)
+    : state.inputLog;
+
+  let s: GameState = { ...state, inputLog };
   let bump: Impact | null = null;
   for (let i = 0; i < steps && s.status === "flying"; i += 1) {
     s = subStep(s, input, dt / steps);
@@ -1096,26 +1216,54 @@ export function stepGame(state: GameState, input: StepInput): GameState {
   return { ...s, bump };
 }
 
+/** What the aircraft actually receives: over a weak link, what the pilot did a moment ago. */
+function receivedInput(state: GameState, input: StepInput): Pick<StepInput, "climb" | "descend" | "throttle"> {
+  const e = state.event;
+  const lagging = !!e && e.kind === "SIGNAL" && (e.phase === "active" || e.phase === "lost");
+  if (!lagging) return input;
+  let late: LoggedInput | undefined;
+  for (const entry of state.inputLog) if (entry.at <= state.elapsed - SIGNAL_LAG) late = entry;
+  return late ?? { climb: false, descend: false, throttle: 0 };
+}
+
 function subStep(state: GameState, input: StepInput, dt: number): GameState {
   const spec = MODE_SPECS[state.mode];
+  const event = state.event;
+  // Return-to-Signal: the aircraft flies itself back, holding its height, and
+  // the sticks do nothing until it has.
+  const returning = event?.kind === "SIGNAL" && event.phase === "rts";
+  const sticks = returning ? { climb: false, descend: false, throttle: 0 as const } : receivedInput(state, input);
+  const assisted = state.mode === "ASSIST" || state.mode === "ASSIST_SPORT";
 
   let velocity: number;
-  if (spec.altitudeHold) {
+  if (spec.altitudeHold || returning) {
     // Altitude hold: the aircraft climbs or descends at the rate asked for and
     // holds height when nothing is.
-    const wanted = input.climb && !input.descend ? -spec.climbRate : input.descend && !input.climb ? spec.climbRate : 0;
+    const rate = spec.altitudeHold ? spec.climbRate : 0;
+    const wanted = sticks.climb && !sticks.descend ? -rate : sticks.descend && !sticks.climb ? rate : 0;
     velocity = state.velocity + (wanted - state.velocity) * (1 - Math.exp(-dt / VERTICAL_TAU));
   } else {
     velocity = Math.min(state.velocity + GRAVITY * dt, MAX_FALL_SPEED);
   }
+  // A draft: Assist leans into it and barely moves, ATTI drifts with it, and
+  // ATTI MAN, holding nothing, is thrown about.
+  if (isLive(event, "DRAFT") && event && !spec.altitudeHold && !returning) {
+    velocity = Math.min(velocity + event.dir * DRAFT_MANUAL * dt, MAX_FALL_SPEED);
+  }
   let y = state.y + velocity * dt;
+  if (isLive(event, "DRAFT") && event && spec.altitudeHold) y += event.dir * (assisted ? DRAFT_ASSIST : DRAFT_ATTI) * dt;
 
   const elapsed = state.elapsed + dt;
-  const target = clampTarget(state.mode, state.target + (input.throttle ?? 0) * THROTTLE_RATE * dt);
+  // Over featureless steel the cameras feed Assist a position that is not
+  // there, and it jerks the aircraft about chasing it. ATTI ignores them.
+  if (isLive(event, "FEATURELESS") && assisted) y += erraticJolt(elapsed) * dt;
+
+  const target = clampTarget(state.mode, state.target + (sticks.throttle ?? 0) * THROTTLE_RATE * dt);
   // Forward speed heads for the setting; without position hold the air pushes it about too.
   let speed =
     state.speed + (target - state.speed) * (1 - Math.exp(-dt / spec.speedTau)) + gustAt(state.mode, elapsed) * dt;
-  speed = Math.max(0, speed);
+  if (isLive(event, "FEATURELESS") && assisted) speed += 40 * Math.sin(3.1 * elapsed) * dt;
+  speed = returning ? -RTS_SPEED : Math.max(0, speed);
 
   const decayed = state.recoil * Math.exp(-RECOIL_DECAY * dt);
   let recoil = decayed < 0.5 ? 0 : decayed;
@@ -1138,7 +1286,12 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     }
     const seed = seedFromDraw(input.styleDraw ?? 0.5);
     const built = buildObstacle(kind, input.placeDraw, seed);
-    obstacles = [...obstacles, { id: nextId, x: WORLD_WIDTH, kind, zone: buildZone, seed, passed: false, ...built }];
+    // While cables hang in this stretch, every gap gets one.
+    const cable = event?.kind === "CABLES" ? 40 + detailDraw(input.placeDraw) * (MAX_CABLE - 40) : undefined;
+    obstacles = [
+      ...obstacles,
+      { id: nextId, x: WORLD_WIDTH, kind, zone: buildZone, seed, passed: false, ...built, ...(cable ? { cable } : {}) },
+    ];
     nextId += 1;
   }
 
@@ -1154,6 +1307,69 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     return o;
   });
 
+  // ---- Events: what is happening to the aircraft, and what it does to the run.
+  let ev = state.event;
+  let { travelled, nextEventAt, heat, dose, lel, lidarOff } = state;
+  let ended: Impact | null = null;
+  if (state.events) {
+    travelled += Math.max(0, speed) * dt;
+    if (!ev) {
+      if (travelled >= nextEventAt) {
+        const kind = state.queued ?? pickEvent(ZONES[droneZone], score, input.eventDraw ?? 0.5);
+        if (kind) ev = startEvent(kind, input.eventDraw ?? 0.5);
+        else nextEventAt = travelled + 300;
+      }
+    } else {
+      ev = { ...ev, t: ev.t + dt };
+      if (ev.phase === "warning") {
+        if (ev.t >= WARNING_TIME) ev = { ...ev, phase: "active", t: 0 };
+      } else if (ev.phase === "active") {
+        ev = { ...ev, left: ev.left - Math.max(0, speed) * dt };
+        if (ev.kind === "SIGNAL" && ev.escalates && ev.left < EVENT_SPECS.SIGNAL.length / 2) {
+          ev = { ...ev, phase: "lost", t: 0 };
+        } else if (ev.left <= 0) {
+          ev = null;
+        }
+      } else if (ev.phase === "lost") {
+        if (ev.t >= LOST_TIME) ev = { ...ev, phase: "rts", t: 0 };
+      } else if (ev.t >= RTS_TIME) {
+        // Back in signal: the pilot has the sticks again, standing still.
+        ev = null;
+        speed = 0;
+      }
+      if (!ev) nextEventAt = travelled + eventGap(score);
+    }
+
+    heat = Math.min(1, Math.max(0, heat + (isLive(ev, "HEAT") ? dt / HEAT_TIME : -COOL_RATE * dt)));
+    if (heat >= 1) lidarOff = true;
+    else if (heat < LIDAR_RECOVER) lidarOff = false;
+    dose = Math.min(1, Math.max(0, dose + (isLive(ev, "RADIATION") ? dt / DOSE_TIME : -DOSE_DECAY * dt)));
+    const evacuating = isLive(ev, "GAS");
+    lel = Math.min(1, Math.max(0, lel + (evacuating && speed < EVAC_SPEED ? dt / LEL_TIME : -LEL_FALL * dt)));
+    if (dose >= 1) ended = { what: "RADIATION", x: DRONE_X, y };
+    else if (lel >= 1) ended = { what: "GAS", x: DRONE_X, y };
+  }
+
+  // An event can take the current mode away; the switch drops to what still
+  // works, and goes back to the pilot's choice once it passes.
+  let mode = state.mode;
+  let forcedFrom = state.forcedFrom;
+  let held = target;
+  const allowed = allowedModes({ event: ev, lidarOff });
+  if (!allowed.includes(mode)) {
+    forcedFrom ??= mode;
+    mode = fallbackFrom(allowed);
+    // Dropped into a mode that drifts, the aircraft is set a little inside
+    // the cage rather than on its edge — the air would push it over at once.
+    held = Math.min(clampTarget(mode, target), FORCED_SPEED);
+  } else if (forcedFrom && forcedFrom !== mode && allowed.includes(forcedFrom)) {
+    mode = forcedFrom;
+    forcedFrom = null;
+    held = clampTarget(mode, target);
+  } else if (forcedFrom === mode) {
+    forcedFrom = null;
+  }
+
   let bump: Impact | null = null;
   if (isCollisionTolerant({ speed })) {
     const bounced = bounceOff(y, velocity, obstacles);
@@ -1165,7 +1381,8 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     }
   }
 
-  const impact = bump ? null : contactAt(y, obstacles);
+  // A cable snags whatever the speed: the cage bounces off steel, not rope.
+  const impact = ended ?? cableAt(y, obstacles) ?? (bump ? null : contactAt(y, obstacles));
   const crashed = impact !== null;
   const flat = !crashed && elapsed >= BATTERY_SECONDS;
 
@@ -1184,10 +1401,34 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     impact,
     recoil: crashed ? 0 : recoil,
     bump,
-    mode: state.mode,
+    mode,
     speed: crashed ? 0 : speed,
-    target,
+    target: held,
+    events: state.events,
+    event: crashed ? null : ev,
+    travelled,
+    nextEventAt,
+    heat,
+    dose,
+    lel,
+    lidarOff,
+    forcedFrom,
+    inputLog: state.inputLog,
+    queued: ev && ev.kind === state.queued ? null : state.queued,
   };
+}
+
+/** A cable the cage has caught, if any. */
+function cableAt(y: number, obstacles: readonly Obstacle[]): Impact | null {
+  for (const o of obstacles) {
+    if (!o.cable) continue;
+    const cx = gapX(o);
+    if (Math.abs(cx - DRONE_X) > DRONE_RADIUS) continue;
+    // The cage's lowest point on the cable's line, against the cable's end.
+    const reach = Math.sqrt(Math.max(0, DRONE_RADIUS ** 2 - (cx - DRONE_X) ** 2));
+    if (y - reach < o.cable) return { what: "CABLE", x: cx, y: Math.min(o.cable, y) };
+  }
+  return null;
 }
 
 /** What the cage is touching at height `y`, if anything — floor and ceiling first. */

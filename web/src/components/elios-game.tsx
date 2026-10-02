@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createRenderer } from "@/components/elios/renderer";
+import { EVENT_KINDS } from "@/lib/elios-events";
 import type { LeaderboardRow } from "@/lib/elios-leaderboard";
 import {
   flushPendingScore,
@@ -19,6 +20,8 @@ import {
   WORLD_WIDTH,
   ZONES,
   ZONE_NAMES,
+  allowedModes,
+  cancelRts,
   createGame,
   crashLine,
   flap,
@@ -180,14 +183,51 @@ export type EliosGameProps = {
   paused?: boolean;
 };
 
-type Hud = { status: GameState["status"]; score: number; impact: Impact | null; zone: number };
+type Hud = {
+  status: GameState["status"];
+  score: number;
+  impact: Impact | null;
+  zone: number;
+  /** The mode actually flying — an event can force it away from the pilot's choice. */
+  live: FlightMode;
+  /** Modes the switch accepts right now, joined, and what the event is doing: cheap to compare every frame. */
+  allowed: string;
+  event: string;
+};
+
+const eventKey = (s: GameState) => (s.event ? `${s.event.kind}:${s.event.phase}` : "");
+
+function hudOf(s: GameState, impact: Impact | null = s.impact): Hud {
+  return {
+    status: s.status,
+    score: s.score,
+    impact,
+    zone: s.droneZone,
+    live: s.mode,
+    allowed: allowedModes(s).join(","),
+    event: eventKey(s),
+  };
+}
+
+/**
+ * A fresh run with things happening to the aircraft — the game as it is meant
+ * to be flown. In development `?event=DARKNESS` (any kind) makes that event
+ * come first, a few seconds in, so each one can be tried on demand.
+ */
+function newRun(zone: number, mode: FlightMode): GameState {
+  const run = createGame(zone, mode, undefined, true);
+  if (process.env.NODE_ENV === "production") return run;
+  const asked = new URLSearchParams(window.location.search).get("event")?.toUpperCase();
+  const kind = EVENT_KINDS.find((k) => k === asked);
+  return kind ? { ...run, queued: kind, nextEventAt: 250 } : run;
+}
 
 export function EliosGame({ className = "mt-4", leaderboard = false, paused = false }: EliosGameProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stateRef = useRef<GameState>(createGame());
   // Server render has no localStorage, so the server snapshot is always null.
   const best = useSyncExternalStore(subscribeBest, readBest, () => null);
-  const [hud, setHud] = useState<Hud>({ status: "idle", score: 0, impact: null, zone: 0 });
+  const [hud, setHud] = useState<Hud>(() => hudOf(createGame()));
   const mode = useSyncExternalStore(subscribeMode, readMode, () => DEFAULT_MODE);
   const heldRef = useRef<Held>(NOTHING_HELD);
   const [board, setBoard] = useState<LeaderboardRow[] | null>(null);
@@ -238,7 +278,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
   useEffect(() => {
     const s = stateRef.current;
     if (s.status === "idle" && s.obstacles.length === 0) {
-      stateRef.current = createGame(Math.floor(Math.random() * ZONES.length), readMode());
+      stateRef.current = newRun(Math.floor(Math.random() * ZONES.length), readMode());
     }
   }, []);
 
@@ -270,14 +310,24 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
     if (paused) return;
     const s = stateRef.current;
     const over = s.status === "crashed" || s.status === "landed";
-    stateRef.current = over ? flap(createGame(nextZone(s.droneZone), s.mode)) : flap(s);
-    const n = stateRef.current;
-    setHud({ status: n.status, score: n.score, impact: null, zone: n.droneZone });
+    // A new run starts in the pilot's chosen mode, not one an event forced.
+    stateRef.current = over ? flap(newRun(nextZone(s.droneZone), readMode())) : flap(s);
+    setHud(hudOf(stateRef.current, null));
   }, [paused]);
 
+  /** The switch: refused while an event has the mode, remembered as the pilot's choice otherwise. */
   const chooseMode = useCallback((next: FlightMode) => {
-    stateRef.current = setMode(stateRef.current, next);
+    const after = setMode(stateRef.current, next);
+    if (after.mode !== next) return;
+    stateRef.current = after;
     writeMode(next);
+    setHud(hudOf(after));
+  }, []);
+
+  /** Inside the Return-to-Signal countdown: keep the sticks and fly on blind. */
+  const keepControl = useCallback(() => {
+    stateRef.current = cancelRts(stateRef.current);
+    setHud(hudOf(stateRef.current));
   }, []);
 
   /** A held input; a fresh press of the throttle also steps it, so a tap does something. */
@@ -361,6 +411,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       const after = stepGame(before, {
         dt,
         kindDraw: Math.random(),
+        eventDraw: Math.random(),
         placeDraw: Math.random(),
         styleDraw: Math.random(),
         climb: held.climb,
@@ -373,9 +424,14 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
         crashedAt = now;
         if (isNewBest(after.score, readBest())) writeBest(after.score);
         if (POST_SCORES && leaderboard && after.score > 0) void submitScoreRef.current(after.score);
-        setHud({ status: after.status, score: after.score, impact: after.impact, zone: after.droneZone });
-      } else if (after.score !== before.score) {
-        setHud({ status: after.status, score: after.score, impact: null, zone: after.droneZone });
+        setHud(hudOf(after));
+      } else if (
+        after.score !== before.score ||
+        after.mode !== before.mode ||
+        eventKey(after) !== eventKey(before) ||
+        after.lidarOff !== before.lidarOff
+      ) {
+        setHud(hudOf(after, null));
       }
 
       // The renderer's clock is capped separately: a tab coming back from
@@ -418,8 +474,14 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       }
       if (e.key === "m" || e.key === "M") {
         e.preventDefault();
-        const i = FLIGHT_MODES.indexOf(stateRef.current.mode);
-        chooseMode(FLIGHT_MODES[(i + 1) % FLIGHT_MODES.length]);
+        const allowed = allowedModes(stateRef.current);
+        const i = allowed.indexOf(stateRef.current.mode);
+        if (allowed.length > 0) chooseMode(allowed[(i + 1) % allowed.length]);
+        return;
+      }
+      if (e.key === "r" || e.key === "R") {
+        e.preventDefault();
+        keepControl();
         return;
       }
       const key = heldKeyFor(e.key);
@@ -428,7 +490,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       if (!e.repeat && (key === "climb" || (key === "descend" && stateRef.current.status !== "flying"))) press();
       hold(key, true);
     },
-    [press, hold, chooseMode],
+    [press, hold, chooseMode, keepControl],
   );
 
   const onKeyUp = useCallback(
@@ -485,6 +547,20 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
           className="block h-auto w-full touch-none select-none"
           style={{ aspectRatio: `${WORLD_WIDTH} / ${WORLD_HEIGHT}` }}
         />
+        {hud.status === "flying" && hud.event === "SIGNAL:lost" ? (
+          <button
+            type="button"
+            onPointerDown={(e) => {
+              // Inside the canvas wrapper: do not also count as a press on the game.
+              e.stopPropagation();
+              e.preventDefault();
+              keepControl();
+            }}
+            className="absolute bottom-[18%] left-1/2 -translate-x-1/2 rounded-full border border-white/40 bg-black/70 px-3 py-1.5 text-[11px] font-semibold text-white"
+          >
+            Cancel RTS · keep flying
+          </button>
+        ) : null}
         {hud.status !== "flying" ? (
           // The scene behind is always dark, whatever the app theme, so the
           // title card uses fixed light text rather than theme tokens. It
@@ -505,7 +581,13 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
                   </p>
                   {hud.impact && where ? (
                     <p className="mt-0.5 text-[11px] text-white/65">
-                      Hit {KIND_LABELS[hud.impact.what]} in the {where}.
+                      {hud.impact.what === "RADIATION"
+                        ? "E04 — dose limit reached. The flight is over."
+                        : hud.impact.what === "GAS"
+                          ? "PA08 — not out of the gas fast enough."
+                          : hud.impact.what === "CABLE"
+                            ? `Snagged ${KIND_LABELS.CABLE} in the ${where} — the cage can't bounce off rope.`
+                            : `Hit ${KIND_LABELS[hud.impact.what]} in the ${where}.`}
                     </p>
                   ) : null}
                 </>
@@ -520,6 +602,11 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
                     : "Tap / space to flap against gravity · ← → speed"}
                 </p>
               ) : null}
+              {hud.status === "idle" ? (
+                <p className="mt-0.5 text-[10px] text-white/45">
+                  Dust, heat, drafts, lost signal… switch modes to survive them · 1–5 modes · R cancels RTS
+                </p>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -527,16 +614,19 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {FLIGHT_MODES.map((option, i) => {
           const spec = MODE_SPECS[option];
-          const on = mode === option;
+          const flying = hud.status === "flying";
+          const on = (flying ? hud.live : mode) === option;
+          const usable = !flying || hud.allowed.split(",").includes(option);
           const limit = option === "ATTI_MAN" ? "unlimited" : `${(spec.maxSpeed * METRES_PER_UNIT).toFixed(1)} m/s max`;
           return (
             <button
               key={option}
               type="button"
               aria-pressed={on}
-              title={`${spec.holds} · ${limit} · key ${i + 1}`}
+              disabled={!usable}
+              title={`${spec.holds} · ${limit} · key ${i + 1}${usable ? "" : " · unavailable right now"}`}
               onClick={() => chooseMode(option)}
-              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:line-through disabled:opacity-40 ${
                 on ? "border-accent/60 bg-accent/15 text-ink" : "border-glass/20 text-ink-4 hover:text-ink-2"
               }`}
             >

@@ -19,6 +19,7 @@ import { LightMap, Motes, drawRims, easeToward, intensityAt, type Light } from "
 import { LOOK, rgba, type RGB } from "./look";
 import { drawObstacleMotion, paintObstacle, type Sprite } from "./obstacle-art";
 import { drawBackdrop, drawMidground, drawSurfaces, type ZoneSpan } from "./scenery";
+import { drawCables, drawEventHud, drawEventWorld, drawLostFeed, drawStatic, holdsFrame } from "./event-fx";
 
 /**
  * Puts a frame of the game on the canvas, back to front:
@@ -96,6 +97,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
   let debris: Debris[] = [];
   let shownZone = -1;
   let titleAt = -10;
+  /** Counts frames, so a weak link can let only some of them through. */
+  let frameNo = 0;
 
   const spriteFor = (o: GameState["obstacles"][number], scale: number): Sprite => {
     const from = `${o.kind}:${o.seed}:${o.zone}`;
@@ -143,6 +146,16 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
     if (disposed) return;
     const scale = canvas.width / W;
     if (!(scale > 0)) return;
+
+    // A stuttering feed: keep the last picture and only add static to it.
+    // The scroll still advances, so the next frame that gets through jumps.
+    frameNo += 1;
+    if (holdsFrame(state, frameNo)) {
+      scroll += (state.status === "flying" ? worldSpeed(state) : 0) * dt;
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      drawStatic(ctx, t, 0.6);
+      return;
+    }
 
     // The scenery keeps up with the run as it speeds up, or drifts while the
     // drone hovers before one.
@@ -225,6 +238,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
       ctx.drawImage(sprite.canvas, o.x + sprite.x0, sprite.y0, sprite.w, sprite.h);
       drawObstacleMotion(ctx, o, t);
     }
+    drawCables(ctx, state.obstacles, t);
 
     light.render(
       beam,
@@ -237,6 +251,9 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
 
     motes.update(dt, scrolled, t);
     motes.draw(ctx, beam, look.mote, look.moteDensity);
+
+    // Dust, the dark, glare — under the drone, so the aircraft itself always shows.
+    drawEventWorld(ctx, state, t, droneY, look.mote);
 
     drone.draw(ctx, DRONE_X, droneY, tilt, t, scale);
 
@@ -267,6 +284,14 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
       }
       ctx.restore();
       debris = debris.filter((d) => d.life > 0);
+    }
+
+    // A lost or stuttering video link, over everything but the HUD.
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    const lost = state.event?.kind === "SIGNAL" && state.event.phase === "lost" && state.status === "flying";
+    if (lost) drawLostFeed(ctx, t);
+    else if (state.event?.kind === "SIGNAL" && state.status === "flying" && state.event.phase !== "warning") {
+      drawStatic(ctx, t, 0.4);
     }
 
     // HUD, in world units again but without the shake. A hard offset shadow
@@ -320,7 +345,13 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
       ctx.textBaseline = "top";
       ctx.textAlign = "left";
       ctx.font = "700 5.5px ui-monospace, SFMono-Regular, Menlo, monospace";
-      label(spec.label.toUpperCase(), 9, 31, "rgba(255,255,255,0.75)");
+      label(
+        state.forcedFrom ? `${spec.label.toUpperCase()} · FORCED` : spec.label.toUpperCase(),
+        9,
+        31,
+        state.forcedFrom ? "rgba(255,206,110,0.95)" : "rgba(255,255,255,0.75)",
+      );
+      drawEventHud(ctx, state, t, label);
       // While the cage still shrugs off contact, say so — and the moment it
       // stops, the label going away is the warning.
       if (caged) {
