@@ -25,8 +25,10 @@ export const LEADERBOARD_LIMIT = 10;
  *
  *   1  original run, linear speed-up to 148
  *   2  three-phase curve to 185, cage bounces below 2 m/s (2026-10-02)
+ *   3  the space picks Assist/ATTI, events, pace by obstacles to 4.5 m/s,
+ *      contact ends the run except ropes (2026-10-02)
  */
-export const ELIOS_RULES_VERSION = 2;
+export const ELIOS_RULES_VERSION = 3;
 
 export type LeaderboardRow = {
   /** First name only — this is a wall display, not a directory. */

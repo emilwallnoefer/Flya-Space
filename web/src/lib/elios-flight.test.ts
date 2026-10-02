@@ -3,8 +3,6 @@ import {
   DRONE_RADIUS,
   DRONE_X,
   EDGE_MARGIN,
-  FLAP_VELOCITY,
-  GRAVITY,
   KIND_LABELS,
   KNOCK_DROP,
   KNOCK_TIME,
@@ -277,27 +275,6 @@ describe("the double web frame stays a slalom, not a wall", () => {
             (climb * bay) / MAX_SPEED + 1,
           );
         }
-      }
-    }
-  });
-
-  it("keeps it flyable on a flap in ATTI MAN up to the old top speed — faster than that is the pilot's risk", () => {
-    const MAN_FAIR_SPEED = 185;
-    for (const draw of PLACEMENTS) {
-      for (const seed of SEEDS) {
-        const { width, solids } = buildObstacle("DOUBLE_FRAME", draw, seed);
-        const [first, second] = holes(solids);
-        const bar = 16;
-        const bay = width - 2 * bar;
-        const seconds = bay / MAN_FAIR_SPEED;
-        const climbOnAFlap = FLAP_VELOCITY ** 2 / (2 * GRAVITY);
-        const dropInTheBay = 0.5 * GRAVITY * seconds ** 2;
-        const offset = Math.abs(second.top - first.top);
-        expect(offset, `DOUBLE_FRAME @ ${draw} seed ${seed}`).toBeLessThanOrEqual(
-          Math.min(climbOnAFlap, dropInTheBay) + 1,
-        );
-        // And it is still a slalom: the holes do not simply line up.
-        expect(offset).toBeGreaterThan(8);
       }
     }
   });

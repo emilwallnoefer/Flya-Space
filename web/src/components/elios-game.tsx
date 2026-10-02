@@ -46,12 +46,6 @@ import {
  * caller opts in.
  */
 
-/**
- * Preview: scores flown under the new rules are kept off the live board until
- * the release that resets it. Flip this with that release.
- */
-const POST_SCORES = false;
-
 /** What the pilot is holding right now; read by the frame loop every step. */
 type Held = { climb: boolean; descend: boolean };
 const NOTHING_HELD: Held = { climb: false, descend: false };
@@ -152,14 +146,10 @@ type Hud = {
   score: number;
   impact: Impact | null;
   zone: number;
-  /** "SIGNAL:lost" and the like — what the overlay buttons need to know. */
-  event: string;
 };
 
-const eventKey = (s: GameState) => (s.event ? `${s.event.kind}:${s.event.phase}` : "");
-
 function hudOf(s: GameState, impact: Impact | null = s.impact): Hud {
-  return { status: s.status, score: s.score, impact, zone: s.droneZone, event: eventKey(s) };
+  return { status: s.status, score: s.score, impact, zone: s.droneZone };
 }
 
 export function EliosGame({ className = "mt-4", leaderboard = false, paused = false }: EliosGameProps) {
@@ -171,7 +161,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
   const heldRef = useRef<Held>(NOTHING_HELD);
   const [board, setBoard] = useState<LeaderboardRow[] | null>(null);
   const pending = useSyncExternalStore(subscribePendingScore, readPendingScore, () => null);
-  const showBoard = POST_SCORES && leaderboard;
+  const showBoard = leaderboard;
 
   /**
    * Refresh the board. Silent on failure: an unapplied migration or a dropped
@@ -340,9 +330,9 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       if (before.status === "flying" && after.status !== "flying") {
         crashedAt = now;
         if (isNewBest(after.score, readBest())) writeBest(after.score);
-        if (POST_SCORES && leaderboard && after.score > 0) void submitScoreRef.current(after.score);
+        if (leaderboard && after.score > 0) void submitScoreRef.current(after.score);
         setHud(hudOf(after));
-      } else if (after.score !== before.score || eventKey(after) !== eventKey(before)) {
+      } else if (after.score !== before.score) {
         setHud(hudOf(after, null));
       }
 
@@ -459,9 +449,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
                         ? "E04 — dose limit reached. The flight is over."
                         : hud.impact.what === "GAS"
                           ? "PA08 — not out of the gas fast enough."
-                          : hud.impact.what === "CABLE"
-                            ? `Snagged ${KIND_LABELS.CABLE} in the ${where}.`
-                            : `Hit ${KIND_LABELS[hud.impact.what]} in the ${where}.`}
+                          : `Hit ${KIND_LABELS[hud.impact.what]} in the ${where}.`}
                     </p>
                   ) : null}
                 </>

@@ -57,11 +57,7 @@ export const WORLD_HEIGHT = 200;
 /** Metres per world unit, for the proximity readout. */
 export const METRES_PER_UNIT = 0.022;
 
-/** Downward acceleration, world units per second squared. */
-export const GRAVITY = 420;
-/** Upward kick of a single flap, world units per second. */
-export const FLAP_VELOCITY = -145;
-/** Terminal velocity, so a long fall stays readable rather than teleporting. */
+/** The fastest the drone ever moves up or down; it sizes the sub-steps that keep collisions honest. */
 export const MAX_FALL_SPEED = 220;
 
 export const DRONE_X = 68;
@@ -699,10 +695,8 @@ export function buildObstacle(
       // first leaves you badly placed for the second.
       //
       // The offset is bounded by what the drone can actually cover inside the
-      // bay: an altitude-holding mode's climb rate at its top speed, and in
-      // ATTI MAN one flap (about 25 units, FLAP_VELOCITY² / 2·GRAVITY) up to
-      // about 4 m/s — faster than that in ATTI MAN is the pilot's own risk.
-      // The test suite holds this to the flight constants.
+      // bay: either mode's climb rate at the run's top speed. The test suite
+      // holds this to the flight constants.
       const width = 96;
       const bar = 16;
       const passage = MIN_PASSAGE + 20;
@@ -1470,7 +1464,7 @@ function contactAt(y: number, obstacles: readonly Obstacle[]): Impact | null {
  * Versioned with the rules: a best flown on an older speed curve is not
  * comparable, so a rules change starts every browser's best afresh.
  */
-export const BEST_SCORE_KEY = "rolegate:elios-best-v2";
+export const BEST_SCORE_KEY = "rolegate:elios-best-v3";
 
 export function isNewBest(score: number, best: number | null): boolean {
   return score > 0 && (best === null || score > best);
