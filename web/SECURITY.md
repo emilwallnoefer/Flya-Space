@@ -99,6 +99,12 @@ Each item: **what** · **impact** · **fix** · **effort**.
 - **Verified:** unit tests for the access rule and a held-account fleet test; the migration tested on a local Postgres with Supabase-style roles (a member keeps every read and write, a held or unknown-role account gets none, re-run safe).
 - **Effort:** S. **Applied by hand?** ⚠️ the SQL file — required.
 
+**T0.13 — Fleet: unearned returns and booking around the pool** _(MEDIUM, run-4 F4/F5)_
+- **What:** (F4) `check_in` accepted a booking still in `reserved`, so booking today and "returning" at once scored an on-time return without the unit moving — one round trip took a new user to 100/trusted (waitlist priority, 84-day horizon). It also reset the unit to available-at-home even when someone else held it. (F5) `reserve` never checked `pooled`, so an admin-assigned unit could be booked, picked up and returned, wiping its assignment. The UI hid both; the server did not.
+- **Fix:** `check_in` now requires `picked_up` (an unused booking is closed with `cancel`, which is not scored) and frees the unit only when this booking is its recorded holder; `reserve` refuses `!isBookable(asset)`, admins included.
+- **Verified:** three route tests, each confirmed to fail with the fix removed. Scoring logic unchanged, so existing scores do not move.
+- **Effort:** XS.
+
 ### Tier 1 — Hardening (defense-in-depth)
 
 **T1.1 — Security headers.** `next.config.ts` sets none. Add a `headers()` block: `Content-Security-Policy` (the mitigating layer for T0.2), `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`. Effort: S (CSP tuning is the only real work).

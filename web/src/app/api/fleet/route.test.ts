@@ -201,6 +201,68 @@ describe("picking material up and bringing it back", () => {
   });
 });
 
+describe("a return has to follow a pickup (audit run-4 F4)", () => {
+  const RES_ID = RESERVATION_ID;
+
+  it("refuses to check in a booking that was never picked up", async () => {
+    // The exploit: book today, "return" at once, collect an on-time return.
+    const res = await post(
+      { viewer: MEMBER, tables: { fleet_assets: assets(), fleet_reservations: [reservation()] } },
+      { action: "check_in", reservation_id: RES_ID },
+    );
+    expect(res.status).toBe(409);
+    expect(String(res.body.error)).toMatch(/never picked up/i);
+    // Nothing moved: the booking is still open and no return was scored.
+    expect(res.tables.fleet_reservations[0].status).toBe("reserved");
+    expect(res.tables.fleet_reservations[0].returned_on ?? null).toBeNull();
+  });
+
+  it("does not free a unit that someone else is recorded as holding", async () => {
+    // MEMBER's booking is picked up on paper, but the unit is with OTHER.
+    const res = await post(
+      {
+        viewer: MEMBER,
+        tables: {
+          fleet_assets: assets({ status: "out", current_holder_user_id: OTHER.id, current_location: "Basel" }),
+          fleet_reservations: [reservation({ status: "picked_up" })],
+        },
+      },
+      { action: "check_in", reservation_id: RES_ID },
+    );
+    expect(res.status).toBe(200);
+    // MEMBER's own booking closes...
+    expect(res.tables.fleet_reservations[0].status).toBe("returned");
+    // ...but OTHER still has the unit, where it was.
+    const asset = res.tables.fleet_assets[0];
+    expect(asset.status).toBe("out");
+    expect(asset.current_holder_user_id).toBe(OTHER.id);
+    expect(asset.current_location).toBe("Basel");
+  });
+});
+
+describe("only the shared pool can be booked (audit run-4 F5)", () => {
+  it("refuses a unit an admin assigned out of the pool", async () => {
+    for (const viewer of [MEMBER, ADMIN]) {
+      const res = await post(
+        {
+          viewer,
+          adminEmails: [ADMIN.email!],
+          tables: {
+            fleet_assets: assets({ pooled: false, current_holder_label: "Customer loan: Acme" }),
+            fleet_reservations: [],
+          },
+        },
+        { action: "reserve", asset_id: ASSET_ID, start_date: TODAY, end_date: "2026-09-16" },
+      );
+      expect(res.status).toBe(409);
+      expect(String(res.body.error)).toMatch(/not in the shared pool/i);
+      expect(res.tables.fleet_reservations).toHaveLength(0);
+      // The assignment is untouched.
+      expect(res.tables.fleet_assets[0].current_holder_label).toBe("Customer loan: Acme");
+    }
+  });
+});
+
 describe("the booking rules", () => {
   const base = () => ({
     viewer: MEMBER,
