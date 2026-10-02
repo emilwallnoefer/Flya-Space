@@ -12,25 +12,23 @@ import {
 } from "@/lib/elios-score-sync";
 import {
   BEST_SCORE_KEY,
-  FLIGHT_MODES,
+  GEARS,
+  GEAR_SPECS,
   KIND_LABELS,
   METRES_PER_UNIT,
-  MODE_SPECS,
   WORLD_HEIGHT,
   WORLD_WIDTH,
   ZONES,
   ZONE_NAMES,
-  allowedModes,
-  cancelRts,
   createGame,
   crashLine,
   flap,
   isNewBest,
-  nudgeThrottle,
   parseStoredBest,
-  setMode,
+  setGear,
+  shiftGear,
   stepGame,
-  type FlightMode,
+  type Gear,
   type GameState,
   type Impact,
 } from "@/lib/elios-flight";
@@ -38,79 +36,31 @@ import {
 /**
  * "Fly where people can't" — the Elios 3 flies through the confined spaces it
  * really inspects, a boiler, a ballast tank, a mine stope, a sewer and a
- * storage tank, past what a pilot meets in each of them.
+ * storage tank, while the things that really go wrong in there go wrong.
+ *
+ * Two controls, the same all run: up/down to fly, and the gear — four steps
+ * from Assist to ATTI Sport — for speed. What the events do to the aircraft
+ * changes how it flies, never what the controls mean.
  *
  * This file is input, the frame loop and the chrome around the canvas. The
- * rules live in `lib/elios-flight.ts` and are unit-tested; the look — real
- * Flyability photographs, the drone as the only light — lives in
- * `components/elios/`. The game itself stays inert: the only network it
- * touches is the leaderboard, and only when a caller opts in.
- *
- * A run flown without a connection still counts: its score waits in
- * localStorage (`lib/elios-score-sync.ts`) and is posted the moment the
- * browser is back online.
+ * rules live in `lib/elios-flight.ts` and `lib/elios-events.ts` and are
+ * unit-tested; the look lives in `components/elios/`. The game itself stays
+ * inert: the only network it touches is the leaderboard, and only when a
+ * caller opts in.
  */
 
 /**
- * Flight-modes preview: scores flown under the new rules are kept off the live
- * board until the release that resets it. Flip this with that release.
+ * Preview: scores flown under the new rules are kept off the live board until
+ * the release that resets it. Flip this with that release.
  */
 const POST_SCORES = false;
 
-/** Where the player left the mode switch, so the next visit starts there. */
-const MODE_KEY = "rolegate:elios-mode";
-
-const DEFAULT_MODE: FlightMode = "ASSIST_SPORT";
-
-/** Read through `useSyncExternalStore`, the same way and for the same reasons as the best score below. */
-let modeCache: FlightMode | undefined;
-const modeListeners = new Set<() => void>();
-
-function readMode(): FlightMode {
-  if (modeCache === undefined) {
-    modeCache = DEFAULT_MODE;
-    try {
-      const raw = window.localStorage.getItem(MODE_KEY);
-      if (raw && (FLIGHT_MODES as readonly string[]).includes(raw)) modeCache = raw as FlightMode;
-    } catch {
-      // Private windows: start in the default.
-    }
-  }
-  return modeCache;
-}
-
-function writeMode(mode: FlightMode) {
-  modeCache = mode;
-  try {
-    window.localStorage.setItem(MODE_KEY, mode);
-  } catch {
-    // A nicety.
-  }
-  for (const listener of modeListeners) listener();
-}
-
-function subscribeMode(onChange: () => void) {
-  modeListeners.add(onChange);
-  return () => {
-    modeListeners.delete(onChange);
-  };
-}
+/** The gear every run starts in: the fastest that still has the cage. */
+const START_GEAR: Gear = "ASSIST_SPORT";
 
 /** What the pilot is holding right now; read by the frame loop every step. */
-type Held = { climb: boolean; descend: boolean; slower: boolean; faster: boolean };
-const NOTHING_HELD: Held = { climb: false, descend: false, slower: false, faster: false };
-
-/**
- * Keys. ↑/W/Space/Enter climb (a flap in ATTI MAN), ↓/S descend, ←/→ (A/D)
- * move the throttle; 1–5 pick a mode and M steps through them.
- */
-function heldKeyFor(key: string): keyof Held | null {
-  if (key === " " || key === "Enter" || key === "ArrowUp" || key === "w" || key === "W") return "climb";
-  if (key === "ArrowDown" || key === "s" || key === "S") return "descend";
-  if (key === "ArrowLeft" || key === "a" || key === "A") return "slower";
-  if (key === "ArrowRight" || key === "d" || key === "D") return "faster";
-  return null;
-}
+type Held = { climb: boolean; descend: boolean };
+const NOTHING_HELD: Held = { climb: false, descend: false };
 
 /** Frame rate while nothing is being flown: waiting for a press, or after a crash has settled. */
 const RESTING_FPS = 24;
@@ -165,6 +115,32 @@ function nextZone(previous: number): number {
   return (previous + 1 + Math.floor(Math.random() * (n - 1))) % n;
 }
 
+/**
+ * A fresh run with events and pick-ups — the game as it is meant to be flown.
+ * In development `?event=DARKNESS` (any kind) makes that event come first, a
+ * few seconds in, so each one can be tried on demand.
+ */
+function newRun(zone: number): GameState {
+  const run = createGame(zone, START_GEAR, true);
+  if (process.env.NODE_ENV === "production") return run;
+  const asked = new URLSearchParams(window.location.search).get("event")?.toUpperCase();
+  const kind = EVENT_KINDS.find((k) => k === asked);
+  return kind ? { ...run, queued: kind, nextEventAt: 250 } : run;
+}
+
+/** Keys: ↑/W/Space/Enter climb, ↓/S descend. ←/A and →/D shift gear; 1–4 pick one. */
+function heldKeyFor(key: string): keyof Held | null {
+  if (key === " " || key === "Enter" || key === "ArrowUp" || key === "w" || key === "W") return "climb";
+  if (key === "ArrowDown" || key === "s" || key === "S") return "descend";
+  return null;
+}
+
+function shiftKeyFor(key: string): 1 | -1 | null {
+  if (key === "ArrowRight" || key === "d" || key === "D") return 1;
+  if (key === "ArrowLeft" || key === "a" || key === "A") return -1;
+  return null;
+}
+
 export type EliosGameProps = {
   /** Extra classes for the wrapper — the composer needs different spacing. */
   className?: string;
@@ -188,50 +164,27 @@ type Hud = {
   score: number;
   impact: Impact | null;
   zone: number;
-  /** The mode actually flying — an event can force it away from the pilot's choice. */
-  live: FlightMode;
-  /** Modes the switch accepts right now, joined, and what the event is doing: cheap to compare every frame. */
-  allowed: string;
+  gear: Gear;
+  /** "SIGNAL:lost" and the like — what the overlay buttons need to know. */
   event: string;
 };
 
 const eventKey = (s: GameState) => (s.event ? `${s.event.kind}:${s.event.phase}` : "");
 
 function hudOf(s: GameState, impact: Impact | null = s.impact): Hud {
-  return {
-    status: s.status,
-    score: s.score,
-    impact,
-    zone: s.droneZone,
-    live: s.mode,
-    allowed: allowedModes(s).join(","),
-    event: eventKey(s),
-  };
-}
-
-/**
- * A fresh run with things happening to the aircraft — the game as it is meant
- * to be flown. In development `?event=DARKNESS` (any kind) makes that event
- * come first, a few seconds in, so each one can be tried on demand.
- */
-function newRun(zone: number, mode: FlightMode): GameState {
-  const run = createGame(zone, mode, undefined, true);
-  if (process.env.NODE_ENV === "production") return run;
-  const asked = new URLSearchParams(window.location.search).get("event")?.toUpperCase();
-  const kind = EVENT_KINDS.find((k) => k === asked);
-  return kind ? { ...run, queued: kind, nextEventAt: 250 } : run;
+  return { status: s.status, score: s.score, impact, zone: s.droneZone, gear: s.gear, event: eventKey(s) };
 }
 
 export function EliosGame({ className = "mt-4", leaderboard = false, paused = false }: EliosGameProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stateRef = useRef<GameState>(createGame());
+  const stateRef = useRef<GameState>(createGame(0, START_GEAR));
   // Server render has no localStorage, so the server snapshot is always null.
   const best = useSyncExternalStore(subscribeBest, readBest, () => null);
-  const [hud, setHud] = useState<Hud>(() => hudOf(createGame()));
-  const mode = useSyncExternalStore(subscribeMode, readMode, () => DEFAULT_MODE);
+  const [hud, setHud] = useState<Hud>(() => hudOf(createGame(0, START_GEAR)));
   const heldRef = useRef<Held>(NOTHING_HELD);
   const [board, setBoard] = useState<LeaderboardRow[] | null>(null);
   const pending = useSyncExternalStore(subscribePendingScore, readPendingScore, () => null);
+  const showBoard = POST_SCORES && leaderboard;
 
   /**
    * Refresh the board. Silent on failure: an unapplied migration or a dropped
@@ -250,7 +203,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
   }, []);
 
   useEffect(() => {
-    if (!leaderboard) return;
+    if (!showBoard) return;
     // Fetched inline with a cancel flag rather than by calling loadBoard():
     // the React Compiler treats an effect that calls a setState-bearing
     // callback as a synchronous set, and this shape also stops a late response
@@ -269,7 +222,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
     return () => {
       cancelled = true;
     };
-  }, [leaderboard]);
+  }, [showBoard]);
 
   // The first space is drawn here rather than during render: the server has
   // to render the same markup the client hydrates, so nothing random may
@@ -278,7 +231,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
   useEffect(() => {
     const s = stateRef.current;
     if (s.status === "idle" && s.obstacles.length === 0) {
-      stateRef.current = newRun(Math.floor(Math.random() * ZONES.length), readMode());
+      stateRef.current = newRun(Math.floor(Math.random() * ZONES.length));
     }
   }, []);
 
@@ -293,48 +246,38 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
     [loadBoard],
   );
 
-  // Coming back online: post whatever was flown while away, then refresh the
-  // board — which may well have failed to load in the first place.
+  // Coming back online: post whatever was flown while away, then refresh the board.
   useEffect(() => {
-    if (!leaderboard) return;
+    if (!showBoard) return;
     const sync = () => {
       void flushPendingScore().then(() => loadBoard());
     };
     if (readPendingScore() !== null) sync();
     window.addEventListener("online", sync);
     return () => window.removeEventListener("online", sync);
-  }, [leaderboard, loadBoard]);
+  }, [showBoard, loadBoard]);
 
-  /** A press: launches, relaunches after a run, and flaps in ATTI MAN. */
+  /** A press: launches, or starts a fresh run after one ends. */
   const press = useCallback(() => {
     if (paused) return;
     const s = stateRef.current;
     const over = s.status === "crashed" || s.status === "landed";
-    // A new run starts in the pilot's chosen mode, not one an event forced.
-    stateRef.current = over ? flap(newRun(nextZone(s.droneZone), readMode())) : flap(s);
+    stateRef.current = over ? flap(newRun(nextZone(s.droneZone))) : flap(s);
     setHud(hudOf(stateRef.current, null));
   }, [paused]);
 
-  /** The switch: refused while an event has the mode, remembered as the pilot's choice otherwise. */
-  const chooseMode = useCallback((next: FlightMode) => {
-    const after = setMode(stateRef.current, next);
-    if (after.mode !== next) return;
-    stateRef.current = after;
-    writeMode(next);
-    setHud(hudOf(after));
-  }, []);
-
-  /** Inside the Return-to-Signal countdown: keep the sticks and fly on blind. */
-  const keepControl = useCallback(() => {
-    stateRef.current = cancelRts(stateRef.current);
+  /** Up or down a gear — or, inside the Return-to-Signal countdown, "I have it". */
+  const shift = useCallback((direction: 1 | -1) => {
+    stateRef.current = shiftGear(stateRef.current, direction);
     setHud(hudOf(stateRef.current));
   }, []);
 
-  /** A held input; a fresh press of the throttle also steps it, so a tap does something. */
+  const pickGear = useCallback((gear: Gear) => {
+    stateRef.current = setGear(stateRef.current, gear);
+    setHud(hudOf(stateRef.current));
+  }, []);
+
   const hold = useCallback((key: keyof Held, on: boolean) => {
-    if (on && !heldRef.current[key] && (key === "slower" || key === "faster")) {
-      stateRef.current = nudgeThrottle(stateRef.current, key === "faster" ? 1 : -1);
-    }
     heldRef.current = { ...heldRef.current, [key]: on };
   }, []);
 
@@ -394,10 +337,8 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       // read the same at a low rate, and drawing the lit canvas at the display
       // rate cost half a core doing nothing. A run, and the crash dust that
       // ends one, keep the full rate.
-      const resting =
-        stateRef.current.status === "idle" ||
-        ((stateRef.current.status === "crashed" || stateRef.current.status === "landed") &&
-          now - crashedAt > CRASH_SETTLE_MS);
+      const status = stateRef.current.status;
+      const resting = status === "idle" || (status !== "flying" && now - crashedAt > CRASH_SETTLE_MS);
       if (resting && now - last < 1000 / RESTING_FPS) {
         raf = requestAnimationFrame(frame);
         return;
@@ -411,26 +352,20 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       const after = stepGame(before, {
         dt,
         kindDraw: Math.random(),
-        eventDraw: Math.random(),
         placeDraw: Math.random(),
         styleDraw: Math.random(),
+        eventDraw: Math.random(),
         climb: held.climb,
         descend: held.descend,
-        throttle: held.faster === held.slower ? 0 : held.faster ? 1 : -1,
       });
       stateRef.current = after;
 
-      if (before.status === "flying" && (after.status === "crashed" || after.status === "landed")) {
+      if (before.status === "flying" && after.status !== "flying") {
         crashedAt = now;
         if (isNewBest(after.score, readBest())) writeBest(after.score);
         if (POST_SCORES && leaderboard && after.score > 0) void submitScoreRef.current(after.score);
         setHud(hudOf(after));
-      } else if (
-        after.score !== before.score ||
-        after.mode !== before.mode ||
-        eventKey(after) !== eventKey(before) ||
-        after.lidarOff !== before.lidarOff
-      ) {
+      } else if (after.score !== before.score || eventKey(after) !== eventKey(before)) {
         setHud(hudOf(after, null));
       }
 
@@ -467,30 +402,30 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       const n = Number(e.key);
-      if (e.key !== " " && Number.isInteger(n) && n >= 1 && n <= FLIGHT_MODES.length) {
+      if (e.key !== " " && Number.isInteger(n) && n >= 1 && n <= GEARS.length) {
         e.preventDefault();
-        chooseMode(FLIGHT_MODES[n - 1]);
+        pickGear(GEARS[n - 1]);
         return;
       }
-      if (e.key === "m" || e.key === "M") {
+      const dir = shiftKeyFor(e.key);
+      if (dir) {
         e.preventDefault();
-        const allowed = allowedModes(stateRef.current);
-        const i = allowed.indexOf(stateRef.current.mode);
-        if (allowed.length > 0) chooseMode(allowed[(i + 1) % allowed.length]);
+        if (!e.repeat) shift(dir);
         return;
       }
       if (e.key === "r" || e.key === "R") {
+        // The old cancel key still works: inside the countdown a shift keeps the gear.
         e.preventDefault();
-        keepControl();
+        if (stateRef.current.event?.phase === "lost") shift(1);
         return;
       }
       const key = heldKeyFor(e.key);
       if (!key) return;
       e.preventDefault();
-      if (!e.repeat && (key === "climb" || (key === "descend" && stateRef.current.status !== "flying"))) press();
+      if (!e.repeat && stateRef.current.status !== "flying") press();
       hold(key, true);
     },
-    [press, hold, chooseMode, keepControl],
+    [press, hold, shift, pickGear],
   );
 
   const onKeyUp = useCallback(
@@ -512,32 +447,30 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       e.currentTarget.setPointerCapture?.(e.pointerId);
       const box = e.currentTarget.getBoundingClientRect();
       const lower = e.clientY - box.top > box.height / 2;
-      press();
+      if (stateRef.current.status !== "flying") press();
       hold(lower ? "descend" : "climb", true);
     },
     [press, hold],
   );
 
   const release = useCallback(() => {
-    hold("climb", false);
-    hold("descend", false);
-  }, [hold]);
+    heldRef.current = NOTHING_HELD;
+  }, []);
 
   const where = ZONE_NAMES[ZONES[hud.zone]]?.name.toLowerCase();
+  const gearAt = GEARS.indexOf(hud.gear);
 
   return (
     <div className={className}>
       <div
         role="button"
         tabIndex={0}
-        aria-label="Fly where people can't: fly the Elios 3 through real confined spaces. Space or up to climb, down to descend, left and right for speed, 1 to 5 for the flight mode."
+        aria-label="Fly where people can't: fly the Elios 3 through real confined spaces. Up and down to fly, left and right to shift gear."
         onPointerDown={onPointerDown}
         onPointerUp={release}
         onPointerCancel={release}
         onLostPointerCapture={release}
-        onBlur={() => {
-          heldRef.current = NOTHING_HELD;
-        }}
+        onBlur={release}
         onKeyDown={onKeyDown}
         onKeyUp={onKeyUp}
         className="relative block w-full cursor-pointer overflow-hidden rounded-xl border border-glass/20 bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
@@ -554,7 +487,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
               // Inside the canvas wrapper: do not also count as a press on the game.
               e.stopPropagation();
               e.preventDefault();
-              keepControl();
+              shift(1);
             }}
             className="absolute bottom-[18%] left-1/2 -translate-x-1/2 rounded-full border border-white/40 bg-black/70 px-3 py-1.5 text-[11px] font-semibold text-white"
           >
@@ -565,19 +498,17 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
           // The scene behind is always dark, whatever the app theme, so the
           // title card uses fixed light text rather than theme tokens. It
           // sits low, under the drone rather than over it.
-          <div className="pointer-events-none absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/80 via-black/25 to-transparent px-4 pb-[7%] text-center">
-            <div>
+          <div className="pointer-events-none absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/85 via-black/30 to-transparent px-4 pb-[6%] text-center">
+            <div className="max-w-sm">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200/90">
                 Fly where people can&rsquo;t
               </p>
               {hud.status === "landed" ? (
-                <p className="mt-1.5 text-sm font-medium text-white">
-                  Battery flat — {hud.score} cleared in {MODE_SPECS[mode].label}
-                </p>
+                <p className="mt-1.5 text-sm font-medium text-white">Battery flat — {hud.score} points.</p>
               ) : hud.status === "crashed" ? (
                 <>
                   <p className="mt-1.5 text-sm font-medium text-white">
-                    {hud.score} cleared — {crashLine(hud.score)}
+                    {hud.score} points — {crashLine(hud.score)}
                   </p>
                   {hud.impact && where ? (
                     <p className="mt-0.5 text-[11px] text-white/65">
@@ -587,87 +518,91 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
                           ? "PA08 — not out of the gas fast enough."
                           : hud.impact.what === "CABLE"
                             ? `Snagged ${KIND_LABELS.CABLE} in the ${where} — the cage can't bounce off rope.`
-                            : `Hit ${KIND_LABELS[hud.impact.what]} in the ${where}.`}
+                            : `Hit ${KIND_LABELS[hud.impact.what]} in the ${where} — too fast for the cage.`}
                     </p>
                   ) : null}
                 </>
-              ) : null}
+              ) : (
+                <p className="mt-1.5 text-[12px] leading-snug text-white/85">
+                  Hold up / down to fly. Shift up for speed — ATTI scores ×2 and ×3, but loses the cage.
+                </p>
+              )}
               <p className="mt-1.5 text-[11px] text-white/65">
                 Tap or press space to {hud.status === "idle" ? "fly" : "go again"}
               </p>
               {hud.status === "idle" ? (
-                <p className="mt-1 text-[10px] text-white/50">
-                  {MODE_SPECS[mode].altitudeHold
-                    ? "Hold top half / ↑ to climb, bottom half / ↓ to descend · ← → speed"
-                    : "Tap / space to flap against gravity · ← → speed"}
-                </p>
-              ) : null}
-              {hud.status === "idle" ? (
                 <p className="mt-0.5 text-[10px] text-white/45">
-                  Dust, heat, drafts, lost signal… switch modes to survive them · 1–5 modes · R cancels RTS
+                  Grab ↻ for Repeat Flight, ✦ for the dust-proof light · ← → shift gear
                 </p>
               ) : null}
             </div>
           </div>
         ) : null}
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {FLIGHT_MODES.map((option, i) => {
-          const spec = MODE_SPECS[option];
-          const flying = hud.status === "flying";
-          const on = (flying ? hud.live : mode) === option;
-          const usable = !flying || hud.allowed.split(",").includes(option);
-          const limit = option === "ATTI_MAN" ? "unlimited" : `${(spec.maxSpeed * METRES_PER_UNIT).toFixed(1)} m/s max`;
-          return (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={on}
-              disabled={!usable}
-              title={`${spec.holds} · ${limit} · key ${i + 1}${usable ? "" : " · unavailable right now"}`}
-              onClick={() => chooseMode(option)}
-              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:line-through disabled:opacity-40 ${
-                on ? "border-accent/60 bg-accent/15 text-ink" : "border-glass/20 text-ink-4 hover:text-ink-2"
-              }`}
-            >
-              {spec.label}
-            </button>
-          );
-        })}
-        <span className="ml-auto flex gap-1.5">
-          {(["slower", "faster"] as const).map((key) => (
-            <button
-              key={key}
-              type="button"
-              aria-label={key === "slower" ? "Slower" : "Faster"}
-              onPointerDown={(e) => {
-                e.preventDefault();
-                e.currentTarget.setPointerCapture?.(e.pointerId);
-                hold(key, true);
-              }}
-              onPointerUp={() => hold(key, false)}
-              onPointerCancel={() => hold(key, false)}
-              onLostPointerCapture={() => hold(key, false)}
-              className="size-8 touch-none select-none rounded-full border border-glass/20 text-sm text-ink-3 active:bg-accent/15"
-            >
-              {key === "slower" ? "−" : "+"}
-            </button>
-          ))}
-        </span>
+
+      {/* The gearbox: the one speed decision. Big enough for a thumb. */}
+      <div className="mt-2 flex items-center gap-1.5">
+        <button
+          type="button"
+          aria-label="Shift down"
+          onClick={() => shift(-1)}
+          disabled={gearAt === 0}
+          className="size-9 shrink-0 select-none rounded-full border border-glass/20 text-sm text-ink-3 disabled:opacity-30 active:bg-accent/15"
+        >
+          ◀
+        </button>
+        <div className="grid flex-1 grid-cols-4 gap-1">
+          {GEARS.map((gear, i) => {
+            const spec = GEAR_SPECS[gear];
+            const on = hud.gear === gear;
+            const fast = !spec.stabilized;
+            return (
+              <button
+                key={gear}
+                type="button"
+                aria-pressed={on}
+                title={`${(spec.speed * METRES_PER_UNIT).toFixed(1)} m/s · ×${spec.multiplier} · key ${i + 1}`}
+                onClick={() => pickGear(gear)}
+                className={`rounded-lg border px-1 py-1 text-center text-[10px] font-medium leading-tight transition-colors ${
+                  on
+                    ? fast
+                      ? "border-amber-400/70 bg-amber-400/15 text-ink"
+                      : "border-accent/60 bg-accent/15 text-ink"
+                    : "border-glass/20 text-ink-4 hover:text-ink-2"
+                }`}
+              >
+                <span className="block truncate">{spec.label}</span>
+                <span className="text-ink-5">
+                  {(spec.speed * METRES_PER_UNIT).toFixed(1)} · ×{spec.multiplier}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          aria-label="Shift up"
+          onClick={() => shift(1)}
+          disabled={gearAt === GEARS.length - 1}
+          className="size-9 shrink-0 select-none rounded-full border border-glass/20 text-sm text-ink-3 disabled:opacity-30 active:bg-accent/15"
+        >
+          ▶
+        </button>
       </div>
+
       <div className="mt-2 flex items-start justify-between gap-3">
-        {best !== null || (leaderboard && pending !== null) ? (
+        {best !== null || (showBoard && pending !== null) ? (
           <p className="text-[11px] text-ink-5">
             {best !== null ? `Best ${best}` : null}
-            {best !== null && leaderboard && pending !== null ? " · " : null}
-            {leaderboard && pending !== null ? (
+            {best !== null && showBoard && pending !== null ? " · " : null}
+            {showBoard && pending !== null ? (
               <span className="text-ink-5/80">{pending} waiting to post to the board</span>
             ) : null}
           </p>
         ) : (
           <span />
         )}
-        {leaderboard && board && board.length > 0 ? (
+        {showBoard && board && board.length > 0 ? (
           <ol className="min-w-0 text-right text-[11px] leading-5 text-ink-4/80">
             {board.slice(0, 5).map((row, i) => (
               <li key={`${row.name}-${i}`} className={row.you ? "text-accent-soft/90" : undefined}>

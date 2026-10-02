@@ -6,8 +6,14 @@ import {
   ZONES,
   ZONE_NAMES,
   clearance,
-  MODE_SPECS,
+  AUTO_TIME,
+  GEARS,
+  GEAR_SPECS,
+  LIGHT_TIME,
+  SAFE_SPEED,
   batteryLeft,
+  gapX,
+  handlingOf,
   isCollisionTolerant,
   worldSpeed,
   type GameState,
@@ -99,6 +105,9 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
   let titleAt = -10;
   /** Counts frames, so a weak link can let only some of them through. */
   let frameNo = 0;
+  /** "+N" pops over the drone as obstacles are cleared: finite, each one fades out. */
+  let pops: Array<{ value: number; born: number }> = [];
+  let lastScore = 0;
 
   const spriteFor = (o: GameState["obstacles"][number], scale: number): Sprite => {
     const from = `${o.kind}:${o.seed}:${o.zone}`;
@@ -252,8 +261,51 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
     motes.update(dt, scrolled, t);
     motes.draw(ctx, beam, look.mote, look.moteDensity);
 
-    // Dust, the dark, glare — under the drone, so the aircraft itself always shows.
-    drawEventWorld(ctx, state, t, droneY, look.mote);
+    // Dust, the dark, glare — under the drone, so the aircraft itself always
+    // shows. The dust-proof light clears them from the picture.
+    if (state.light <= 0) drawEventWorld(ctx, state, t, droneY, look.mote);
+
+    // Pick-ups in the gaps: Repeat Flight in cyan, the dust-proof light in amber.
+    for (const o of state.obstacles) {
+      const p = o.pickup;
+      if (!p || p.taken) continue;
+      const px = gapX(o);
+      if (px < -10 || px > W + 10) continue;
+      const repeat = p.kind === "REPEAT";
+      const colour = repeat ? "120,220,255" : "255,205,110";
+      const r = 5.5 + Math.sin(t * 5 + o.id) * 0.5;
+      const glow = ctx.createRadialGradient(px, p.y, 0, px, p.y, r * 2.6);
+      glow.addColorStop(0, `rgba(${colour},0.55)`);
+      glow.addColorStop(1, `rgba(${colour},0)`);
+      ctx.fillStyle = glow;
+      ctx.fillRect(px - r * 3, p.y - r * 3, r * 6, r * 6);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = `rgba(${colour},0.95)`;
+      ctx.beginPath();
+      ctx.arc(px, p.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = `rgba(${colour},0.95)`;
+      ctx.font = "700 6.5px ui-sans-serif, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(repeat ? "↻" : "✦", px, p.y + 0.3);
+    }
+
+    // Out of the cage, the air goes past in streaks — more of them the faster.
+    if (state.status === "flying" && state.speed > SAFE_SPEED) {
+      const n = Math.round(((state.speed - SAFE_SPEED) / SAFE_SPEED) * 6);
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i < n; i += 1) {
+        const seed = Math.sin(i * 91.7) * 1000;
+        const yy = (seed - Math.floor(seed)) * H;
+        const xx = W - ((scroll * 2.2 + i * 53) % (W + 40));
+        ctx.beginPath();
+        ctx.moveTo(xx, yy);
+        ctx.lineTo(xx + 14, yy);
+        ctx.stroke();
+      }
+    }
 
     drone.draw(ctx, DRONE_X, droneY, tilt, t, scale);
 
@@ -310,6 +362,18 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
     ctx.textBaseline = "top";
     if (state.status !== "idle") label(String(state.score), 9, 7, "rgba(255,255,255,0.92)");
 
+    // "+N" over the drone for every obstacle cleared; bigger in the fast gears.
+    if (state.score < lastScore) pops = [];
+    if (state.score > lastScore && state.status === "flying") pops = [...pops, { value: state.score - lastScore, born: t }];
+    lastScore = state.score;
+    pops = pops.filter((p) => t - p.born < 0.8);
+    for (const p of pops) {
+      const age = (t - p.born) / 0.8;
+      ctx.font = `700 ${p.value > 1 ? 8 : 6}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      label(`+${p.value}`, DRONE_X + 4, droneY - 22 - age * 12, p.value > 2 ? "rgba(255,206,110,0.95)" : "rgba(255,255,255,0.9)", 1 - age);
+    }
+
     const zone = ZONE_NAMES[ZONES[here.zone]];
     ctx.font = "600 6px ui-sans-serif, system-ui, sans-serif";
     ctx.textAlign = "right";
@@ -330,27 +394,43 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
       ctx.textAlign = "left";
       label(`CLEARANCE ${clear.toFixed(2)} m`, 9, H - 7, warn);
 
-      // Ground speed over the setting, and the mode: the two numbers a pilot
-      // watches. The speed goes amber once the cage would no longer save you.
-      const spec = MODE_SPECS[state.mode];
+      // Speed and gear: the two things a pilot watches. Speed goes amber once
+      // the cage would no longer save you; the gear line says when the
+      // aircraft is not flying the way the gear asks.
       const caged = isCollisionTolerant(state);
-      const setting = state.mode === "ATTI_MAN" ? "∞" : (spec.maxSpeed * METRES_PER_UNIT).toFixed(1);
       ctx.textAlign = "right";
-      label(
-        `${(state.speed * METRES_PER_UNIT).toFixed(1)} m/s · SET ${(state.target * METRES_PER_UNIT).toFixed(1)}/${setting}`,
-        W - 9,
-        H - 7,
-        caged ? "rgba(255,255,255,0.6)" : "rgba(255,206,110,0.9)",
-      );
+      label(`${(state.speed * METRES_PER_UNIT).toFixed(1)} m/s`, W - 9, H - 7, caged ? "rgba(255,255,255,0.6)" : "rgba(255,206,110,0.95)");
+
+      const gear = GEAR_SPECS[state.gear];
+      const handling = handlingOf(state);
+      const forced = handling === "MANUAL" ? "MANUAL THRUST" : handling === "ATTI" && gear.stabilized ? "FORCED ATTI" : null;
       ctx.textBaseline = "top";
       ctx.textAlign = "left";
+      // Four little bars, the switch's positions, lit up to the gear.
+      const at = GEARS.indexOf(state.gear);
+      for (let i = 0; i < GEARS.length; i += 1) {
+        ctx.fillStyle = i <= at ? (i >= 2 ? "rgba(255,206,110,0.95)" : "rgba(140,220,255,0.9)") : "rgba(255,255,255,0.18)";
+        ctx.fillRect(9 + i * 4, 31.5 + (3 - i) * 0.9, 3, 2.6 + i * 0.9);
+      }
       ctx.font = "700 5.5px ui-monospace, SFMono-Regular, Menlo, monospace";
-      label(
-        state.forcedFrom ? `${spec.label.toUpperCase()} · FORCED` : spec.label.toUpperCase(),
-        9,
-        31,
-        state.forcedFrom ? "rgba(255,206,110,0.95)" : "rgba(255,255,255,0.75)",
-      );
+      label(`${gear.label.toUpperCase()} ×${gear.multiplier}`, 27, 32, "rgba(255,255,255,0.8)");
+      if (forced) label(forced, 9, 39, handling === "MANUAL" ? "rgba(255,120,100,0.98)" : "rgba(255,206,110,0.98)");
+
+      // Power-ups running: what they are and how long they have left.
+      const running: Array<[string, number, string]> = [];
+      if (state.auto > 0) running.push(["A11 REPEAT FLIGHT", state.auto / AUTO_TIME, "120,220,255"]);
+      if (state.light > 0) running.push(["DUST-PROOF LIGHT", state.light / LIGHT_TIME, "255,205,110"]);
+      running.forEach(([name, left, colour], i) => {
+        const yy = H - 30 - i * 8;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.font = "700 5px ui-monospace, SFMono-Regular, Menlo, monospace";
+        label(name, W / 2, yy, `rgba(${colour},0.98)`);
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(W / 2 - 20, yy + 0.5, 40, 2);
+        ctx.fillStyle = `rgba(${colour},0.95)`;
+        ctx.fillRect(W / 2 - 20, yy + 0.5, 40 * left, 2);
+      });
       drawEventHud(ctx, state, t, label);
       // While the cage still shrugs off contact, say so — and the moment it
       // stops, the label going away is the warning.

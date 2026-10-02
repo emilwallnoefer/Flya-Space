@@ -79,7 +79,7 @@ function hash(n: number): number {
 
 /**
  * The world-space effects, over the lit scene and under the HUD: dust, the
- * dark, glare off featureless steel, the draft, radiation snow, gas.
+ * dark, the draft, radiation snow, gas.
  */
 export function drawEventWorld(
   ctx: CanvasRenderingContext2D,
@@ -130,12 +130,6 @@ export function drawEventWorld(
         ctx.fillRect(x, H - 1.5, 0.9, 0.9);
         ctx.fillRect(x, 0.6, 0.9, 0.9);
       }
-      break;
-    }
-    case "FEATURELESS": {
-      // Polished steel throwing the light back: a flat, bright wash.
-      ctx.fillStyle = "rgba(225,232,240,0.2)";
-      ctx.fillRect(0, 0, W, H);
       break;
     }
     case "DRAFT": {
@@ -250,10 +244,6 @@ export function drawEventHud(ctx: CanvasRenderingContext2D, state: GameState, t:
 
   // Meters stay up while they read anything, so a hot lidar is visible after the heat.
   let y = 31;
-  if (state.heat > 0.02 || state.lidarOff) {
-    meter(ctx, label, state.lidarOff ? "L02 LIDAR OFF" : "LIDAR", state.heat, y);
-    y += 6;
-  }
   if (state.dose > 0.02) {
     meter(ctx, label, "DOSE", state.dose, y);
     y += 6;

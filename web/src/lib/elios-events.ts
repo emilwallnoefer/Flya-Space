@@ -3,11 +3,8 @@
  * drone gets into trouble in a confined space, most of them straight off the
  * Elios 3's own warning list (the codes on screen are the real ones):
  *
- *   Dust (VIO)            cameras and lidar blinded → FORCED ATTI
- *   Lidar hot (L03 → L02) a hot boiler cooks the lidar; too long in it and
- *                         Assist drops out — so the answer is speed
- *   Featureless walls     smooth steel fools the cameras and Assist turns
- *                         erratic; the pilot has to recognise it and pick ATTI
+ *   Dust (VIO)            cameras and lidar blinded → FORCED ATTI, at the
+ *                         speed of whatever gear you are in
  *   Draft                 a shaft or stack blows through; Assist holds
  *                         position against it, ATTI drifts with it
  *   Weak signal (T01)     the video lags; it can drop out entirely (T13),
@@ -26,7 +23,7 @@
  * Only types come from `elios-flight.ts`, which imports from here.
  */
 
-import type { FlightMode, Zone } from "@/lib/elios-flight";
+import type { Zone } from "@/lib/elios-flight";
 
 /** Metres per world unit — the same scale as the flight rules. */
 const METRES_PER_UNIT = 0.022;
@@ -34,8 +31,6 @@ const mps = (metres: number) => metres / METRES_PER_UNIT;
 
 export const EVENT_KINDS = [
   "DUST",
-  "HEAT",
-  "FEATURELESS",
   "DRAFT",
   "SIGNAL",
   "DARKNESS",
@@ -64,27 +59,9 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
   DUST: {
     code: "VIO",
     title: "Dust — cameras and lidar blind",
-    hint: "Forced ATTI · stay under 2 m/s",
+    hint: "Forced ATTI · it drifts now",
     zones: ["MINE", "SEWER"],
     length: 750,
-    minScore: 0,
-    weight: 3,
-  },
-  HEAT: {
-    code: "L03",
-    title: "Lidar getting hot",
-    hint: "Get through fast",
-    zones: ["BOILER"],
-    length: 1000,
-    minScore: 0,
-    weight: 3,
-  },
-  FEATURELESS: {
-    code: "VIO",
-    title: "Featureless walls",
-    hint: "Assist goes erratic — switch to ATTI",
-    zones: ["TANK", "BALLAST"],
-    length: 850,
     minScore: 0,
     weight: 3,
   },
@@ -92,7 +69,7 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
     code: "WND",
     title: "Draft through the space",
     hint: "Assist holds against it — ATTI drifts",
-    zones: ["MINE", "BALLAST", "BOILER"],
+    zones: ["MINE", "BALLAST", "BOILER", "TANK", "SEWER"],
     length: 700,
     minScore: 0,
     weight: 2,
@@ -118,7 +95,7 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
   STAB: {
     code: "A01",
     title: "Stabilization disabled",
-    hint: "Manual thrust — tap to hold height",
+    hint: "Manual thrust — hold up against gravity",
     zones: "ANY",
     length: 450,
     minScore: 12,
@@ -175,10 +152,6 @@ export type ActiveEvent = {
 
 /** Seconds of notice before an event takes effect. */
 export const WARNING_TIME = 1.2;
-/** Seconds in the heat before the lidar overheats; it recovers below `LIDAR_RECOVER`. */
-export const HEAT_TIME = 6;
-export const COOL_RATE = 0.2;
-export const LIDAR_RECOVER = 0.3;
 /** Seconds in a radiation field to the dose limit; the meter ebbs slowly outside. */
 export const DOSE_TIME = 7;
 export const DOSE_DECAY = 0.05;
@@ -242,23 +215,4 @@ export function startEvent(kind: EventKind, draw: number): ActiveEvent {
 /** Is the event biting yet — past its warning? */
 export function isLive(event: ActiveEvent | null, kind?: EventKind): boolean {
   return !!event && event.phase !== "warning" && (kind === undefined || event.kind === kind);
-}
-
-const ASSIST_MODES: readonly FlightMode[] = ["ASSIST", "ASSIST_SPORT"];
-const ALL_BUT_MANUAL: readonly FlightMode[] = ["ASSIST", "ASSIST_SPORT", "ATTI", "ATTI_SPORT"];
-
-/** Modes the aircraft cannot fly in right now. */
-export function deniedModes(event: ActiveEvent | null, lidarOff: boolean): readonly FlightMode[] {
-  if (isLive(event, "STAB")) return ALL_BUT_MANUAL;
-  if (isLive(event, "DUST") || lidarOff) return ASSIST_MODES;
-  return [];
-}
-
-/**
- * The jolts a confused camera system puts into Assist over featureless steel,
- * vertical units per second. Smooth enough to read, wrong enough to crash.
- */
-export function erraticJolt(elapsed: number): number {
-  const t = Number.isFinite(elapsed) ? elapsed : 0;
-  return 85 * Math.sin(5.3 * t) * (Math.sin(1.7 * t) > 0 ? 1 : -0.6) + 30 * Math.sin(11.1 * t + 0.7);
 }

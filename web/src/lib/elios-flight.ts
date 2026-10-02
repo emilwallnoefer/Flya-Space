@@ -29,7 +29,6 @@
  */
 
 import {
-  COOL_RATE,
   DOSE_DECAY,
   DOSE_TIME,
   DRAFT_ASSIST,
@@ -38,18 +37,14 @@ import {
   EVAC_SPEED,
   EVENT_SPECS,
   FIRST_EVENT,
-  HEAT_TIME,
   LEL_FALL,
   LEL_TIME,
-  LIDAR_RECOVER,
   LOST_TIME,
   RTS_SPEED,
   RTS_TIME,
   SIGNAL_LAG,
   WARNING_TIME,
-  deniedModes,
   detailDraw,
-  erraticJolt,
   eventGap,
   isLive,
   pickEvent,
@@ -80,63 +75,84 @@ export const DRONE_X = 68;
 export const DRONE_RADIUS = 11;
 
 /**
- * The Elios flies in five modes, the ones on the real remote. Each one caps
- * the forward speed and decides how much the aircraft holds for the pilot:
+ * Two things decide how the Elios flies, and only one of them is the pilot's.
  *
- *   Assist        position + altitude hold   1.5 m/s
- *   Assist Sport  position + altitude hold   2 m/s
- *   ATTI          altitude hold only         5 m/s
- *   ATTI Sport    altitude hold only         7 m/s
- *   ATTI MAN      nothing held               unlimited
+ * The **gear** is the pilot's: four steps of the real remote's mode switch,
+ * each a cruising speed. The aircraft flies at the gear's speed — there is no
+ * throttle — so shifting is the only speed decision, and it is a big one:
  *
- * In the side view, up/down is altitude and left/right is forward speed:
+ *   Assist        1.5 m/s   stabilised   ×1
+ *   Assist Sport  2 m/s     stabilised   ×1
+ *   ATTI          5 m/s     drifts       ×2
+ *   ATTI Sport    7 m/s     drifts       ×3
  *
- * - Position hold means the speed you set is the speed you fly: the aircraft
- *   brakes and accelerates hard, and nothing pushes it around.
- * - Without it (ATTI) the forward speed has momentum and drifts with the air,
- *   so braking for an obstacle is something you start early.
- * - Altitude hold means no gravity: hold to climb, hold to descend, let go and
- *   it stays where it is. ATTI MAN drops it, and you are back to flapping
- *   against gravity — the game as it always was.
+ * The Assist gears sit inside the collision-tolerant cage (2 m/s); the ATTI
+ * gears are fast, drift with the air and crash on contact — and score double
+ * and triple per obstacle, on a battery that does not wait.
  *
- * `maxSpeed` and the rates are in world units per second; `speedTau` is how
- * long the forward speed takes to cover most of the way to the throttle
- * setting; `gust` is how hard the air pushes on an aircraft that is not
- * holding its position.
+ * The **handling** is not the pilot's: it is what the aircraft can manage.
+ * Assist handling holds position and height; ATTI handling has inertia and
+ * goes where the air pushes it; manual thrust is gravity against a held
+ * climb. An Assist gear flies Assist handling until something blinds its
+ * sensors (dust: FORCED ATTI, at the same speed) or switches its
+ * stabilisation off (A01: manual thrust). Up climbs and down descends in all
+ * of them — the controls never change meaning, only the aircraft does.
  */
-export const FLIGHT_MODES = ["ASSIST", "ASSIST_SPORT", "ATTI", "ATTI_SPORT", "ATTI_MAN"] as const;
-export type FlightMode = (typeof FLIGHT_MODES)[number];
+export const GEARS = ["ASSIST", "ASSIST_SPORT", "ATTI", "ATTI_SPORT"] as const;
+export type Gear = (typeof GEARS)[number];
 
-export type ModeSpec = {
-  label: string;
-  holds: string;
-  maxSpeed: number;
-  /** Altitude hold: no gravity, climb and descend at `climbRate` on request. */
-  altitudeHold: boolean;
-  climbRate: number;
-  speedTau: number;
-  gust: number;
-};
+export type GearSpec = { label: string; speed: number; multiplier: number; stabilized: boolean };
 
 const mps = (metres: number) => metres / METRES_PER_UNIT;
 
-export const MODE_SPECS: Record<FlightMode, ModeSpec> = {
-  ASSIST: { label: "Assist", holds: "Position + altitude hold", maxSpeed: mps(1.5), altitudeHold: true, climbRate: 95, speedTau: 0.25, gust: 0 },
-  ASSIST_SPORT: { label: "Assist Sport", holds: "Position + altitude hold", maxSpeed: mps(2), altitudeHold: true, climbRate: 110, speedTau: 0.3, gust: 0 },
-  ATTI: { label: "ATTI", holds: "Altitude hold only", maxSpeed: mps(5), altitudeHold: true, climbRate: 125, speedTau: 1.1, gust: 22 },
-  ATTI_SPORT: { label: "ATTI Sport", holds: "Altitude hold only", maxSpeed: mps(7), altitudeHold: true, climbRate: 165, speedTau: 0.9, gust: 22 },
-  // "Unlimited" still needs a number: 12 m/s crosses the screen in half a second.
-  ATTI_MAN: { label: "ATTI MAN", holds: "No stabilisation", maxSpeed: mps(12), altitudeHold: false, climbRate: 0, speedTau: 1.2, gust: 26 },
+export const GEAR_SPECS: Record<Gear, GearSpec> = {
+  ASSIST: { label: "Assist", speed: mps(1.5), multiplier: 1, stabilized: true },
+  ASSIST_SPORT: { label: "Assist Sport", speed: mps(2), multiplier: 1, stabilized: true },
+  ATTI: { label: "ATTI", speed: mps(5), multiplier: 2, stabilized: false },
+  ATTI_SPORT: { label: "ATTI Sport", speed: mps(7), multiplier: 3, stabilized: false },
 };
 
-/** How fast holding the throttle moves the speed setting, world units per second per second. */
-export const THROTTLE_RATE = mps(2.5);
-/** Speed setting a run starts with, clipped to the mode: right on the edge of the cage. */
-export const START_SPEED = mps(2);
-/** How quickly an altitude-holding aircraft reaches the climb rate asked for. */
-export const VERTICAL_TAU = 0.12;
-/** Seconds of flight on one battery. The score is obstacles cleared before it runs out. */
+export type Handling = "ASSIST" | "ATTI" | "MANUAL";
+
+/**
+ * `climb` is the vertical rate asked for while up or down is held, `tau` how
+ * long the aircraft takes to get there (ATTI is sluggish: it has momentum),
+ * `speedTau` how quickly the forward speed settles on a new gear (Assist
+ * brakes hard, ATTI coasts), and `gust` how hard the air pushes the forward
+ * speed about when nothing is holding position.
+ */
+export const HANDLING: Record<Handling, { label: string; climb: number; tau: number; speedTau: number; gust: number }> = {
+  ASSIST: { label: "Assist", climb: 110, tau: 0.12, speedTau: 0.3, gust: 0 },
+  ATTI: { label: "ATTI", climb: 130, tau: 0.4, speedTau: 0.9, gust: 22 },
+  MANUAL: { label: "Manual thrust", climb: 0, tau: 0, speedTau: 1, gust: 26 },
+};
+
+/** Manual thrust: held up accelerates the aircraft upward this hard, against gravity. */
+export const THRUST = 900;
+/** …and it climbs no faster than this. */
+export const MAX_CLIMB_SPEED = 200;
+/** Seconds of flight on one battery. The score is points earned before it runs out. */
 export const BATTERY_SECONDS = 90;
+
+/**
+ * The pick-ups: what the real aircraft can do for a pilot in trouble.
+ *
+ * - Repeat Flight: the Elios 3 can fly a recorded path again by itself. Here
+ *   it takes over for `AUTO_TIME` seconds, threads every obstacle on its own
+ *   at ATTI speed or better, and cannot crash while it does.
+ * - Dust-proof light: the lighting mode that stops dust throwing the light
+ *   back into the camera. Here it clears dust and darkness from the picture
+ *   for `LIGHT_TIME` seconds — the picture, not the sensors.
+ */
+export const PICKUPS = ["REPEAT", "LIGHT"] as const;
+export type PickupKind = (typeof PICKUPS)[number];
+export const AUTO_TIME = 4;
+export const LIGHT_TIME = 6;
+/** How close the cage has to come to a pick-up to collect it. */
+export const PICKUP_REACH = DRONE_RADIUS + 7;
+/** Obstacles between pick-ups: at least this many, plus up to `PICKUP_SPREAD` more. */
+export const PICKUP_EVERY = 9;
+export const PICKUP_SPREAD = 7;
 
 /**
  * Below this forward speed (2 m/s on the readout) the cage takes the hit: the
@@ -178,17 +194,6 @@ export const ZONE_NAMES: Record<Zone, { name: string; industry: string }> = {
   SEWER: { name: "Sewer", industry: "Wastewater" },
   TANK: { name: "Storage tank", industry: "Oil & gas" },
 };
-
-/**
- * The air an aircraft without position hold drifts in: a smooth, repeatable
- * push, so a run replays exactly. Zero in the Assist modes.
- */
-export function gustAt(mode: FlightMode, elapsed: number): number {
-  const g = MODE_SPECS[mode].gust;
-  if (g === 0) return 0;
-  const t = Number.isFinite(elapsed) ? elapsed : 0;
-  return (g * (Math.sin(0.83 * t) + 0.7 * Math.sin(2.1 * t + 1.7) + 0.4 * Math.sin(4.3 * t + 0.4))) / 2.1;
-}
 
 /** Is the drone slow enough right now for the cage to take a hit? */
 export function isCollisionTolerant(state: Pick<GameState, "speed">): boolean {
@@ -330,7 +335,13 @@ export type Obstacle = {
   passed: boolean;
   /** A cable hanging from the roof in the gap behind this obstacle, this long. */
   cable?: number;
+  /** The middle of the widest way through, for the autopilot. */
+  lane?: number;
+  /** A pick-up floating in the gap behind this obstacle. */
+  pickup?: Pickup;
 };
+
+export type Pickup = { kind: PickupKind; y: number; taken: boolean };
 
 /** The middle of the clear gap behind an obstacle, where a cable hangs. */
 export function gapX(o: Pick<Obstacle, "x" | "width">): number {
@@ -1014,7 +1025,10 @@ export type GameState = {
   y: number;
   velocity: number;
   obstacles: Obstacle[];
+  /** Points: each obstacle cleared is worth the multiplier of the gear it was cleared in. */
   score: number;
+  /** Obstacles cleared, whatever the gear: how far into the run this is. */
+  cleared: number;
   /** Seconds elapsed this run; drains the battery and drives the animation. */
   elapsed: number;
   /** Index into ZONES of the space the drone is flying in right now. */
@@ -1032,47 +1046,43 @@ export type GameState = {
   recoil: number;
   /** Where the cage took a hit this step and flew on; null on a clean step. */
   bump: Impact | null;
-  mode: FlightMode;
+  gear: Gear;
   /** Forward speed over the ground, world units per second. What the readout shows. */
   speed: number;
-  /** The throttle setting the forward speed is heading for. */
-  target: number;
-  /** Whether things happen to the aircraft on this run (see `elios-events.ts`). */
+  /** Whether things happen to the aircraft on this run (see `elios-events.ts`), and pick-ups appear. */
   events: boolean;
   event: ActiveEvent | null;
   /** World units flown forward this run; events are spaced in it. */
   travelled: number;
   nextEventAt: number;
-  /** Meters, 0 to 1: lidar temperature, radiation dose, gas concentration. */
-  heat: number;
+  /** Meters, 0 to 1: radiation dose, gas concentration. */
   dose: number;
   lel: number;
-  /** The lidar overheated and has not cooled down yet: Assist is out. */
-  lidarOff: boolean;
-  /** The mode the pilot was in before an event forced a change; restored when it passes. */
-  forcedFrom: FlightMode | null;
   /** Recent inputs, so a weak link can deliver them late. */
   inputLog: readonly LoggedInput[];
   /** An event that comes next whatever the space — for trying one out. */
   queued: EventKind | null;
+  /** Seconds of Repeat Flight left; the autopilot has the aircraft while above zero. */
+  auto: number;
+  /** Seconds of dust-proof light left. */
+  light: number;
+  /** Id of the obstacle the next pick-up is built on. */
+  nextPickupAt: number;
+  /** Points scored on the last obstacle cleared, for the "+N" the renderer shows. */
+  lastGain: number;
 };
 
-type LoggedInput = { at: number; climb: boolean; descend: boolean; throttle: -1 | 0 | 1 };
+type LoggedInput = { at: number; climb: boolean; descend: boolean };
 
-export function createGame(
-  startZone = 0,
-  mode: FlightMode = "ATTI_MAN",
-  target = START_SPEED,
-  events = false,
-): GameState {
+export function createGame(startZone = 0, gear: Gear = "ASSIST_SPORT", events = false): GameState {
   const zone = ZONES.indexOf(zoneAt(startZone));
-  const set = clampTarget(mode, target);
   return {
     status: "idle",
     y: WORLD_HEIGHT / 2,
     velocity: 0,
     obstacles: [],
     score: 0,
+    cleared: 0,
     elapsed: 0,
     droneZone: zone,
     buildZone: zone,
@@ -1081,87 +1091,80 @@ export function createGame(
     impact: null,
     recoil: 0,
     bump: null,
-    mode,
-    // A run launches already cruising at its setting rather than from a standstill.
-    speed: set,
-    target: set,
+    gear,
+    // A run launches already cruising rather than from a standstill.
+    speed: GEAR_SPECS[gear].speed,
     events,
     event: null,
     travelled: 0,
     nextEventAt: FIRST_EVENT,
-    heat: 0,
     dose: 0,
     lel: 0,
-    lidarOff: false,
-    forcedFrom: null,
     inputLog: [],
     queued: null,
+    auto: 0,
+    light: 0,
+    nextPickupAt: PICKUP_EVERY,
+    lastGain: 0,
   };
 }
 
-/** Modes the pilot can switch to right now; an event can take some away. */
-export function allowedModes(state: Pick<GameState, "event" | "lidarOff">): readonly FlightMode[] {
-  const denied = deniedModes(state.event, state.lidarOff);
-  return FLIGHT_MODES.filter((m) => !denied.includes(m));
-}
-
-/** The speed setting a forced mode change leaves the aircraft at, at most: 1.5 m/s. */
-export const FORCED_SPEED = mps(1.5);
-
-/** Where a mode the aircraft can no longer fly falls back to. */
-function fallbackFrom(allowed: readonly FlightMode[]): FlightMode {
-  return allowed.includes("ATTI") ? "ATTI" : (allowed[0] ?? "ATTI_MAN");
+/**
+ * How the aircraft is flying right now — which is not always what the gear
+ * asks for. Stabilisation switched off means manual thrust; dust blinding the
+ * sensors means an Assist gear flies ATTI, at its own speed.
+ */
+export function handlingOf(state: Pick<GameState, "gear" | "event">): Handling {
+  if (isLive(state.event, "STAB")) return "MANUAL";
+  if (!GEAR_SPECS[state.gear].stabilized || isLive(state.event, "DUST")) return "ATTI";
+  return "ASSIST";
 }
 
 /**
- * Cancel Return-to-Signal inside its countdown: the pilot keeps the sticks and
- * flies on over the weak link instead of being flown back.
+ * The air the aircraft drifts in when nothing holds its position: a smooth,
+ * repeatable push on the forward speed, so a run replays exactly.
  */
+export function gustAt(handling: Handling, elapsed: number): number {
+  const g = HANDLING[handling].gust;
+  if (g === 0) return 0;
+  const t = Number.isFinite(elapsed) ? elapsed : 0;
+  return (g * (Math.sin(0.83 * t) + 0.7 * Math.sin(2.1 * t + 1.7) + 0.4 * Math.sin(4.3 * t + 0.4))) / 2.1;
+}
+
+/**
+ * Shift up (1) or down (-1) a gear. Allowed mid-flight; the aircraft then
+ * settles on the new speed at its handling's rate — Assist brakes hard, ATTI
+ * coasts. Inside the Return-to-Signal countdown a shift is the pilot saying
+ * "I have it": it cancels the return and keeps the gear.
+ */
+export function shiftGear(state: GameState, direction: 1 | -1): GameState {
+  if (state.status !== "idle" && state.status !== "flying") return state;
+  const e = state.event;
+  if (e && e.kind === "SIGNAL" && e.phase === "lost") {
+    return { ...state, event: { ...e, phase: "active", t: 0, escalates: false } };
+  }
+  const i = GEARS.indexOf(state.gear) + direction;
+  if (i < 0 || i >= GEARS.length) return state;
+  return setGear(state, GEARS[i]);
+}
+
+/** Put the switch in a particular gear. */
+export function setGear(state: GameState, gear: Gear): GameState {
+  if (state.gear === gear || (state.status !== "idle" && state.status !== "flying")) return state;
+  // Before a run there is nothing to slow down from.
+  return { ...state, gear, speed: state.status === "idle" ? GEAR_SPECS[gear].speed : state.speed };
+}
+
+/** Cancel Return-to-Signal inside its countdown — the same as a shift does. */
 export function cancelRts(state: GameState): GameState {
   const e = state.event;
   if (!e || e.kind !== "SIGNAL" || e.phase !== "lost") return state;
   return { ...state, event: { ...e, phase: "active", t: 0, escalates: false } };
 }
 
-function clampTarget(mode: FlightMode, target: number): number {
-  const t = Number.isFinite(target) ? target : START_SPEED;
-  return Math.min(Math.max(t, 0), MODE_SPECS[mode].maxSpeed);
-}
-
-/**
- * Flip the mode switch. Allowed mid-flight, the way a pilot really does it:
- * the speed setting is clipped to the new mode's limit, and the aircraft then
- * slows toward it at the new mode's rate — so dropping into Assist is the hard
- * brake, and dropping out of it leaves you coasting.
- */
-export function setMode(state: GameState, mode: FlightMode): GameState {
-  if (state.mode === mode || !allowedModes(state).includes(mode)) return state;
-  const target = clampTarget(mode, state.target);
-  // Before a run there is nothing to slow down from.
-  const speed = state.status === "idle" ? target : state.speed;
-  // A pilot who picks a mode has taken over from whatever an event forced.
-  return { ...state, mode, target, speed, forcedFrom: null };
-}
-
-/** One tap of the throttle: a quarter metre per second, clipped to the mode. */
-export const THROTTLE_STEP = mps(0.25);
-
-/** Tap the throttle up (1) or down (-1). Holding it is `StepInput.throttle`. */
-export function nudgeThrottle(state: GameState, direction: 1 | -1): GameState {
-  if (state.status === "crashed" || state.status === "landed") return state;
-  const target = clampTarget(state.mode, state.target + direction * THROTTLE_STEP);
-  return { ...state, target, speed: state.status === "idle" ? target : state.speed };
-}
-
-/**
- * A press. From `idle` it launches the run, so one tap starts and flies — there
- * is no separate start button to hunt for. In ATTI MAN it is a flap against
- * gravity; with altitude hold, climbing is a held input to `stepGame` instead.
- */
+/** A press from `idle` launches the run; everything after it is held input to `stepGame`. */
 export function flap(state: GameState): GameState {
-  if (state.status === "crashed" || state.status === "landed") return state;
-  if (MODE_SPECS[state.mode].altitudeHold) return state.status === "idle" ? { ...state, status: "flying" } : state;
-  return { ...state, status: "flying", velocity: FLAP_VELOCITY };
+  return state.status === "idle" ? { ...state, status: "flying" } : state;
 }
 
 export type StepInput = {
@@ -1172,12 +1175,10 @@ export type StepInput = {
   placeDraw: number;
   /** Draw in [0, 1) that cuts ragged shapes; defaults to a fixed cut. */
   styleDraw?: number;
-  /** Held inputs. Climb/descend only mean something with altitude hold. */
+  /** Held inputs: up climbs, down descends, in every handling. */
   climb?: boolean;
   descend?: boolean;
-  /** Throttle held: -1 slows the speed setting down, 1 speeds it up. */
-  throttle?: -1 | 0 | 1;
-  /** Draw in [0, 1): which event comes next, and its details. */
+  /** Draw in [0, 1): which event comes next, and its details; also where pick-ups go. */
   eventDraw?: number;
 };
 
@@ -1197,12 +1198,7 @@ export function stepGame(state: GameState, input: StepInput): GameState {
   const travel = Math.max(Math.abs(state.speed) + state.recoil, Math.abs(state.velocity), MAX_FALL_SPEED) * dt;
   const steps = Math.min(8, Math.max(1, Math.ceil(travel / MAX_STEP_TRAVEL)));
   // Keep just enough input history for a weak link to deliver it late.
-  const logged: LoggedInput = {
-    at: state.elapsed,
-    climb: !!input.climb,
-    descend: !!input.descend,
-    throttle: input.throttle ?? 0,
-  };
+  const logged: LoggedInput = { at: state.elapsed, climb: !!input.climb, descend: !!input.descend };
   const inputLog = state.events
     ? [...state.inputLog, logged].filter((e) => e.at >= state.elapsed - SIGNAL_LAG - 0.25)
     : state.inputLog;
@@ -1217,52 +1213,73 @@ export function stepGame(state: GameState, input: StepInput): GameState {
 }
 
 /** What the aircraft actually receives: over a weak link, what the pilot did a moment ago. */
-function receivedInput(state: GameState, input: StepInput): Pick<StepInput, "climb" | "descend" | "throttle"> {
+function receivedInput(state: GameState, input: StepInput): Pick<StepInput, "climb" | "descend"> {
   const e = state.event;
   const lagging = !!e && e.kind === "SIGNAL" && (e.phase === "active" || e.phase === "lost");
   if (!lagging) return input;
   let late: LoggedInput | undefined;
   for (const entry of state.inputLog) if (entry.at <= state.elapsed - SIGNAL_LAG) late = entry;
-  return late ?? { climb: false, descend: false, throttle: 0 };
+  return late ?? { climb: false, descend: false };
+}
+
+/**
+ * The middle of the widest way through an obstacle, measured with it centred
+ * on the drone: where the Repeat Flight autopilot steers.
+ */
+export function laneThrough(solids: readonly Solid[], width: number): number {
+  const probe = { solids, x: DRONE_X - width / 2 } as Pick<Obstacle, "solids" | "x">;
+  let best: [number, number] = [WORLD_HEIGHT / 2, WORLD_HEIGHT / 2];
+  let start: number | null = null;
+  for (let y = DRONE_RADIUS + 1; y <= WORLD_HEIGHT - DRONE_RADIUS - 1; y += 2) {
+    const free = !probe.solids.some((s) => circleHitsSolid(DRONE_X, y, DRONE_RADIUS, s, probe.x));
+    if (free && start === null) start = y;
+    if ((!free || y + 2 > WORLD_HEIGHT - DRONE_RADIUS - 1) && start !== null) {
+      const end = free ? y : y - 2;
+      if (end - start > best[1] - best[0]) best = [start, end];
+      start = null;
+    }
+  }
+  return (best[0] + best[1]) / 2;
 }
 
 function subStep(state: GameState, input: StepInput, dt: number): GameState {
-  const spec = MODE_SPECS[state.mode];
   const event = state.event;
+  const handling = handlingOf(state);
+  const feel = HANDLING[handling];
+  const gearSpec = GEAR_SPECS[state.gear];
+  const autopilot = state.auto > 0;
   // Return-to-Signal: the aircraft flies itself back, holding its height, and
-  // the sticks do nothing until it has.
-  const returning = event?.kind === "SIGNAL" && event.phase === "rts";
-  const sticks = returning ? { climb: false, descend: false, throttle: 0 as const } : receivedInput(state, input);
-  const assisted = state.mode === "ASSIST" || state.mode === "ASSIST_SPORT";
+  // the sticks do nothing until it has. Repeat Flight outranks it.
+  const returning = !autopilot && event?.kind === "SIGNAL" && event.phase === "rts";
+  const sticks = returning ? { climb: false, descend: false } : receivedInput(state, input);
+  const draft = isLive(event, "DRAFT") && event && !returning && !autopilot ? event.dir : 0;
 
+  // ---- Up and down.
   let velocity: number;
-  if (spec.altitudeHold || returning) {
-    // Altitude hold: the aircraft climbs or descends at the rate asked for and
-    // holds height when nothing is.
-    const rate = spec.altitudeHold ? spec.climbRate : 0;
-    const wanted = sticks.climb && !sticks.descend ? -rate : sticks.descend && !sticks.climb ? rate : 0;
-    velocity = state.velocity + (wanted - state.velocity) * (1 - Math.exp(-dt / VERTICAL_TAU));
+  if (autopilot) {
+    // Repeat Flight: steer for the way through whatever is next.
+    const next = state.obstacles.find((o) => o.x + o.width > DRONE_X - DRONE_RADIUS);
+    const lane = next?.lane ?? WORLD_HEIGHT / 2;
+    velocity = Math.max(-170, Math.min(170, (lane - state.y) * 7));
+  } else if (handling === "MANUAL" && !returning) {
+    // Manual thrust: gravity always, thrust while up is held, a draft on top.
+    velocity = state.velocity + (GRAVITY + draft * DRAFT_MANUAL - (sticks.climb ? THRUST : 0)) * dt;
+    velocity = Math.min(MAX_FALL_SPEED, Math.max(-MAX_CLIMB_SPEED, velocity));
   } else {
-    velocity = Math.min(state.velocity + GRAVITY * dt, MAX_FALL_SPEED);
-  }
-  // A draft: Assist leans into it and barely moves, ATTI drifts with it, and
-  // ATTI MAN, holding nothing, is thrown about.
-  if (isLive(event, "DRAFT") && event && !spec.altitudeHold && !returning) {
-    velocity = Math.min(velocity + event.dir * DRAFT_MANUAL * dt, MAX_FALL_SPEED);
+    // Altitude hold: up and down ask for a climb rate, nothing asks to stay;
+    // ATTI gets there slowly and a draft carries it, Assist leans into one.
+    const rate = returning ? 0 : feel.climb;
+    const wanted = sticks.climb && !sticks.descend ? -rate : sticks.descend && !sticks.climb ? rate : 0;
+    const push = draft * (handling === "ASSIST" ? DRAFT_ASSIST : DRAFT_ATTI);
+    velocity = state.velocity + (wanted + push - state.velocity) * (1 - Math.exp(-dt / (feel.tau || 0.12)));
   }
   let y = state.y + velocity * dt;
-  if (isLive(event, "DRAFT") && event && spec.altitudeHold) y += event.dir * (assisted ? DRAFT_ASSIST : DRAFT_ATTI) * dt;
 
+  // ---- Forward.
   const elapsed = state.elapsed + dt;
-  // Over featureless steel the cameras feed Assist a position that is not
-  // there, and it jerks the aircraft about chasing it. ATTI ignores them.
-  if (isLive(event, "FEATURELESS") && assisted) y += erraticJolt(elapsed) * dt;
-
-  const target = clampTarget(state.mode, state.target + (sticks.throttle ?? 0) * THROTTLE_RATE * dt);
-  // Forward speed heads for the setting; without position hold the air pushes it about too.
-  let speed =
-    state.speed + (target - state.speed) * (1 - Math.exp(-dt / spec.speedTau)) + gustAt(state.mode, elapsed) * dt;
-  if (isLive(event, "FEATURELESS") && assisted) speed += 40 * Math.sin(3.1 * elapsed) * dt;
+  const cruise = autopilot ? Math.max(gearSpec.speed, GEAR_SPECS.ATTI.speed) : gearSpec.speed;
+  let speed = state.speed + (cruise - state.speed) * (1 - Math.exp(-dt / feel.speedTau));
+  if (!autopilot) speed += gustAt(handling, elapsed) * dt;
   speed = returning ? -RTS_SPEED : Math.max(0, speed);
 
   const decayed = state.recoil * Math.exp(-RECOIL_DECAY * dt);
@@ -1271,7 +1288,8 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     .map((o) => ({ ...o, x: o.x - worldSpeed({ speed, recoil }) * dt }))
     .filter((o) => o.x + o.width > -4);
 
-  let { buildZone, buildCount, nextId } = state;
+  // ---- New obstacles, with what the run is putting in the gaps.
+  let { buildZone, buildCount, nextId, nextPickupAt } = state;
   const last = obstacles[obstacles.length - 1];
   if (!last || last.x + last.width <= WORLD_WIDTH - OBSTACLE_GAP) {
     let kind: ObstacleKind;
@@ -1286,36 +1304,67 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     }
     const seed = seedFromDraw(input.styleDraw ?? 0.5);
     const built = buildObstacle(kind, input.placeDraw, seed);
+    const draw = input.eventDraw ?? 0.5;
     // While cables hang in this stretch, every gap gets one.
     const cable = event?.kind === "CABLES" ? 40 + detailDraw(input.placeDraw) * (MAX_CABLE - 40) : undefined;
+    let pickup: Pickup | undefined;
+    if (state.events && nextId >= nextPickupAt && !cable) {
+      pickup = { kind: draw < 0.6 ? "REPEAT" : "LIGHT", y: 50 + detailDraw(draw) * 100, taken: false };
+      nextPickupAt = nextId + PICKUP_EVERY + Math.floor(detailDraw(detailDraw(draw)) * PICKUP_SPREAD);
+    }
     obstacles = [
       ...obstacles,
-      { id: nextId, x: WORLD_WIDTH, kind, zone: buildZone, seed, passed: false, ...built, ...(cable ? { cable } : {}) },
+      {
+        id: nextId,
+        x: WORLD_WIDTH,
+        kind,
+        zone: buildZone,
+        seed,
+        passed: false,
+        ...built,
+        lane: laneThrough(built.solids, built.width),
+        ...(cable ? { cable } : {}),
+        ...(pickup ? { pickup } : {}),
+      },
     ];
     nextId += 1;
   }
 
-  let score = state.score;
+  // ---- Scoring, and pick-ups collected on the way past.
+  let { score, cleared, auto, light, lastGain } = state;
   let droneZone = state.droneZone;
+  auto = Math.max(0, auto - dt);
+  light = Math.max(0, light - dt);
+  // The autopilot scores at the speed it flies, never less than ATTI.
+  const multiplier = autopilot ? Math.max(gearSpec.multiplier, GEAR_SPECS.ATTI.multiplier) : gearSpec.multiplier;
   obstacles = obstacles.map((o) => {
+    let next = o;
     if (!o.passed && o.x + o.width < DRONE_X - DRONE_RADIUS) {
-      score += 1;
+      score += multiplier;
+      cleared += 1;
+      lastGain = multiplier;
       // Through the manhole: the drone is in the next space now.
       if (o.kind === "BULKHEAD") droneZone = o.zone;
-      return { ...o, passed: true };
+      next = { ...next, passed: true };
     }
-    return o;
+    const p = o.pickup;
+    if (p && !p.taken && Math.hypot(gapX(o) - DRONE_X, p.y - y) <= PICKUP_REACH) {
+      if (p.kind === "REPEAT") auto = AUTO_TIME;
+      else light = LIGHT_TIME;
+      next = { ...next, pickup: { ...p, taken: true } };
+    }
+    return next;
   });
 
   // ---- Events: what is happening to the aircraft, and what it does to the run.
   let ev = state.event;
-  let { travelled, nextEventAt, heat, dose, lel, lidarOff } = state;
+  let { travelled, nextEventAt, dose, lel } = state;
   let ended: Impact | null = null;
   if (state.events) {
     travelled += Math.max(0, speed) * dt;
     if (!ev) {
       if (travelled >= nextEventAt) {
-        const kind = state.queued ?? pickEvent(ZONES[droneZone], score, input.eventDraw ?? 0.5);
+        const kind = state.queued ?? pickEvent(ZONES[droneZone], cleared, input.eventDraw ?? 0.5);
         if (kind) ev = startEvent(kind, input.eventDraw ?? 0.5);
         else nextEventAt = travelled + 300;
       }
@@ -1337,12 +1386,9 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
         ev = null;
         speed = 0;
       }
-      if (!ev) nextEventAt = travelled + eventGap(score);
+      if (!ev) nextEventAt = travelled + eventGap(cleared);
     }
 
-    heat = Math.min(1, Math.max(0, heat + (isLive(ev, "HEAT") ? dt / HEAT_TIME : -COOL_RATE * dt)));
-    if (heat >= 1) lidarOff = true;
-    else if (heat < LIDAR_RECOVER) lidarOff = false;
     dose = Math.min(1, Math.max(0, dose + (isLive(ev, "RADIATION") ? dt / DOSE_TIME : -DOSE_DECAY * dt)));
     const evacuating = isLive(ev, "GAS");
     lel = Math.min(1, Math.max(0, lel + (evacuating && speed < EVAC_SPEED ? dt / LEL_TIME : -LEL_FALL * dt)));
@@ -1350,39 +1396,29 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     else if (lel >= 1) ended = { what: "GAS", x: DRONE_X, y };
   }
 
-  // An event can take the current mode away; the switch drops to what still
-  // works, and goes back to the pilot's choice once it passes.
-  let mode = state.mode;
-  let forcedFrom = state.forcedFrom;
-  let held = target;
-  const allowed = allowedModes({ event: ev, lidarOff });
-  if (!allowed.includes(mode)) {
-    forcedFrom ??= mode;
-    mode = fallbackFrom(allowed);
-    // Dropped into a mode that drifts, the aircraft is set a little inside
-    // the cage rather than on its edge — the air would push it over at once.
-    held = Math.min(clampTarget(mode, target), FORCED_SPEED);
-  } else if (forcedFrom && forcedFrom !== mode && allowed.includes(forcedFrom)) {
-    mode = forcedFrom;
-    forcedFrom = null;
-    held = clampTarget(mode, target);
-  } else if (forcedFrom === mode) {
-    forcedFrom = null;
-  }
-
+  // ---- Contact. Repeat Flight cannot crash: it only keeps inside the world.
   let bump: Impact | null = null;
-  if (isCollisionTolerant({ speed })) {
-    const bounced = bounceOff(y, velocity, obstacles);
-    ({ y, velocity, obstacles, bump } = bounced);
-    if (bounced.headOn) {
-      recoil = Math.max(recoil, BOUNCE_RECOIL);
-      // A head-on hit stops the aircraft; it has to pick up speed again.
-      speed = 0;
+  let impact: Impact | null = null;
+  if (autopilot) {
+    y = Math.min(Math.max(y, DRONE_RADIUS + 1), WORLD_HEIGHT - DRONE_RADIUS - 1);
+    impact = ended;
+  } else {
+    if (isCollisionTolerant({ speed })) {
+      const bounced = bounceOff(y, velocity, obstacles);
+      ({ y, velocity, obstacles, bump } = bounced);
+      if (bounced.headOn) {
+        recoil = Math.max(recoil, BOUNCE_RECOIL);
+        // A head-on hit stops the aircraft; it has to pick up speed again.
+        speed = 0;
+      }
     }
+    // A cable snags whatever the speed: the cage bounces off steel, not rope.
+    impact = ended ?? cableAt(y, obstacles) ?? (bump ? null : contactAt(y, obstacles));
   }
+  // Handing back from the autopilot: at the gear's own speed, not coasting
+  // down from ATTI into whatever comes next.
+  if (state.auto > 0 && auto === 0) speed = gearSpec.speed;
 
-  // A cable snags whatever the speed: the cage bounces off steel, not rope.
-  const impact = ended ?? cableAt(y, obstacles) ?? (bump ? null : contactAt(y, obstacles));
   const crashed = impact !== null;
   const flat = !crashed && elapsed >= BATTERY_SECONDS;
 
@@ -1393,6 +1429,7 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     velocity,
     obstacles,
     score,
+    cleared,
     elapsed: Math.min(elapsed, BATTERY_SECONDS),
     droneZone,
     buildZone,
@@ -1401,20 +1438,20 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     impact,
     recoil: crashed ? 0 : recoil,
     bump,
-    mode,
+    gear: state.gear,
     speed: crashed ? 0 : speed,
-    target: held,
     events: state.events,
     event: crashed ? null : ev,
     travelled,
     nextEventAt,
-    heat,
     dose,
     lel,
-    lidarOff,
-    forcedFrom,
     inputLog: state.inputLog,
     queued: ev && ev.kind === state.queued ? null : state.queued,
+    auto,
+    light,
+    nextPickupAt,
+    lastGain,
   };
 }
 
