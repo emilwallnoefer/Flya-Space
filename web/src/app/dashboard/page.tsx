@@ -79,7 +79,10 @@ export default async function DashboardPage({
       await notifyAdminsOfPendingRole({
         userId,
         email,
-        name: displayNameFor({ email, user_metadata: userMetadata }),
+        // From the email only: the token carries no provider identity, and a
+        // held account's own profile name is not something to put in an
+        // admin's inbox (security audit run-4 F7).
+        name: displayNameFor({ email }),
       });
     }
     return <RoleGate email={email ?? "this account"} />;
@@ -147,17 +150,22 @@ export default async function DashboardPage({
   // `autoLink: true` matters: it is the onboarding step that matches a person
   // to their legacy holder name. When the board is not prefetched, the panel's
   // own GET /api/fleet runs it instead, so it still happens on first open.
+  // The name drives that matching, so it must come from the sign-in provider,
+  // which the token does not carry — hence one getUser() here, only when Fleet
+  // is the module being opened (security audit run-4 F7).
   const initialFleetPromise: Promise<FleetBoardPayload | null> = userId && opensFleet
-    ? buildFleetBoard(
-        createAdminClient(),
-        {
-          id: userId,
-          email,
-          name: displayNameFor({ email, user_metadata: userMetadata }),
-          isAdmin,
-        },
-        { windowDays: DEFAULT_WINDOW_DAYS },
-        { autoLink: true },
+    ? supabase.auth.getUser().then(({ data: { user } }) =>
+        buildFleetBoard(
+          createAdminClient(),
+          {
+            id: userId,
+            email,
+            name: displayNameFor({ email, identities: user?.identities }),
+            isAdmin,
+          },
+          { windowDays: DEFAULT_WINDOW_DAYS },
+          { autoLink: true },
+        ),
       ).catch((error) => {
         console.error("Dashboard SSR: buildFleetBoard failed", error);
         return null;

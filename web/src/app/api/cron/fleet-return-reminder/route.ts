@@ -293,10 +293,7 @@ export async function GET(request: Request) {
       u.id,
       {
         email: u.email ?? null,
-        name: displayNameFor({
-          email: u.email,
-          user_metadata: (u.user_metadata ?? null) as Record<string, unknown> | null,
-        }),
+        name: displayNameFor({ email: u.email, identities: u.identities }),
       },
     ]),
   );

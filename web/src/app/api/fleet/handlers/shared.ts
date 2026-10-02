@@ -65,10 +65,7 @@ export async function resolveViewer(): Promise<Viewer | null> {
   return {
     id: user.id,
     email: user.email ?? null,
-    name: displayNameFor({
-      email: user.email,
-      user_metadata: (user.user_metadata ?? null) as Record<string, unknown> | null,
-    }),
+    name: displayNameFor({ email: user.email, identities: user.identities }),
     isAdmin: isAdminEmail(user.email ?? null),
     hasAccess: hasAppAccess(user),
   };
