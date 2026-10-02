@@ -3,19 +3,20 @@
  * drone gets into trouble in a confined space, most of them straight off the
  * Elios 3's own warning list (the codes on screen are the real ones):
  *
- *   Dust (VIO)            cameras and lidar blinded → FORCED ATTI, at the
- *                         speed of whatever gear you are in
+ *   Dust (VIO)            cameras and lidar blinded: an Assist space drops
+ *                         to FORCED ATTI, and the picture fogs
  *   Draft                 a shaft or stack blows through; Assist holds
- *                         position against it, ATTI drifts with it
+ *                         position against it, ATTI is carried by it
  *   Weak signal (T01)     the video lags; it can drop out entirely (T13),
  *                         and after five seconds — three here — the drone
  *                         flies itself back along its path (Return-to-Signal)
  *                         unless the pilot cancels
  *   Lighting error (S16)  the panel goes dark; only the lidar sees
- *   Stabilization off (A01) nothing holds the aircraft: manual thrust
- *   Hanging cables        the cage bounces off steel, but a cable snags
- *   Radiation (E04)       a dose builds the longer you stay in the field
- *   Gas (PA08)            critical LEL: evacuate, fast
+ *   Hanging cables        rigging hanging into the gaps; go under it
+ *   Radiation (E04)       a hot band across the space: the dose builds the
+ *                         closer you fly to it
+ *   Gas (PA08)            a layer of it — methane under the roof, hydrogen
+ *                         sulphide on the floor; stay out of it
  *
  * Pure and `Math.random()`-free, like the flight rules: which event comes and
  * which way a draft blows are draws passed in by the caller.
@@ -34,7 +35,6 @@ export const EVENT_KINDS = [
   "DRAFT",
   "SIGNAL",
   "DARKNESS",
-  "STAB",
   "CABLES",
   "RADIATION",
   "GAS",
@@ -59,8 +59,8 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
   DUST: {
     code: "VIO",
     title: "Dust — cameras and lidar blind",
-    hint: "Forced ATTI · it drifts now",
-    zones: ["MINE", "SEWER"],
+    hint: "Assist is blind — it drifts now",
+    zones: ["BOILER", "BALLAST", "SEWER", "MINE"],
     length: 750,
     minScore: 0,
     weight: 3,
@@ -92,19 +92,10 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
     minScore: 3,
     weight: 2,
   },
-  STAB: {
-    code: "A01",
-    title: "Stabilization disabled",
-    hint: "Manual thrust — hold up against gravity",
-    zones: "ANY",
-    length: 450,
-    minScore: 12,
-    weight: 1,
-  },
   CABLES: {
     code: "!",
     title: "Hanging cables",
-    hint: "The cage won't save you — go under",
+    hint: "Go under them",
     zones: ["MINE", "SEWER", "BALLAST"],
     length: 500,
     minScore: 2,
@@ -113,7 +104,7 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
   RADIATION: {
     code: "E04",
     title: "Radiation field",
-    hint: "Dose building — get through fast",
+    hint: "Keep away from the hot band",
     zones: ["BOILER", "TANK"],
     length: 900,
     minScore: 6,
@@ -121,8 +112,8 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
   },
   GAS: {
     code: "PA08",
-    title: "Critical LEL — evacuate",
-    hint: "Hold 4 m/s or faster",
+    title: "Critical LEL — gas layer",
+    hint: "Stay out of the gas",
     zones: ["MINE", "SEWER"],
     length: 800,
     minScore: 6,
@@ -155,10 +146,9 @@ export const WARNING_TIME = 1.2;
 /** Seconds in a radiation field to the dose limit; the meter ebbs slowly outside. */
 export const DOSE_TIME = 7;
 export const DOSE_DECAY = 0.05;
-/** Gas: below `EVAC_SPEED` the LEL meter fills in this many seconds, and drains at `LEL_FALL` per second above it. */
-export const LEL_TIME = 4;
-export const LEL_FALL = 0.5;
-export const EVAC_SPEED = mps(4);
+/** Seconds in the gas layer to the limit, and how fast the meter drains outside it. */
+export const LEL_TIME = 2.2;
+export const LEL_FALL = 0.6;
 /** How late the controls arrive over a weak link. */
 export const SIGNAL_LAG = 0.3;
 /** The window to cancel Return-to-Signal (five seconds on the real aircraft), and how long it flies back. */
@@ -167,11 +157,6 @@ export const RTS_TIME = 1.6;
 export const RTS_SPEED = mps(1.5);
 /** How far into a run the first event waits. */
 export const FIRST_EVENT = 650;
-/** How far a draft pushes a drone that is holding altitude, per second: barely in Assist, hard in ATTI. */
-export const DRAFT_ASSIST = 10;
-export const DRAFT_ATTI = 70;
-/** …and how hard it accelerates one in ATTI MAN, which holds nothing. */
-export const DRAFT_MANUAL = 280;
 
 /** Clear air between one event ending and the next, shrinking as the run goes on. */
 export function eventGap(score: number): number {

@@ -3,6 +3,9 @@ import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
   gapX,
+  GAS_LAYER,
+  RADIATION_REACH,
+  radiationBand,
   type GameState,
   type Obstacle,
 } from "@/lib/elios-flight";
@@ -147,6 +150,16 @@ export function drawEventWorld(
       break;
     }
     case "RADIATION": {
+      // The hot band itself: a glow across the space, fading out to its reach.
+      const band = radiationBand(e);
+      const g = ctx.createLinearGradient(0, band - RADIATION_REACH, 0, band + RADIATION_REACH);
+      g.addColorStop(0, "rgba(120,255,140,0)");
+      g.addColorStop(0.5, "rgba(120,255,140,0.22)");
+      g.addColorStop(1, "rgba(120,255,140,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, band - RADIATION_REACH, W, RADIATION_REACH * 2);
+      ctx.fillStyle = "rgba(160,255,170,0.35)";
+      ctx.fillRect(0, band - 0.4, W, 0.8);
       // Snow on the sensor, getting worse with the dose.
       const n = Math.round(60 + state.dose * 260);
       const frame = Math.floor(t * 30);
@@ -157,8 +170,26 @@ export function drawEventWorld(
       break;
     }
     case "GAS": {
-      ctx.fillStyle = `rgba(170,200,60,${(0.08 + state.lel * 0.2).toFixed(3)})`;
-      ctx.fillRect(0, 0, W, H);
+      // The layer: methane under the roof, hydrogen sulphide on the floor,
+      // with a soft edge and a slow roll so it reads as gas, not a wall.
+      const top = e.dir < 0;
+      const y0 = top ? 0 : H - GAS_LAYER;
+      const g = ctx.createLinearGradient(0, top ? GAS_LAYER + 10 : H - GAS_LAYER - 10, 0, top ? 0 : H);
+      g.addColorStop(0, "rgba(180,210,70,0)");
+      g.addColorStop(0.25, "rgba(180,210,70,0.28)");
+      g.addColorStop(1, "rgba(180,210,70,0.42)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, top ? 0 : y0 - 10, W, GAS_LAYER + 10);
+      ctx.strokeStyle = "rgba(210,235,110,0.35)";
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      const edge = top ? GAS_LAYER : H - GAS_LAYER;
+      for (let x = 0; x <= W; x += 4) {
+        const yy = edge + Math.sin(x * 0.05 + t * 1.4) * 2;
+        if (x === 0) ctx.moveTo(x, yy);
+        else ctx.lineTo(x, yy);
+      }
+      ctx.stroke();
       break;
     }
     default:
@@ -224,7 +255,7 @@ export function drawEventHud(ctx: CanvasRenderingContext2D, state: GameState, t:
     const spec = EVENT_SPECS[e.kind];
     const warn = e.phase === "warning";
     const on = !warn || Math.floor(t * 6) % 2 === 0;
-    const danger = e.kind === "STAB" || e.kind === "GAS" || e.kind === "RADIATION" || e.phase === "lost";
+    const danger = e.kind === "GAS" || e.kind === "RADIATION" || e.phase === "lost";
     const colour = danger ? "rgba(255,120,100,0.98)" : "rgba(255,206,110,0.98)";
     if (on) {
       ctx.font = "700 6.5px ui-monospace, SFMono-Regular, Menlo, monospace";

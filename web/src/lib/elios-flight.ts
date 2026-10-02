@@ -18,23 +18,18 @@
  * seeded generator — so a whole run replays exactly in a test, the same
  * discipline `fleet-rules.ts` follows.
  *
- * The run is flown in one of five flight modes (`MODE_SPECS`), switchable
- * mid-flight, on a throttle the pilot controls, until the battery runs flat;
- * the score is obstacles cleared on one battery. The collision-tolerant cage
- * is a rule about speed, not mode: at or below `SAFE_SPEED` contact bounces,
- * above it contact is a crash. The ATTI MAN flap physics and the obstacle
- * spacing are unchanged from the first version of the game; changing any of
- * this changes what a score means, so it comes with a leaderboard reset and a
- * bump of `ELIOS_RULES_VERSION`.
+ * The space decides how the aircraft flies (`ZONE_MODE`): Assist in tight
+ * spaces, ATTI in open voids, and dust forces ATTI anywhere. Contact is a
+ * crash — there is no cage to bounce off — and the pace rises with every
+ * obstacle cleared (`speedFor`). The obstacle spacing is unchanged from the
+ * first version of the game; changing any of this changes what a score
+ * means, so it comes with a leaderboard reset and a bump of
+ * `ELIOS_RULES_VERSION`.
  */
 
 import {
   DOSE_DECAY,
   DOSE_TIME,
-  DRAFT_ASSIST,
-  DRAFT_ATTI,
-  DRAFT_MANUAL,
-  EVAC_SPEED,
   EVENT_SPECS,
   FIRST_EVENT,
   LEL_FALL,
@@ -75,71 +70,75 @@ export const DRONE_X = 68;
 export const DRONE_RADIUS = 11;
 
 /**
- * Two things decide how the Elios flies, and only one of them is the pilot's.
+ * How the Elios flies is not the pilot's choice: it is what the space allows.
  *
- * The **gear** is the pilot's: four steps of the real remote's mode switch,
- * each a cruising speed. The aircraft flies at the gear's speed — there is no
- * throttle — so shifting is the only speed decision, and it is a big one:
+ *   Assist       tight, feature-rich spaces — boiler, ballast tank, sewer.
+ *                The cameras and lidar hold the aircraft: it goes exactly
+ *                where it is told and hovers when nothing is pressed.
+ *   ATTI         big open voids — the stope, the storage tank — where the
+ *                walls are beyond the sensors' range. Only altitude is held:
+ *                the aircraft has momentum, wanders, and drafts throw it.
+ *   Forced ATTI  dust blinds the sensors in an Assist space, and the aircraft
+ *                drops to ATTI without being asked — the real FORCED ATTI.
  *
- *   Assist        1.5 m/s   stabilised   ×1
- *   Assist Sport  2 m/s     stabilised   ×1
- *   ATTI          5 m/s     drifts       ×2
- *   ATTI Sport    7 m/s     drifts       ×3
+ * The controls never change: hold up to climb, down to descend, in all three.
+ * What changes is how well the aircraft does what it is told.
  *
- * The Assist gears sit inside the collision-tolerant cage (2 m/s); the ATTI
- * gears are fast, drift with the air and crash on contact — and score double
- * and triple per obstacle, on a battery that does not wait.
- *
- * The **handling** is not the pilot's: it is what the aircraft can manage.
- * Assist handling holds position and height; ATTI handling has inertia and
- * goes where the air pushes it; manual thrust is gravity against a held
- * climb. An Assist gear flies Assist handling until something blinds its
- * sensors (dust: FORCED ATTI, at the same speed) or switches its
- * stabilisation off (A01: manual thrust). Up climbs and down descends in all
- * of them — the controls never change meaning, only the aircraft does.
+ * There is no cage to save you: contact is a crash. And the run does not wait
+ * — it starts at 1.5 m/s and gets faster with every obstacle cleared.
  */
-export const GEARS = ["ASSIST", "ASSIST_SPORT", "ATTI", "ATTI_SPORT"] as const;
-export type Gear = (typeof GEARS)[number];
+export type FlightMode = "ASSIST" | "ATTI" | "FORCED_ATTI";
 
-export type GearSpec = { label: string; speed: number; multiplier: number; stabilized: boolean };
+/** Which mode each space flies in, before any event has its say. */
+export const ZONE_MODE: Record<Zone, "ASSIST" | "ATTI"> = {
+  BOILER: "ASSIST",
+  BALLAST: "ASSIST",
+  MINE: "ATTI",
+  SEWER: "ASSIST",
+  TANK: "ATTI",
+};
+
+/**
+ * `climb` is the vertical rate up or down asks for, `tau` how long the
+ * aircraft takes to get there (ATTI has momentum), `wander` how far a drone
+ * holding only altitude drifts up and down on its own, `draft` how hard a
+ * draft carries it, and `gust` how much the air pushes its forward speed.
+ */
+export const MODE_SPECS: Record<
+  FlightMode,
+  { label: string; why: string; climb: number; tau: number; wander: number; draft: number; gust: number }
+> = {
+  ASSIST: { label: "Assist", why: "Stabilised", climb: 110, tau: 0.12, wander: 0, draft: 10, gust: 0 },
+  ATTI: { label: "ATTI", why: "Open void — beyond sensor range", climb: 130, tau: 0.4, wander: 26, draft: 70, gust: 18 },
+  FORCED_ATTI: { label: "Forced ATTI", why: "Sensors blinded", climb: 130, tau: 0.4, wander: 26, draft: 70, gust: 18 },
+};
 
 const mps = (metres: number) => metres / METRES_PER_UNIT;
 
-export const GEAR_SPECS: Record<Gear, GearSpec> = {
-  ASSIST: { label: "Assist", speed: mps(1.5), multiplier: 1, stabilized: true },
-  ASSIST_SPORT: { label: "Assist Sport", speed: mps(2), multiplier: 1, stabilized: true },
-  ATTI: { label: "ATTI", speed: mps(5), multiplier: 2, stabilized: false },
-  ATTI_SPORT: { label: "ATTI Sport", speed: mps(7), multiplier: 3, stabilized: false },
-};
-
-export type Handling = "ASSIST" | "ATTI" | "MANUAL";
-
 /**
- * `climb` is the vertical rate asked for while up or down is held, `tau` how
- * long the aircraft takes to get there (ATTI is sluggish: it has momentum),
- * `speedTau` how quickly the forward speed settles on a new gear (Assist
- * brakes hard, ATTI coasts), and `gust` how hard the air pushes the forward
- * speed about when nothing is holding position.
+ * The run speeds up as it goes: 1.5 m/s at the start, +0.06 m/s for every
+ * obstacle cleared, up to 6 m/s about 75 obstacles in. Obstacles stay the same
+ * distance apart, so only the time to read one shrinks. The cap is held down
+ * by the double web frame, whose second hole has to stay reachable at the
+ * fastest the run gets (the test suite checks it).
  */
-export const HANDLING: Record<Handling, { label: string; climb: number; tau: number; speedTau: number; gust: number }> = {
-  ASSIST: { label: "Assist", climb: 110, tau: 0.12, speedTau: 0.3, gust: 0 },
-  ATTI: { label: "ATTI", climb: 130, tau: 0.4, speedTau: 0.9, gust: 22 },
-  MANUAL: { label: "Manual thrust", climb: 0, tau: 0, speedTau: 1, gust: 26 },
-};
+export const START_SPEED = mps(1.5);
+export const SPEED_PER_OBSTACLE = mps(0.06);
+export const MAX_SPEED = mps(6);
+/** How quickly the forward speed settles on a new pace. */
+export const SPEED_TAU = 0.8;
 
-/** Manual thrust: held up accelerates the aircraft upward this hard, against gravity. */
-export const THRUST = 900;
-/** …and it climbs no faster than this. */
-export const MAX_CLIMB_SPEED = 200;
-/** Seconds of flight on one battery. The score is points earned before it runs out. */
-export const BATTERY_SECONDS = 90;
+export function speedFor(cleared: number): number {
+  const n = Number.isFinite(cleared) ? Math.max(0, cleared) : 0;
+  return Math.min(MAX_SPEED, START_SPEED + SPEED_PER_OBSTACLE * n);
+}
 
 /**
  * The pick-ups: what the real aircraft can do for a pilot in trouble.
  *
  * - Repeat Flight: the Elios 3 can fly a recorded path again by itself. Here
- *   it takes over for `AUTO_TIME` seconds, threads every obstacle on its own
- *   at ATTI speed or better, and cannot crash while it does.
+ *   it takes over for `AUTO_TIME` seconds, threads every obstacle on its own,
+ *   and cannot crash while it does.
  * - Dust-proof light: the lighting mode that stops dust throwing the light
  *   back into the camera. Here it clears dust and darkness from the picture
  *   for `LIGHT_TIME` seconds — the picture, not the sensors.
@@ -154,20 +153,6 @@ export const PICKUP_REACH = DRONE_RADIUS + 7;
 export const PICKUP_EVERY = 9;
 export const PICKUP_SPREAD = 7;
 
-/**
- * Below this forward speed (2 m/s on the readout) the cage takes the hit: the
- * drone bounces off whatever it touched and keeps flying, the way the real
- * collision-tolerant Elios does. Above it, contact is a crash — in every mode.
- * The mode does not protect you; your speed does. Assist and Assist Sport
- * simply cannot go fast enough to lose it.
- */
-export const SAFE_SPEED = 2 / METRES_PER_UNIT;
-/** Share of the vertical speed the cage keeps through a bounce. */
-export const BOUNCE_RESTITUTION = 0.55;
-/** A head-on bump throws the world back at this speed, world units per second… */
-export const BOUNCE_RECOIL = 110;
-/** …which dies away at this rate per second, so the run picks up again within half a second. */
-export const RECOIL_DECAY = 6;
 /** Clear air between one obstacle and the next. */
 export const OBSTACLE_GAP = 112;
 /** Never open a passage tighter than this, or it stops being playable. */
@@ -195,22 +180,9 @@ export const ZONE_NAMES: Record<Zone, { name: string; industry: string }> = {
   TANK: { name: "Storage tank", industry: "Oil & gas" },
 };
 
-/** Is the drone slow enough right now for the cage to take a hit? */
-export function isCollisionTolerant(state: Pick<GameState, "speed">): boolean {
-  return Math.abs(state.speed) <= SAFE_SPEED + 1e-9;
-}
-
-/**
- * How fast the obstacles are actually moving: the forward speed, less whatever
- * a head-on bounce is still throwing the world back by. Negative while it does.
- */
-export function worldSpeed(state: Pick<GameState, "speed" | "recoil">): number {
-  return state.speed - state.recoil;
-}
-
-/** Share of the battery left, 1 at launch and 0 when the run ends. */
-export function batteryLeft(state: Pick<GameState, "elapsed">): number {
-  return Math.max(0, 1 - state.elapsed / BATTERY_SECONDS);
+/** How fast the obstacles are moving: the forward speed. Negative while Return-to-Signal flies back. */
+export function worldSpeed(state: Pick<GameState, "speed">): number {
+  return state.speed;
 }
 
 /** The zone at a (possibly out-of-range) index, wrapping like the run does. */
@@ -1013,8 +985,7 @@ export function hitsCeiling(y: number): boolean {
 // Game
 // ---------------------------------------------------------------------------
 
-/** `landed` is a run that flew its battery flat: it ends there, and the score stands. */
-export type GameStatus = "idle" | "flying" | "crashed" | "landed";
+export type GameStatus = "idle" | "flying" | "crashed";
 
 /** Where a run ended and what it ended on — the crash screen names it. */
 export type Impact = { what: ImpactKind; x: number; y: number };
@@ -1025,11 +996,9 @@ export type GameState = {
   y: number;
   velocity: number;
   obstacles: Obstacle[];
-  /** Points: each obstacle cleared is worth the multiplier of the gear it was cleared in. */
+  /** Obstacles cleared. It is the score, and it sets the pace. */
   score: number;
-  /** Obstacles cleared, whatever the gear: how far into the run this is. */
-  cleared: number;
-  /** Seconds elapsed this run; drains the battery and drives the animation. */
+  /** Seconds elapsed this run; drives the drift and the animation. */
   elapsed: number;
   /** Index into ZONES of the space the drone is flying in right now. */
   droneZone: number;
@@ -1039,14 +1008,6 @@ export type GameState = {
   buildCount: number;
   nextId: number;
   impact: Impact | null;
-  /**
-   * How fast a head-on bounce is still throwing the world back, world units
-   * per second. Zero unless the cage just took a hit.
-   */
-  recoil: number;
-  /** Where the cage took a hit this step and flew on; null on a clean step. */
-  bump: Impact | null;
-  gear: Gear;
   /** Forward speed over the ground, world units per second. What the readout shows. */
   speed: number;
   /** Whether things happen to the aircraft on this run (see `elios-events.ts`), and pick-ups appear. */
@@ -1068,13 +1029,11 @@ export type GameState = {
   light: number;
   /** Id of the obstacle the next pick-up is built on. */
   nextPickupAt: number;
-  /** Points scored on the last obstacle cleared, for the "+N" the renderer shows. */
-  lastGain: number;
 };
 
 type LoggedInput = { at: number; climb: boolean; descend: boolean };
 
-export function createGame(startZone = 0, gear: Gear = "ASSIST_SPORT", events = false): GameState {
+export function createGame(startZone = 0, events = false): GameState {
   const zone = ZONES.indexOf(zoneAt(startZone));
   return {
     status: "idle",
@@ -1082,18 +1041,14 @@ export function createGame(startZone = 0, gear: Gear = "ASSIST_SPORT", events = 
     velocity: 0,
     obstacles: [],
     score: 0,
-    cleared: 0,
     elapsed: 0,
     droneZone: zone,
     buildZone: zone,
     buildCount: 0,
     nextId: 1,
     impact: null,
-    recoil: 0,
-    bump: null,
-    gear,
     // A run launches already cruising rather than from a standstill.
-    speed: GEAR_SPECS[gear].speed,
+    speed: START_SPEED,
     events,
     event: null,
     travelled: 0,
@@ -1105,57 +1060,28 @@ export function createGame(startZone = 0, gear: Gear = "ASSIST_SPORT", events = 
     auto: 0,
     light: 0,
     nextPickupAt: PICKUP_EVERY,
-    lastGain: 0,
   };
 }
 
-/**
- * How the aircraft is flying right now — which is not always what the gear
- * asks for. Stabilisation switched off means manual thrust; dust blinding the
- * sensors means an Assist gear flies ATTI, at its own speed.
- */
-export function handlingOf(state: Pick<GameState, "gear" | "event">): Handling {
-  if (isLive(state.event, "STAB")) return "MANUAL";
-  if (!GEAR_SPECS[state.gear].stabilized || isLive(state.event, "DUST")) return "ATTI";
-  return "ASSIST";
+/** How the aircraft is flying right now: the space decides, and dust can force ATTI. */
+export function modeOf(state: Pick<GameState, "droneZone" | "event">): FlightMode {
+  if (ZONE_MODE[zoneAt(state.droneZone)] === "ATTI") return "ATTI";
+  return isLive(state.event, "DUST") ? "FORCED_ATTI" : "ASSIST";
 }
 
-/**
- * The air the aircraft drifts in when nothing holds its position: a smooth,
- * repeatable push on the forward speed, so a run replays exactly.
- */
-export function gustAt(handling: Handling, elapsed: number): number {
-  const g = HANDLING[handling].gust;
+/** A smooth, repeatable wander in [-1, 1] — the air a drone holding only altitude drifts in. */
+function wander(t: number, phase: number): number {
+  return (Math.sin(0.9 * t + phase) + 0.6 * Math.sin(2.3 * t + 1.1 + phase) + 0.3 * Math.sin(5.1 * t + phase)) / 1.9;
+}
+
+/** The push on the forward speed in this mode, world units per second per second. */
+export function gustAt(mode: FlightMode, elapsed: number): number {
+  const g = MODE_SPECS[mode].gust;
   if (g === 0) return 0;
-  const t = Number.isFinite(elapsed) ? elapsed : 0;
-  return (g * (Math.sin(0.83 * t) + 0.7 * Math.sin(2.1 * t + 1.7) + 0.4 * Math.sin(4.3 * t + 0.4))) / 2.1;
+  return g * wander(Number.isFinite(elapsed) ? elapsed : 0, 0.4);
 }
 
-/**
- * Shift up (1) or down (-1) a gear. Allowed mid-flight; the aircraft then
- * settles on the new speed at its handling's rate — Assist brakes hard, ATTI
- * coasts. Inside the Return-to-Signal countdown a shift is the pilot saying
- * "I have it": it cancels the return and keeps the gear.
- */
-export function shiftGear(state: GameState, direction: 1 | -1): GameState {
-  if (state.status !== "idle" && state.status !== "flying") return state;
-  const e = state.event;
-  if (e && e.kind === "SIGNAL" && e.phase === "lost") {
-    return { ...state, event: { ...e, phase: "active", t: 0, escalates: false } };
-  }
-  const i = GEARS.indexOf(state.gear) + direction;
-  if (i < 0 || i >= GEARS.length) return state;
-  return setGear(state, GEARS[i]);
-}
-
-/** Put the switch in a particular gear. */
-export function setGear(state: GameState, gear: Gear): GameState {
-  if (state.gear === gear || (state.status !== "idle" && state.status !== "flying")) return state;
-  // Before a run there is nothing to slow down from.
-  return { ...state, gear, speed: state.status === "idle" ? GEAR_SPECS[gear].speed : state.speed };
-}
-
-/** Cancel Return-to-Signal inside its countdown — the same as a shift does. */
+/** Cancel Return-to-Signal inside its countdown: fly on over the weak link instead. */
 export function cancelRts(state: GameState): GameState {
   const e = state.event;
   if (!e || e.kind !== "SIGNAL" || e.phase !== "lost") return state;
@@ -1175,7 +1101,7 @@ export type StepInput = {
   placeDraw: number;
   /** Draw in [0, 1) that cuts ragged shapes; defaults to a fixed cut. */
   styleDraw?: number;
-  /** Held inputs: up climbs, down descends, in every handling. */
+  /** Held inputs: up climbs, down descends, in every mode. */
   climb?: boolean;
   descend?: boolean;
   /** Draw in [0, 1): which event comes next, and its details; also where pick-ups go. */
@@ -1193,9 +1119,9 @@ export function stepGame(state: GameState, input: StepInput): GameState {
   // ever being tested.
   const dt = Math.min(Math.max(input.dt, 0), 0.05);
 
-  // At ATTI speeds one frame can carry an obstacle further than the cage is
+  // At top speed one frame can carry an obstacle further than the cage is
   // wide; split the step so every contact is still tested.
-  const travel = Math.max(Math.abs(state.speed) + state.recoil, Math.abs(state.velocity), MAX_FALL_SPEED) * dt;
+  const travel = Math.max(Math.abs(state.speed), Math.abs(state.velocity), MAX_FALL_SPEED) * dt;
   const steps = Math.min(8, Math.max(1, Math.ceil(travel / MAX_STEP_TRAVEL)));
   // Keep just enough input history for a weak link to deliver it late.
   const logged: LoggedInput = { at: state.elapsed, climb: !!input.climb, descend: !!input.descend };
@@ -1204,12 +1130,8 @@ export function stepGame(state: GameState, input: StepInput): GameState {
     : state.inputLog;
 
   let s: GameState = { ...state, inputLog };
-  let bump: Impact | null = null;
-  for (let i = 0; i < steps && s.status === "flying"; i += 1) {
-    s = subStep(s, input, dt / steps);
-    bump ??= s.bump;
-  }
-  return { ...s, bump };
+  for (let i = 0; i < steps && s.status === "flying"; i += 1) s = subStep(s, input, dt / steps);
+  return s;
 }
 
 /** What the aircraft actually receives: over a weak link, what the pilot did a moment ago. */
@@ -1227,11 +1149,11 @@ function receivedInput(state: GameState, input: StepInput): Pick<StepInput, "cli
  * on the drone: where the Repeat Flight autopilot steers.
  */
 export function laneThrough(solids: readonly Solid[], width: number): number {
-  const probe = { solids, x: DRONE_X - width / 2 } as Pick<Obstacle, "solids" | "x">;
+  const x = DRONE_X - width / 2;
   let best: [number, number] = [WORLD_HEIGHT / 2, WORLD_HEIGHT / 2];
   let start: number | null = null;
   for (let y = DRONE_RADIUS + 1; y <= WORLD_HEIGHT - DRONE_RADIUS - 1; y += 2) {
-    const free = !probe.solids.some((s) => circleHitsSolid(DRONE_X, y, DRONE_RADIUS, s, probe.x));
+    const free = !solids.some((s) => circleHitsSolid(DRONE_X, y, DRONE_RADIUS, s, x));
     if (free && start === null) start = y;
     if ((!free || y + 2 > WORLD_HEIGHT - DRONE_RADIUS - 1) && start !== null) {
       const end = free ? y : y - 2;
@@ -1242,17 +1164,40 @@ export function laneThrough(solids: readonly Solid[], width: number): number {
   return (best[0] + best[1]) / 2;
 }
 
+/** Height of a gas layer: methane gathers under the roof, hydrogen sulphide on the floor. */
+export const GAS_LAYER = 64;
+/** How far from the hot band radiation still adds to the dose. */
+export const RADIATION_REACH = 80;
+
+/** Is the drone in the gas layer an event has laid down? */
+export function inGas(event: ActiveEvent | null, y: number): boolean {
+  if (!isLive(event, "GAS") || !event) return false;
+  return event.dir < 0 ? y - DRONE_RADIUS < GAS_LAYER : y + DRONE_RADIUS > WORLD_HEIGHT - GAS_LAYER;
+}
+
+/** Where a radiation event's hot band runs, as a height. */
+export function radiationBand(event: Pick<ActiveEvent, "dir">): number {
+  return event.dir < 0 ? WORLD_HEIGHT * 0.3 : WORLD_HEIGHT * 0.7;
+}
+
+/** Dose per second at height `y`: strongest on the band, nothing beyond its reach. */
+export function doseRate(event: ActiveEvent | null, y: number): number {
+  if (!isLive(event, "RADIATION") || !event) return 0;
+  const near = Math.max(0, 1 - Math.abs(y - radiationBand(event)) / RADIATION_REACH);
+  return (near * near) / DOSE_TIME;
+}
+
 function subStep(state: GameState, input: StepInput, dt: number): GameState {
   const event = state.event;
-  const handling = handlingOf(state);
-  const feel = HANDLING[handling];
-  const gearSpec = GEAR_SPECS[state.gear];
+  const mode = modeOf(state);
+  const spec = MODE_SPECS[mode];
   const autopilot = state.auto > 0;
-  // Return-to-Signal: the aircraft flies itself back, holding its height, and
-  // the sticks do nothing until it has. Repeat Flight outranks it.
+  // Return-to-Signal: the aircraft retraces its own path, holding its height,
+  // and the sticks do nothing until it is back in signal. Repeat Flight outranks it.
   const returning = !autopilot && event?.kind === "SIGNAL" && event.phase === "rts";
+  const flownForYou = autopilot || returning;
   const sticks = returning ? { climb: false, descend: false } : receivedInput(state, input);
-  const draft = isLive(event, "DRAFT") && event && !returning && !autopilot ? event.dir : 0;
+  const elapsed = state.elapsed + dt;
 
   // ---- Up and down.
   let velocity: number;
@@ -1261,32 +1206,24 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     const next = state.obstacles.find((o) => o.x + o.width > DRONE_X - DRONE_RADIUS);
     const lane = next?.lane ?? WORLD_HEIGHT / 2;
     velocity = Math.max(-170, Math.min(170, (lane - state.y) * 7));
-  } else if (handling === "MANUAL" && !returning) {
-    // Manual thrust: gravity always, thrust while up is held, a draft on top.
-    velocity = state.velocity + (GRAVITY + draft * DRAFT_MANUAL - (sticks.climb ? THRUST : 0)) * dt;
-    velocity = Math.min(MAX_FALL_SPEED, Math.max(-MAX_CLIMB_SPEED, velocity));
   } else {
-    // Altitude hold: up and down ask for a climb rate, nothing asks to stay;
-    // ATTI gets there slowly and a draft carries it, Assist leans into one.
-    const rate = returning ? 0 : feel.climb;
+    // Altitude hold in every mode: up and down ask for a climb rate, nothing
+    // asks to stay. ATTI gets there slowly and wanders on its own; a draft
+    // carries ATTI and barely moves Assist.
+    const rate = returning ? 0 : spec.climb;
     const wanted = sticks.climb && !sticks.descend ? -rate : sticks.descend && !sticks.climb ? rate : 0;
-    const push = draft * (handling === "ASSIST" ? DRAFT_ASSIST : DRAFT_ATTI);
-    velocity = state.velocity + (wanted + push - state.velocity) * (1 - Math.exp(-dt / (feel.tau || 0.12)));
+    const draft = isLive(event, "DRAFT") && event && !returning ? event.dir * spec.draft : 0;
+    const drift = returning ? 0 : spec.wander * wander(elapsed, 2.7);
+    velocity = state.velocity + (wanted + draft + drift - state.velocity) * (1 - Math.exp(-dt / spec.tau));
   }
   let y = state.y + velocity * dt;
 
-  // ---- Forward.
-  const elapsed = state.elapsed + dt;
-  const cruise = autopilot ? Math.max(gearSpec.speed, GEAR_SPECS.ATTI.speed) : gearSpec.speed;
-  let speed = state.speed + (cruise - state.speed) * (1 - Math.exp(-dt / feel.speedTau));
-  if (!autopilot) speed += gustAt(handling, elapsed) * dt;
+  // ---- Forward: the pace of the run, pushed about by the air in ATTI.
+  let speed = state.speed + (speedFor(state.score) - state.speed) * (1 - Math.exp(-dt / SPEED_TAU));
+  if (!flownForYou) speed += gustAt(mode, elapsed) * dt;
   speed = returning ? -RTS_SPEED : Math.max(0, speed);
 
-  const decayed = state.recoil * Math.exp(-RECOIL_DECAY * dt);
-  let recoil = decayed < 0.5 ? 0 : decayed;
-  let obstacles = state.obstacles
-    .map((o) => ({ ...o, x: o.x - worldSpeed({ speed, recoil }) * dt }))
-    .filter((o) => o.x + o.width > -4);
+  let obstacles = state.obstacles.map((o) => ({ ...o, x: o.x - speed * dt })).filter((o) => o.x + o.width > -4);
 
   // ---- New obstacles, with what the run is putting in the gaps.
   let { buildZone, buildCount, nextId, nextPickupAt } = state;
@@ -1331,18 +1268,14 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
   }
 
   // ---- Scoring, and pick-ups collected on the way past.
-  let { score, cleared, auto, light, lastGain } = state;
+  let { score, auto, light } = state;
   let droneZone = state.droneZone;
   auto = Math.max(0, auto - dt);
   light = Math.max(0, light - dt);
-  // The autopilot scores at the speed it flies, never less than ATTI.
-  const multiplier = autopilot ? Math.max(gearSpec.multiplier, GEAR_SPECS.ATTI.multiplier) : gearSpec.multiplier;
   obstacles = obstacles.map((o) => {
     let next = o;
     if (!o.passed && o.x + o.width < DRONE_X - DRONE_RADIUS) {
-      score += multiplier;
-      cleared += 1;
-      lastGain = multiplier;
+      score += 1;
       // Through the manhole: the drone is in the next space now.
       if (o.kind === "BULKHEAD") droneZone = o.zone;
       next = { ...next, passed: true };
@@ -1364,7 +1297,7 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     travelled += Math.max(0, speed) * dt;
     if (!ev) {
       if (travelled >= nextEventAt) {
-        const kind = state.queued ?? pickEvent(ZONES[droneZone], cleared, input.eventDraw ?? 0.5);
+        const kind = state.queued ?? pickEvent(ZONES[droneZone], score, input.eventDraw ?? 0.5);
         if (kind) ev = startEvent(kind, input.eventDraw ?? 0.5);
         else nextEventAt = travelled + 300;
       }
@@ -1386,59 +1319,40 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
         ev = null;
         speed = 0;
       }
-      if (!ev) nextEventAt = travelled + eventGap(cleared);
+      if (!ev) nextEventAt = travelled + eventGap(score);
     }
 
-    dose = Math.min(1, Math.max(0, dose + (isLive(ev, "RADIATION") ? dt / DOSE_TIME : -DOSE_DECAY * dt)));
-    const evacuating = isLive(ev, "GAS");
-    lel = Math.min(1, Math.max(0, lel + (evacuating && speed < EVAC_SPEED ? dt / LEL_TIME : -LEL_FALL * dt)));
+    dose = Math.min(1, Math.max(0, dose + (doseRate(ev, y) > 0 ? doseRate(ev, y) * dt : -DOSE_DECAY * dt)));
+    lel = Math.min(1, Math.max(0, lel + (inGas(ev, y) ? dt / LEL_TIME : -LEL_FALL * dt)));
     if (dose >= 1) ended = { what: "RADIATION", x: DRONE_X, y };
     else if (lel >= 1) ended = { what: "GAS", x: DRONE_X, y };
   }
 
-  // ---- Contact. Repeat Flight cannot crash: it only keeps inside the world.
-  let bump: Impact | null = null;
-  let impact: Impact | null = null;
-  if (autopilot) {
+  // ---- Contact. No cage to bounce off: touching anything ends the run.
+  // Repeat Flight and Return-to-Signal fly a safe path, so only stay inside the world.
+  let impact: Impact | null;
+  if (flownForYou) {
     y = Math.min(Math.max(y, DRONE_RADIUS + 1), WORLD_HEIGHT - DRONE_RADIUS - 1);
     impact = ended;
   } else {
-    if (isCollisionTolerant({ speed })) {
-      const bounced = bounceOff(y, velocity, obstacles);
-      ({ y, velocity, obstacles, bump } = bounced);
-      if (bounced.headOn) {
-        recoil = Math.max(recoil, BOUNCE_RECOIL);
-        // A head-on hit stops the aircraft; it has to pick up speed again.
-        speed = 0;
-      }
-    }
-    // A cable snags whatever the speed: the cage bounces off steel, not rope.
-    impact = ended ?? cableAt(y, obstacles) ?? (bump ? null : contactAt(y, obstacles));
+    // A cable is as fatal as steel.
+    impact = ended ?? cableAt(y, obstacles) ?? contactAt(y, obstacles);
   }
-  // Handing back from the autopilot: at the gear's own speed, not coasting
-  // down from ATTI into whatever comes next.
-  if (state.auto > 0 && auto === 0) speed = gearSpec.speed;
-
   const crashed = impact !== null;
-  const flat = !crashed && elapsed >= BATTERY_SECONDS;
 
   return {
-    status: crashed ? "crashed" : flat ? "landed" : "flying",
+    status: crashed ? "crashed" : "flying",
     // Park the drone inside the world rather than part-way through a wall.
     y: crashed ? Math.min(Math.max(y, DRONE_RADIUS), WORLD_HEIGHT - DRONE_RADIUS) : y,
     velocity,
     obstacles,
     score,
-    cleared,
-    elapsed: Math.min(elapsed, BATTERY_SECONDS),
+    elapsed,
     droneZone,
     buildZone,
     buildCount,
     nextId,
     impact,
-    recoil: crashed ? 0 : recoil,
-    bump,
-    gear: state.gear,
     speed: crashed ? 0 : speed,
     events: state.events,
     event: crashed ? null : ev,
@@ -1451,7 +1365,6 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     auto,
     light,
     nextPickupAt,
-    lastGain,
   };
 }
 
@@ -1477,66 +1390,6 @@ function contactAt(y: number, obstacles: readonly Obstacle[]): Impact | null {
   const solid = hit.solids.find((s) => circleHitsSolid(DRONE_X, y, DRONE_RADIUS, s, hit.x)) ?? hit.solids[0];
   const [ix, iy] = nearestPointOnSolid(DRONE_X, y, solid, hit.x);
   return { what: hit.kind, x: ix, y: iy };
-}
-
-/** Clearance the cage is pushed out to after a bounce, so the next step starts free. */
-const SEPARATION = 0.5;
-
-/**
- * The collision-tolerant cage: push the drone clear of whatever it is touching
- * and send it back the way it came.
- *
- * The drone cannot move sideways — the world moves past it — so a push along x
- * is applied to the obstacles instead. Vertical speed into the surface is
- * reflected with `BOUNCE_RESTITUTION`; a hit on the front of something also
- * reports `headOn`, and the caller throws the world back with a recoil. A few
- * passes cover being wedged between two surfaces.
- */
-function bounceOff(
-  y0: number,
-  v0: number,
-  obstacles0: Obstacle[],
-): { y: number; velocity: number; obstacles: Obstacle[]; bump: Impact | null; headOn: boolean } {
-  let y = y0;
-  let velocity = v0;
-  let obstacles = obstacles0;
-  let bump: Impact | null = null;
-  let headOn = false;
-
-  for (let pass = 0; pass < 4; pass += 1) {
-    const contact = contactAt(y, obstacles);
-    if (!contact) break;
-    bump ??= contact;
-
-    if (contact.what === "FLOOR") {
-      y = WORLD_HEIGHT - DRONE_RADIUS - SEPARATION;
-      velocity = -Math.abs(velocity) * BOUNCE_RESTITUTION;
-      continue;
-    }
-    if (contact.what === "CEILING") {
-      y = DRONE_RADIUS + SEPARATION;
-      velocity = Math.abs(velocity) * BOUNCE_RESTITUTION;
-      continue;
-    }
-
-    // Normal from the contact point to the cage's centre. A centre already
-    // inside the steel has no usable normal; back straight out of it.
-    const dx = DRONE_X - contact.x;
-    const dy = y - contact.y;
-    const d = Math.hypot(dx, dy);
-    const [nx, ny, depth] = d > 1e-6 ? [dx / d, dy / d, DRONE_RADIUS - d] : [-1, 0, DRONE_RADIUS];
-    const push = depth + SEPARATION;
-
-    y += ny * push;
-    if (nx !== 0) obstacles = obstacles.map((o) => ({ ...o, x: o.x - nx * push }));
-    if (ny * velocity < 0) velocity = -velocity * BOUNCE_RESTITUTION;
-    if (nx < -0.5) headOn = true;
-  }
-
-  // A cage wedged into a corner can be pushed through the floor or ceiling by
-  // the last pass; never leave it outside the world.
-  y = Math.min(Math.max(y, DRONE_RADIUS + SEPARATION), WORLD_HEIGHT - DRONE_RADIUS - SEPARATION);
-  return { y, velocity, obstacles, bump, headOn };
 }
 
 /**

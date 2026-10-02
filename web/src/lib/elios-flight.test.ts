@@ -6,23 +6,20 @@ import {
   FLAP_VELOCITY,
   GRAVITY,
   KIND_LABELS,
-  BOUNCE_RECOIL,
-  BATTERY_SECONDS,
-  GEARS,
-  GEAR_SPECS,
-  HANDLING,
+  MAX_SPEED,
   METRES_PER_UNIT,
-  SAFE_SPEED,
+  MODE_SPECS,
   MIN_PASSAGE,
   OBSTACLE_GAP,
   OBSTACLE_KINDS,
+  START_SPEED,
   WORLD_HEIGHT,
   WORLD_WIDTH,
   ZONES,
   ZONE_KINDS,
   ZONE_LENGTH,
+  ZONE_MODE,
   ZONE_NAMES,
-  batteryLeft,
   buildObstacle,
   circleHitsSolid,
   clearance,
@@ -31,25 +28,21 @@ import {
   distanceToSegment,
   flap,
   gustAt,
-  handlingOf,
   hitsCeiling,
   hitsGround,
   hitsObstacle,
-  isCollisionTolerant,
   isNewBest,
   kindFor,
   laneThrough,
+  modeOf,
   nearestPointOnSolid,
   parseStoredBest,
   pointInPolygon,
   seedFromDraw,
   seededRandom,
-  setGear,
-  shiftGear,
+  speedFor,
   stepGame,
-  worldSpeed,
   zoneAt,
-  type Gear,
   type GameState,
   type Obstacle,
   type ObstacleKind,
@@ -270,17 +263,16 @@ describe("the double web frame stays a slalom, not a wall", () => {
     ];
   }
 
-  it("never offsets the second hole further than the drone climbs inside the bay, in any gear at full speed", () => {
-    for (const gear of GEARS) {
-      const { speed } = GEAR_SPECS[gear];
-      const { climb } = HANDLING[GEAR_SPECS[gear].stabilized ? "ASSIST" : "ATTI"];
+  it("never offsets the second hole further than the drone climbs inside the bay, in any mode at top speed", () => {
+    for (const mode of ["ASSIST", "ATTI"] as const) {
+      const { climb } = MODE_SPECS[mode];
       for (const draw of PLACEMENTS) {
         for (const seed of SEEDS) {
           const { width, solids } = buildObstacle("DOUBLE_FRAME", draw, seed);
           const [first, second] = holes(solids);
           const bay = width - 2 * 16;
-          expect(Math.abs(second.top - first.top), `${gear} DOUBLE_FRAME @ ${draw}`).toBeLessThanOrEqual(
-            (climb * bay) / speed + 1,
+          expect(Math.abs(second.top - first.top), `${mode} DOUBLE_FRAME @ ${draw}`).toBeLessThanOrEqual(
+            (climb * bay) / MAX_SPEED + 1,
           );
         }
       }
@@ -396,10 +388,9 @@ describe("idle and crashed states are frozen", () => {
     expect(fly(crashed, 60)).toEqual(crashed);
   });
 
-  it("refuses to revive a crashed run with a press or a shift", () => {
+  it("refuses to revive a crashed run with a press", () => {
     const crashed: GameState = { ...createGame(), status: "crashed" };
     expect(flap(crashed)).toEqual(crashed);
-    expect(shiftGear(crashed, 1)).toBe(crashed);
   });
 
   it("starts in whichever space it is given, wrapped into range", () => {
@@ -408,81 +399,65 @@ describe("idle and crashed states are frozen", () => {
     expect(createGame(Number.NaN).droneZone).toBe(0);
   });
 
-  it("launches on a press, already cruising at the gear's speed", () => {
-    const s = flap(createGame(0, "ATTI"));
+  it("launches on a press, already cruising at the opening pace", () => {
+    const s = flap(createGame());
     expect(s.status).toBe("flying");
-    expect(s.speed).toBe(GEAR_SPECS.ATTI.speed);
+    expect(s.speed).toBe(START_SPEED);
   });
 });
 
-describe("the gearbox", () => {
-  it("has the four steps of the real switch, in order of speed, and the cage only under the Assist ones", () => {
-    expect(GEARS).toEqual(["ASSIST", "ASSIST_SPORT", "ATTI", "ATTI_SPORT"]);
-    const speeds = GEARS.map((g) => GEAR_SPECS[g].speed * METRES_PER_UNIT);
-    expect(speeds[0]).toBeCloseTo(1.5, 9);
-    expect(speeds[1]).toBeCloseTo(2, 9);
-    expect(speeds[2]).toBeCloseTo(5, 9);
-    expect(speeds[3]).toBeCloseTo(7, 9);
-    for (const g of GEARS) {
-      expect(GEAR_SPECS[g].speed <= SAFE_SPEED + 1e-9, g).toBe(GEAR_SPECS[g].stabilized);
+describe("the pace", () => {
+  it("starts at 1.5 m/s and tops out at 6", () => {
+    expect(speedFor(0) * METRES_PER_UNIT).toBeCloseTo(1.5, 9);
+    expect(MAX_SPEED * METRES_PER_UNIT).toBeCloseTo(6, 9);
+    expect(speedFor(1e6)).toBe(MAX_SPEED);
+  });
+
+  it("gets faster with every obstacle cleared, and never jumps", () => {
+    for (let n = 1; n < 120; n += 1) {
+      expect(speedFor(n)).toBeGreaterThanOrEqual(speedFor(n - 1));
+      expect(speedFor(n) - speedFor(n - 1)).toBeLessThan(3);
     }
+    expect(speedFor(40)).toBeGreaterThan(speedFor(0) * 2);
   });
 
-  it("pays more for the gears that lose the cage", () => {
-    const m = GEARS.map((g) => GEAR_SPECS[g].multiplier);
-    for (let i = 1; i < m.length; i += 1) expect(m[i]).toBeGreaterThanOrEqual(m[i - 1]);
-    expect(GEAR_SPECS.ATTI_SPORT.multiplier).toBeGreaterThan(GEAR_SPECS.ASSIST.multiplier);
+  it("treats junk as the start of a run", () => {
+    expect(speedFor(-5)).toBe(START_SPEED);
+    expect(speedFor(Number.NaN)).toBe(START_SPEED);
   });
 
-  it("shifts one step at a time and stops at either end", () => {
-    let s = flap(createGame(0, "ASSIST"));
-    expect(shiftGear(s, -1)).toBe(s);
-    s = shiftGear(s, 1);
-    expect(s.gear).toBe("ASSIST_SPORT");
-    s = shiftGear(shiftGear(s, 1), 1);
-    expect(s.gear).toBe("ATTI_SPORT");
-    expect(shiftGear(s, 1)).toBe(s);
-  });
-
-  it("settles on the new gear's speed — braking hard into Assist, coasting up in ATTI", () => {
-    const fast = { ...flap(createGame(0, "ATTI_SPORT")), y: 100 };
-    const braked = fly(noSteel(setGear(fast, "ASSIST")), 90);
-    expect(braked.speed).toBeCloseTo(GEAR_SPECS.ASSIST.speed, -1);
-    const slow = { ...flap(createGame(0, "ASSIST")), y: 100 };
-    const halfASecond = fly(noSteel(setGear(slow, "ATTI_SPORT")), 30);
-    expect(halfASecond.speed).toBeLessThan(GEAR_SPECS.ATTI_SPORT.speed * 0.8);
-  });
-
-  it("only changes the speed instantly before a run", () => {
-    expect(setGear(createGame(0, "ASSIST"), "ATTI").speed).toBe(GEAR_SPECS.ATTI.speed);
-    const flying = flap(createGame(0, "ASSIST"));
-    expect(setGear(flying, "ATTI").speed).toBe(GEAR_SPECS.ASSIST.speed);
+  it("settles the forward speed on the pace the score sets", () => {
+    let s: GameState = { ...flap(createGame(0)), y: 100, score: 50 };
+    for (let i = 0; i < 180; i += 1) s = stepGame(noSteel(s), INPUT);
+    expect(s.status).toBe("flying");
+    expect(s.speed).toBeGreaterThan(speedFor(50) - 10);
   });
 });
 
-describe("handling", () => {
-  it("is Assist in the Assist gears and ATTI in the fast ones", () => {
-    expect(handlingOf(createGame(0, "ASSIST"))).toBe("ASSIST");
-    expect(handlingOf(createGame(0, "ASSIST_SPORT"))).toBe("ASSIST");
-    expect(handlingOf(createGame(0, "ATTI"))).toBe("ATTI");
-    expect(handlingOf(createGame(0, "ATTI_SPORT"))).toBe("ATTI");
-  });
-
-  it("holds height with nothing pressed, and climbs or descends while held — in both", () => {
-    for (const gear of GEARS) {
-      const s = noSteel({ ...flap(createGame(0, gear)), y: 100 });
-      expect(fly(s, 60).y, gear).toBeCloseTo(100, 6);
-      expect(fly(s, 30, { climb: true }).y, gear).toBeLessThan(92);
-      expect(fly(s, 30, { descend: true }).y, gear).toBeGreaterThan(108);
-      expect(fly(s, 30, { climb: true, descend: true }).y, gear).toBeCloseTo(100, 6);
+describe("modes", () => {
+  it("fly Assist in the tight spaces and ATTI in the open voids", () => {
+    for (const zone of ZONES) {
+      const s = createGame(ZONES.indexOf(zone));
+      expect(modeOf(s), zone).toBe(ZONE_MODE[zone]);
     }
+    expect(ZONE_MODE.TANK).toBe("ATTI");
+    expect(ZONE_MODE.BOILER).toBe("ASSIST");
   });
 
-  it("gives ATTI momentum: slower to answer, and it carries on after you let go", () => {
-    const assist = noSteel({ ...flap(createGame(0, "ASSIST_SPORT")), y: 100 });
-    const atti = noSteel({ ...flap(createGame(0, "ATTI")), y: 100 });
+  it("holds height with nothing pressed in Assist, and climbs or descends while held", () => {
+    const s = noSteel({ ...flap(createGame(ZONES.indexOf("BOILER"))), y: 100 });
+    expect(fly(s, 60).y).toBeCloseTo(100, 6);
+    expect(fly(s, 30, { climb: true }).y).toBeLessThan(92);
+    expect(fly(s, 30, { descend: true }).y).toBeGreaterThan(108);
+    expect(fly(s, 30, { climb: true, descend: true }).y).toBeCloseTo(100, 6);
+  });
+
+  it("lets ATTI wander on its own, answer slower, and carry on after you let go", () => {
+    const assist = noSteel({ ...flap(createGame(ZONES.indexOf("BOILER"))), y: 100 });
+    const atti = noSteel({ ...flap(createGame(ZONES.indexOf("TANK"))), y: 100 });
+    // Nothing pressed: Assist sits still, ATTI does not.
+    expect(Math.abs(fly(atti, 120).y - 100)).toBeGreaterThan(3);
     expect(fly(atti, 6, { climb: true }).velocity).toBeGreaterThan(fly(assist, 6, { climb: true }).velocity);
-    // How far it keeps climbing in the fifth of a second after up is let go.
     const coast = (s: GameState) => {
       const released = fly(s, 30, { climb: true });
       return released.y - fly(released, 12).y;
@@ -507,17 +482,17 @@ describe("physics", () => {
     expect(stepGame({ ...createGame(), status: "flying" }, { ...INPUT, dt: -5 }).y).toBe(WORLD_HEIGHT / 2);
   });
 
-  it("does not tunnel through steel at ATTI Sport on a long frame", () => {
+  it("does not tunnel through steel at top speed on a long frame", () => {
     const pendant = { ...at("PENDANT", 1, 7, 0), x: DRONE_X + DRONE_RADIUS + 4 };
     let y = DRONE_RADIUS + 1;
     while (y < WORLD_HEIGHT - DRONE_RADIUS && !hitsObstacle(y, { ...pendant, x: DRONE_X - 4 })) y += 1;
-    const s = stepGame({ ...flap(createGame(0, "ATTI_SPORT")), y, obstacles: [pendant] }, { ...INPUT, dt: 0.05 });
+    const s = stepGame({ ...flap(createGame()), y, speed: MAX_SPEED, obstacles: [pendant] }, { ...INPUT, dt: 0.05 });
     expect(s.status).toBe("crashed");
     expect(s.impact?.what).toBe("PENDANT");
   });
 });
 
-describe("crash detection", () => {
+describe("crash detection — there is no cage", () => {
   it("crashes into the floor and the ceiling", () => {
     expect(hitsGround(WORLD_HEIGHT - DRONE_RADIUS)).toBe(true);
     expect(hitsCeiling(DRONE_RADIUS)).toBe(true);
@@ -526,17 +501,17 @@ describe("crash detection", () => {
   });
 
   it("parks the drone inside the world, not through a surface, and says it hit the floor", () => {
-    const s = fly(noSteel({ ...flap(createGame(0, "ATTI")), y: WORLD_HEIGHT - 20 }), 90, { descend: true });
+    const s = fly(noSteel({ ...flap(createGame()), y: WORLD_HEIGHT - 20 }), 90, { descend: true });
     expect(s.status).toBe("crashed");
     expect(s.y).toBeLessThanOrEqual(WORLD_HEIGHT - DRONE_RADIUS);
     expect(s.y).toBeGreaterThanOrEqual(DRONE_RADIUS);
     expect(s.impact?.what).toBe("FLOOR");
   });
 
-  it("names the obstacle it hit and marks the point of contact on it", () => {
+  it("crashes on contact even at the slowest pace", () => {
     const pendant = at("PENDANT", 1, 7, 10);
-    const state: GameState = { ...flap(createGame(0, "ATTI")), y: 40, obstacles: [pendant] };
-    const s = stepGame(state, INPUT);
+    const s = stepGame({ ...flap(createGame()), y: 40, obstacles: [pendant] }, INPUT);
+    expect(s.speed).toBe(0);
     expect(s.status).toBe("crashed");
     expect(s.impact?.what).toBe("PENDANT");
     expect(Math.hypot((s.impact?.x ?? 0) - DRONE_X, (s.impact?.y ?? 0) - s.y)).toBeLessThanOrEqual(DRONE_RADIUS + 1);
@@ -548,18 +523,11 @@ describe("crash detection", () => {
 });
 
 describe("scoring", () => {
-  const past = (gear: Gear) => {
-    const state: GameState = { ...flap(createGame(0, gear)), y: 100, obstacles: [at("HANGUP", 0, 7, DRONE_X)] };
-    return fly(noSteel(state), 30);
-  };
-
-  it("scores an obstacle once, at the multiplier of the gear it was cleared in", () => {
-    for (const gear of GEARS) {
-      const s = past(gear);
-      expect(s.cleared, gear).toBe(1);
-      expect(s.score, gear).toBe(GEAR_SPECS[gear].multiplier);
-      expect(s.lastGain, gear).toBe(GEAR_SPECS[gear].multiplier);
-    }
+  it("scores an obstacle once, when it is fully behind the drone", () => {
+    const state: GameState = { ...flap(createGame()), y: 100, obstacles: [at("HANGUP", 0, 7, DRONE_X)] };
+    const scored = fly(noSteel(state), 30);
+    expect(scored.score).toBe(1);
+    expect(fly(scored, 30).score).toBe(1);
   });
 
   it("does not score an obstacle still ahead", () => {
@@ -571,11 +539,11 @@ describe("scoring", () => {
 describe("a run through the spaces", () => {
   /** Fly a long run through steel that is not there and record every obstacle as it is built. */
   function tour(startZone: number, frames: number) {
-    let s = flap(createGame(startZone, "ATTI"));
+    let s = flap(createGame(startZone));
     const built: Obstacle[] = [];
     const zonesFlown: number[] = [s.droneZone];
     for (let i = 0; i < frames; i += 1) {
-      s = stepGame(noSteel(s), {
+      s = stepGame(noSteel({ ...s, y: WORLD_HEIGHT / 2, velocity: 0 }), {
         ...INPUT,
         kindDraw: (i * 0.6180339887) % 1,
         placeDraw: (i * 0.4142135624) % 1,
@@ -583,13 +551,12 @@ describe("a run through the spaces", () => {
       });
       for (const o of s.obstacles) if (!built.some((b) => b.id === o.id)) built.push(o);
       if (s.droneZone !== zonesFlown[zonesFlown.length - 1]) zonesFlown.push(s.droneZone);
-      if (s.status !== "flying") s = { ...s, status: "flying", y: WORLD_HEIGHT / 2, velocity: 0, impact: null, elapsed: 0 };
     }
     return { built, zonesFlown, final: s };
   }
 
   it("builds ZONE_LENGTH obstacles per space, then a bulkhead into the next", () => {
-    const { built } = tour(2, 4000);
+    const { built } = tour(2, 5000);
     expect(built.length).toBeGreaterThan(3 * (ZONE_LENGTH + 1));
     let zone = 2;
     built.forEach((o, i) => {
@@ -605,12 +572,12 @@ describe("a run through the spaces", () => {
   });
 
   it("moves the drone into the next space as it clears the bulkhead, and only then", () => {
-    const { zonesFlown } = tour(4, 4000);
+    const { zonesFlown } = tour(4, 5000);
     expect(zonesFlown.slice(0, 4)).toEqual([4, 0, 1, 2]);
   });
 
   it("gives every obstacle its own id and never repeats a kind back to back", () => {
-    const { built } = tour(0, 4000);
+    const { built } = tour(0, 5000);
     expect(new Set(built.map((o) => o.id)).size).toBe(built.length);
     for (let i = 1; i < built.length; i += 1) expect(built[i].kind).not.toBe(built[i - 1].kind);
   });
@@ -621,19 +588,19 @@ describe("a run through the spaces", () => {
     expect(final.obstacles.every((o) => o.x + o.width > -8 && o.x <= WORLD_WIDTH)).toBe(true);
   });
 
-  it("keeps the spacing between obstacles at full speed", () => {
-    let s = flap(createGame(0, "ATTI_SPORT"));
+  it("keeps the spacing between obstacles at top speed", () => {
+    let s = flap(createGame());
     const gaps: number[] = [];
     let seen = 0;
     for (let i = 0; i < 3000; i += 1) {
-      s = stepGame(noSteel(s), { ...INPUT, kindDraw: (i * 0.618) % 1, placeDraw: (i * 0.414) % 1 });
+      s = stepGame(noSteel({ ...s, speed: MAX_SPEED, score: 1000 }), { ...INPUT, kindDraw: (i * 0.618) % 1, placeDraw: (i * 0.414) % 1 });
       if (s.obstacles.length > seen && s.obstacles.length > 1) {
         const fresh = s.obstacles[s.obstacles.length - 1];
         const previous = s.obstacles[s.obstacles.length - 2];
         gaps.push(fresh.x - (previous.x + previous.width));
       }
       seen = s.obstacles.length;
-      if (s.status !== "flying") s = { ...s, status: "flying", y: WORLD_HEIGHT / 2, velocity: 0, impact: null, elapsed: 0 };
+      if (s.status !== "flying") s = { ...s, status: "flying", y: WORLD_HEIGHT / 2, velocity: 0, impact: null };
     }
     expect(gaps.length).toBeGreaterThan(20);
     for (const gap of gaps) {
@@ -647,26 +614,9 @@ describe("a run through the spaces", () => {
       for (const draw of PLACEMENTS) {
         const built = buildObstacle(kind, draw, 7);
         const lane = laneThrough(built.solids, built.width);
-        const placed = { ...at(kind, draw, 7, built.width / 2) };
-        expect(hitsObstacle(lane, placed), `${kind} @ ${draw}`).toBe(false);
+        expect(hitsObstacle(lane, at(kind, draw, 7, built.width / 2)), `${kind} @ ${draw}`).toBe(false);
       }
     }
-  });
-});
-
-describe("the battery", () => {
-  it("drains with flight time and ends the run where it runs out, keeping the score", () => {
-    const s0: GameState = { ...flap(createGame(0, "ASSIST")), score: 9, elapsed: BATTERY_SECONDS - 0.05, y: 100 };
-    expect(batteryLeft(s0)).toBeCloseTo(0.05 / BATTERY_SECONDS, 9);
-    const s = fly(noSteel(s0), 6);
-    expect(s.status).toBe("landed");
-    expect(s.score).toBeGreaterThanOrEqual(9);
-    expect(batteryLeft(s)).toBe(0);
-    expect(fly(s, 30)).toEqual(s);
-  });
-
-  it("starts full", () => {
-    expect(batteryLeft(createGame())).toBe(1);
   });
 });
 
@@ -696,75 +646,5 @@ describe("crashLine", () => {
       expect(crashLine(score).length).toBeGreaterThan(0);
     }
     expect(crashLine(0)).not.toMatch(/bad|terrible|useless|fail/i);
-  });
-});
-
-describe("the collision-tolerant cage", () => {
-  const caged = (over: Partial<GameState> = {}): GameState => ({ ...flap(createGame(0, "ASSIST_SPORT")), ...over });
-
-  it("holds exactly up to 2 m/s on the readout", () => {
-    expect(SAFE_SPEED * METRES_PER_UNIT).toBeCloseTo(2, 9);
-    for (const metres of [0, 0.5, 1.5, 1.99, 2]) expect(isCollisionTolerant({ speed: metres / METRES_PER_UNIT })).toBe(true);
-    for (const metres of [2.01, 3, 7]) expect(isCollisionTolerant({ speed: metres / METRES_PER_UNIT })).toBe(false);
-  });
-
-  it("bounces off the floor instead of crashing, and keeps flying", () => {
-    const s = fly(caged({ y: WORLD_HEIGHT - 20, velocity: 120 }), 6, { descend: true });
-    expect(s.status).toBe("flying");
-    expect(s.impact).toBeNull();
-    expect(s.y).toBeLessThanOrEqual(WORLD_HEIGHT - DRONE_RADIUS);
-  });
-
-  it("bounces off the ceiling back down", () => {
-    const s = stepGame(caged({ y: DRONE_RADIUS + 1, velocity: -140 }), { ...INPUT, climb: true });
-    expect(s.status).toBe("flying");
-    expect(s.bump?.what).toBe("CEILING");
-    expect(s.velocity).toBeGreaterThan(0);
-  });
-
-  it("throws the world back on a head-on hit and leaves the cage clear of the steel", () => {
-    const built = buildObstacle("WEB_FRAME", 0.5, 7);
-    const frame: Obstacle = { id: 1, x: DRONE_X + DRONE_RADIUS - 2, kind: "WEB_FRAME", zone: 1, seed: 7, passed: false, ...built };
-    let y = DRONE_RADIUS + 1;
-    while (y < WORLD_HEIGHT - DRONE_RADIUS && !hitsObstacle(y, frame)) y += 1;
-    const s = stepGame(caged({ y, velocity: 0, obstacles: [frame] }), INPUT);
-    expect(s.status).toBe("flying");
-    expect(s.bump?.what).toBe("WEB_FRAME");
-    expect(s.recoil).toBe(BOUNCE_RECOIL);
-    expect(s.obstacles[0].x).toBeGreaterThan(frame.x);
-    expect(s.obstacles.some((o) => hitsObstacle(s.y, o))).toBe(false);
-  });
-
-  it("lets the recoil die away, so the run picks up again within a second", () => {
-    let s = caged({ y: 100, recoil: BOUNCE_RECOIL });
-    expect(worldSpeed(s)).toBeLessThan(0);
-    s = fly(noSteel(s), 60);
-    expect(s.recoil).toBe(0);
-    expect(worldSpeed(s)).toBeCloseTo(s.speed, 9);
-  });
-
-  it("cannot crash at all in the Assist gears, whatever it flies into", () => {
-    for (const zone of ZONES.keys()) {
-      for (const gear of ["ASSIST", "ASSIST_SPORT"] as const) {
-        let s = flap(createGame(zone, gear));
-        for (let i = 0; s.status === "flying" && s.elapsed < 30; i += 1) {
-          s = stepGame(s, {
-            ...INPUT,
-            kindDraw: (i * 0.6180339887) % 1,
-            placeDraw: (i * 0.4142135624) % 1,
-            styleDraw: (i * 0.7320508075) % 1,
-            descend: i % 200 < 60,
-          });
-          expect(s.status, `${gear} zone ${zone} at ${s.elapsed.toFixed(2)} s`).toBe("flying");
-        }
-      }
-    }
-  });
-
-  it("crashes on the same contact in the ATTI gears", () => {
-    const s = fly({ ...flap(createGame(0, "ATTI")), y: WORLD_HEIGHT - 20, velocity: 120 }, 10, { descend: true });
-    expect(s.status).toBe("crashed");
-    expect(s.impact?.what).toBe("FLOOR");
-    expect(s.bump).toBeNull();
   });
 });

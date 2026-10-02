@@ -12,23 +12,20 @@ import {
 } from "@/lib/elios-score-sync";
 import {
   BEST_SCORE_KEY,
-  GEARS,
-  GEAR_SPECS,
   KIND_LABELS,
-  METRES_PER_UNIT,
+  MODE_SPECS,
   WORLD_HEIGHT,
   WORLD_WIDTH,
   ZONES,
+  ZONE_MODE,
   ZONE_NAMES,
+  cancelRts,
   createGame,
   crashLine,
   flap,
   isNewBest,
   parseStoredBest,
-  setGear,
-  shiftGear,
   stepGame,
-  type Gear,
   type GameState,
   type Impact,
 } from "@/lib/elios-flight";
@@ -38,9 +35,10 @@ import {
  * really inspects, a boiler, a ballast tank, a mine stope, a sewer and a
  * storage tank, while the things that really go wrong in there go wrong.
  *
- * Two controls, the same all run: up/down to fly, and the gear — four steps
- * from Assist to ATTI Sport — for speed. What the events do to the aircraft
- * changes how it flies, never what the controls mean.
+ * One control, the same all run: hold up or down to fly. The space decides
+ * whether the aircraft holds itself steady (Assist) or drifts (ATTI), and dust
+ * can force the drift on it — the controls never change meaning, only how
+ * well the aircraft obeys them.
  *
  * This file is input, the frame loop and the chrome around the canvas. The
  * rules live in `lib/elios-flight.ts` and `lib/elios-events.ts` and are
@@ -54,9 +52,6 @@ import {
  * the release that resets it. Flip this with that release.
  */
 const POST_SCORES = false;
-
-/** The gear every run starts in: the fastest that still has the cage. */
-const START_GEAR: Gear = "ASSIST_SPORT";
 
 /** What the pilot is holding right now; read by the frame loop every step. */
 type Held = { climb: boolean; descend: boolean };
@@ -121,23 +116,17 @@ function nextZone(previous: number): number {
  * few seconds in, so each one can be tried on demand.
  */
 function newRun(zone: number): GameState {
-  const run = createGame(zone, START_GEAR, true);
+  const run = createGame(zone, true);
   if (process.env.NODE_ENV === "production") return run;
   const asked = new URLSearchParams(window.location.search).get("event")?.toUpperCase();
   const kind = EVENT_KINDS.find((k) => k === asked);
   return kind ? { ...run, queued: kind, nextEventAt: 250 } : run;
 }
 
-/** Keys: ↑/W/Space/Enter climb, ↓/S descend. ←/A and →/D shift gear; 1–4 pick one. */
+/** Keys: ↑/W/Space/Enter climb, ↓/S descend; R cancels Return-to-Signal. */
 function heldKeyFor(key: string): keyof Held | null {
   if (key === " " || key === "Enter" || key === "ArrowUp" || key === "w" || key === "W") return "climb";
   if (key === "ArrowDown" || key === "s" || key === "S") return "descend";
-  return null;
-}
-
-function shiftKeyFor(key: string): 1 | -1 | null {
-  if (key === "ArrowRight" || key === "d" || key === "D") return 1;
-  if (key === "ArrowLeft" || key === "a" || key === "A") return -1;
   return null;
 }
 
@@ -164,7 +153,6 @@ type Hud = {
   score: number;
   impact: Impact | null;
   zone: number;
-  gear: Gear;
   /** "SIGNAL:lost" and the like — what the overlay buttons need to know. */
   event: string;
 };
@@ -172,15 +160,15 @@ type Hud = {
 const eventKey = (s: GameState) => (s.event ? `${s.event.kind}:${s.event.phase}` : "");
 
 function hudOf(s: GameState, impact: Impact | null = s.impact): Hud {
-  return { status: s.status, score: s.score, impact, zone: s.droneZone, gear: s.gear, event: eventKey(s) };
+  return { status: s.status, score: s.score, impact, zone: s.droneZone, event: eventKey(s) };
 }
 
 export function EliosGame({ className = "mt-4", leaderboard = false, paused = false }: EliosGameProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stateRef = useRef<GameState>(createGame(0, START_GEAR));
+  const stateRef = useRef<GameState>(createGame(0));
   // Server render has no localStorage, so the server snapshot is always null.
   const best = useSyncExternalStore(subscribeBest, readBest, () => null);
-  const [hud, setHud] = useState<Hud>(() => hudOf(createGame(0, START_GEAR)));
+  const [hud, setHud] = useState<Hud>(() => hudOf(createGame(0)));
   const heldRef = useRef<Held>(NOTHING_HELD);
   const [board, setBoard] = useState<LeaderboardRow[] | null>(null);
   const pending = useSyncExternalStore(subscribePendingScore, readPendingScore, () => null);
@@ -261,19 +249,14 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
   const press = useCallback(() => {
     if (paused) return;
     const s = stateRef.current;
-    const over = s.status === "crashed" || s.status === "landed";
+    const over = s.status === "crashed";
     stateRef.current = over ? flap(newRun(nextZone(s.droneZone))) : flap(s);
     setHud(hudOf(stateRef.current, null));
   }, [paused]);
 
-  /** Up or down a gear — or, inside the Return-to-Signal countdown, "I have it". */
-  const shift = useCallback((direction: 1 | -1) => {
-    stateRef.current = shiftGear(stateRef.current, direction);
-    setHud(hudOf(stateRef.current));
-  }, []);
-
-  const pickGear = useCallback((gear: Gear) => {
-    stateRef.current = setGear(stateRef.current, gear);
+  /** Inside the Return-to-Signal countdown: keep the sticks and fly on blind. */
+  const keepControl = useCallback(() => {
+    stateRef.current = cancelRts(stateRef.current);
     setHud(hudOf(stateRef.current));
   }, []);
 
@@ -401,22 +384,9 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      const n = Number(e.key);
-      if (e.key !== " " && Number.isInteger(n) && n >= 1 && n <= GEARS.length) {
-        e.preventDefault();
-        pickGear(GEARS[n - 1]);
-        return;
-      }
-      const dir = shiftKeyFor(e.key);
-      if (dir) {
-        e.preventDefault();
-        if (!e.repeat) shift(dir);
-        return;
-      }
       if (e.key === "r" || e.key === "R") {
-        // The old cancel key still works: inside the countdown a shift keeps the gear.
         e.preventDefault();
-        if (stateRef.current.event?.phase === "lost") shift(1);
+        keepControl();
         return;
       }
       const key = heldKeyFor(e.key);
@@ -425,7 +395,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       if (!e.repeat && stateRef.current.status !== "flying") press();
       hold(key, true);
     },
-    [press, hold, shift, pickGear],
+    [press, hold, keepControl],
   );
 
   const onKeyUp = useCallback(
@@ -458,14 +428,14 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
   }, []);
 
   const where = ZONE_NAMES[ZONES[hud.zone]]?.name.toLowerCase();
-  const gearAt = GEARS.indexOf(hud.gear);
+  const mode = MODE_SPECS[ZONE_MODE[ZONES[hud.zone]]];
 
   return (
     <div className={className}>
       <div
         role="button"
         tabIndex={0}
-        aria-label="Fly where people can't: fly the Elios 3 through real confined spaces. Up and down to fly, left and right to shift gear."
+        aria-label="Fly where people can't: fly the Elios 3 through real confined spaces. Hold up to climb, down to descend."
         onPointerDown={onPointerDown}
         onPointerUp={release}
         onPointerCancel={release}
@@ -487,7 +457,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
               // Inside the canvas wrapper: do not also count as a press on the game.
               e.stopPropagation();
               e.preventDefault();
-              shift(1);
+              keepControl();
             }}
             className="absolute bottom-[18%] left-1/2 -translate-x-1/2 rounded-full border border-white/40 bg-black/70 px-3 py-1.5 text-[11px] font-semibold text-white"
           >
@@ -503,12 +473,10 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200/90">
                 Fly where people can&rsquo;t
               </p>
-              {hud.status === "landed" ? (
-                <p className="mt-1.5 text-sm font-medium text-white">Battery flat — {hud.score} points.</p>
-              ) : hud.status === "crashed" ? (
+              {hud.status === "crashed" ? (
                 <>
                   <p className="mt-1.5 text-sm font-medium text-white">
-                    {hud.score} points — {crashLine(hud.score)}
+                    {hud.score} cleared — {crashLine(hud.score)}
                   </p>
                   {hud.impact && where ? (
                     <p className="mt-0.5 text-[11px] text-white/65">
@@ -517,14 +485,14 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
                         : hud.impact.what === "GAS"
                           ? "PA08 — not out of the gas fast enough."
                           : hud.impact.what === "CABLE"
-                            ? `Snagged ${KIND_LABELS.CABLE} in the ${where} — the cage can't bounce off rope.`
-                            : `Hit ${KIND_LABELS[hud.impact.what]} in the ${where} — too fast for the cage.`}
+                            ? `Snagged ${KIND_LABELS.CABLE} in the ${where}.`
+                            : `Hit ${KIND_LABELS[hud.impact.what]} in the ${where}.`}
                     </p>
                   ) : null}
                 </>
               ) : (
                 <p className="mt-1.5 text-[12px] leading-snug text-white/85">
-                  Hold up / down to fly. Shift up for speed — ATTI scores ×2 and ×3, but loses the cage.
+                  Hold up / down to fly. Tight spaces fly in Assist; open voids and dust drop you to ATTI — it drifts. It gets faster.
                 </p>
               )}
               <p className="mt-1.5 text-[11px] text-white/65">
@@ -532,62 +500,12 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
               </p>
               {hud.status === "idle" ? (
                 <p className="mt-0.5 text-[10px] text-white/45">
-                  Grab ↻ for Repeat Flight, ✦ for the dust-proof light · ← → shift gear
+                  Grab ↻ for Repeat Flight, ✦ for the dust-proof light · this space: {mode.label}
                 </p>
               ) : null}
             </div>
           </div>
         ) : null}
-      </div>
-
-      {/* The gearbox: the one speed decision. Big enough for a thumb. */}
-      <div className="mt-2 flex items-center gap-1.5">
-        <button
-          type="button"
-          aria-label="Shift down"
-          onClick={() => shift(-1)}
-          disabled={gearAt === 0}
-          className="size-9 shrink-0 select-none rounded-full border border-glass/20 text-sm text-ink-3 disabled:opacity-30 active:bg-accent/15"
-        >
-          ◀
-        </button>
-        <div className="grid flex-1 grid-cols-4 gap-1">
-          {GEARS.map((gear, i) => {
-            const spec = GEAR_SPECS[gear];
-            const on = hud.gear === gear;
-            const fast = !spec.stabilized;
-            return (
-              <button
-                key={gear}
-                type="button"
-                aria-pressed={on}
-                title={`${(spec.speed * METRES_PER_UNIT).toFixed(1)} m/s · ×${spec.multiplier} · key ${i + 1}`}
-                onClick={() => pickGear(gear)}
-                className={`rounded-lg border px-1 py-1 text-center text-[10px] font-medium leading-tight transition-colors ${
-                  on
-                    ? fast
-                      ? "border-amber-400/70 bg-amber-400/15 text-ink"
-                      : "border-accent/60 bg-accent/15 text-ink"
-                    : "border-glass/20 text-ink-4 hover:text-ink-2"
-                }`}
-              >
-                <span className="block truncate">{spec.label}</span>
-                <span className="text-ink-5">
-                  {(spec.speed * METRES_PER_UNIT).toFixed(1)} · ×{spec.multiplier}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <button
-          type="button"
-          aria-label="Shift up"
-          onClick={() => shift(1)}
-          disabled={gearAt === GEARS.length - 1}
-          className="size-9 shrink-0 select-none rounded-full border border-glass/20 text-sm text-ink-3 disabled:opacity-30 active:bg-accent/15"
-        >
-          ▶
-        </button>
       </div>
 
       <div className="mt-2 flex items-start justify-between gap-3">
