@@ -16,6 +16,18 @@ export const MAX_PLAUSIBLE_SCORE = 999;
 
 export const LEADERBOARD_LIMIT = 10;
 
+/**
+ * Which rules a score was flown under. Bump it whenever a change makes old
+ * scores incomparable (the speed curve, the collision-tolerant opening), and
+ * clear `elios_scores` in the same release. The route refuses any other
+ * version — including none, which is what a tab still running the previous
+ * build sends — so an old-rules score cannot land on the fresh board.
+ *
+ *   1  original run, linear speed-up to 148
+ *   2  three-phase curve to 185, cage bounces below 2 m/s (2026-10-02)
+ */
+export const ELIOS_RULES_VERSION = 2;
+
 export type LeaderboardRow = {
   /** First name only — this is a wall display, not a directory. */
   name: string;
@@ -46,6 +58,11 @@ export function firstNameOf(displayName: string): string {
 export function shouldRecord(score: number, current: number | null): boolean {
   if (!Number.isInteger(score) || score <= 0 || score > MAX_PLAUSIBLE_SCORE) return false;
   return current === null || score > current;
+}
+
+/** Was this submission flown under the rules the board is currently counting? */
+export function isCurrentRules(raw: unknown): boolean {
+  return raw === ELIOS_RULES_VERSION;
 }
 
 /** Coerce whatever arrived over the wire into a score, or null if it is nonsense. */

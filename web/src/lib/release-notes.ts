@@ -20,6 +20,16 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-02-elios-harder",
+    date: "Oct 2, 2026",
+    title: "The drone game got harder — fresh leaderboard",
+    highlights: [
+      "The run speeds up faster and keeps getting quicker the longer you survive.",
+      "Until 2 m/s the cage bounces off whatever it hits. After that, contact is a crash.",
+      "New rules, new board: the leaderboard starts from zero.",
+    ],
+  },
+  {
     version: "2026-10-02-idle-energy",
     date: "Oct 2, 2026",
     title: "Easier on your battery",

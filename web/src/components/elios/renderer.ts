@@ -6,7 +6,9 @@ import {
   ZONES,
   ZONE_NAMES,
   clearance,
+  isCollisionTolerant,
   speedAt,
+  worldSpeed,
   type GameState,
   type Impact,
 } from "@/lib/elios-flight";
@@ -89,6 +91,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
   let lastElapsed = 0;
   let lastImpact: Impact | null = null;
   let crashAt = -10;
+  let bumpAt = -10;
   let debris: Debris[] = [];
   let shownZone = -1;
   let titleAt = -10;
@@ -104,16 +107,23 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
     return sprite;
   };
 
-  const spawnCrash = (impact: Impact, droneY: number) => {
+  /** Grit knocked off by a bounce: a few specks, no puff, added to whatever is still settling. */
+  const BUMP_SPECKS = 10;
+  /** Bounces closer together than this share one burst of grit, so a cage resting on the floor does not smoke. */
+  const BUMP_GAP = 0.15;
+
+  const spawnCrash = (impact: Impact, droneY: number, bump = false) => {
+    const count = bump ? BUMP_SPECKS : 34;
+    const power = bump ? 0.6 : 1;
     // Dust thrown back off the surface, toward the side the drone came from.
     let nx = DRONE_X - impact.x;
     let ny = droneY - impact.y;
     const len = Math.hypot(nx, ny) || 1;
     nx /= len;
     ny /= len;
-    debris = Array.from({ length: 34 }, () => {
+    const thrown = Array.from({ length: count }, () => {
       const spread = (Math.random() - 0.5) * 2.2;
-      const speed = 12 + Math.random() * 46;
+      const speed = (12 + Math.random() * 46) * power;
       const ang = Math.atan2(ny, nx) + spread;
       return {
         x: impact.x,
@@ -124,6 +134,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
         size: 0.3 + Math.random() * 0.9,
       };
     });
+    // A crash is the end of the run and owns the screen; a bump adds to what is settling.
+    debris = bump ? [...debris, ...thrown] : thrown;
   };
 
   const frame = (state: GameState, dt: number, t: number) => {
@@ -133,7 +145,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
 
     // The scenery keeps up with the run as it speeds up, or drifts while the
     // drone hovers before one.
-    const speed = state.status === "flying" ? speedAt(state.elapsed) : state.status === "idle" ? IDLE_DRIFT : 0;
+    const speed = state.status === "flying" ? worldSpeed(state) : state.status === "idle" ? IDLE_DRIFT : 0;
     const scrolled = speed * dt;
     scroll += scrolled;
 
@@ -155,6 +167,10 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
       spawnCrash(state.impact, state.y);
     }
     if (state.status !== "crashed") lastImpact = null;
+    if (state.bump && t - bumpAt > BUMP_GAP) {
+      bumpAt = t;
+      spawnCrash(state.bump, state.y, true);
+    }
 
     if (state.droneZone !== shownZone) {
       // A new space: title it — unless this is simply the first frame.
@@ -163,7 +179,14 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
     }
 
     const since = t - crashAt;
-    const shake = !options.reducedMotion && since < 0.32 ? (1 - since / 0.32) * 1.8 : 0;
+    const sinceBump = t - bumpAt;
+    const shake = options.reducedMotion
+      ? 0
+      : since < 0.32
+        ? (1 - since / 0.32) * 1.8
+        : sinceBump < 0.18
+          ? (1 - sinceBump / 0.18) * 0.7
+          : 0;
     const sx = shake ? (Math.random() - 0.5) * shake : 0;
     const sy = shake ? (Math.random() - 0.5) * shake : 0;
 
@@ -223,7 +246,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
         d.life -= dt;
         d.vy += 60 * dt;
         d.vx *= 1 - 1.8 * dt;
-        d.x += d.vx * dt;
+        // Grit from a bounce mid-run goes by with the walls it came off.
+        d.x += d.vx * dt - scrolled;
         d.y = Math.min(H - 1, d.y + d.vy * dt);
         if (d.life <= 0) continue;
         const lit = Math.min(1, 0.25 + intensityAt(beam, d.x, d.y));
@@ -275,7 +299,14 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
       // Ground speed, which climbs all run: the number that says why it is
       // getting harder.
       ctx.textAlign = "right";
-      label(`${(speed * METRES_PER_UNIT).toFixed(1)} m/s`, W - 9, H - 7, "rgba(255,255,255,0.6)");
+      // The readout is the run speed, not the momentary recoil after a bounce.
+      label(`${(speedAt(state.elapsed) * METRES_PER_UNIT).toFixed(1)} m/s`, W - 9, H - 7, "rgba(255,255,255,0.6)");
+      // While the cage still shrugs off contact, say so — and the moment it
+      // stops, the label going away is the warning.
+      if (isCollisionTolerant(state.elapsed)) {
+        ctx.textAlign = "center";
+        label("COLLISION-TOLERANT", W / 2, H - 7, "rgba(140,220,255,0.75)");
+      }
     }
 
     const titleAge = t - titleAt;

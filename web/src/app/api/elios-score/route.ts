@@ -6,6 +6,7 @@ import { checkRateLimit, createRateLimitHeaders, getClientIp } from "@/lib/secur
 import {
   LEADERBOARD_LIMIT,
   firstNameOf,
+  isCurrentRules,
   parseSubmittedScore,
   rankBoard,
   shouldRecord,
@@ -90,7 +91,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Bad request" }, { status: 400 });
   }
 
-  const score = parseSubmittedScore((body as { score?: unknown } | null)?.score);
+  const submitted = body as { score?: unknown; rules?: unknown } | null;
+  // A 400 tells the client to drop the score rather than retry it, which is
+  // exactly right for one flown under rules the board no longer counts.
+  if (!isCurrentRules(submitted?.rules)) {
+    return NextResponse.json({ error: "Flown under older rules" }, { status: 400 });
+  }
+  const score = parseSubmittedScore(submitted?.score);
   if (score === null) return NextResponse.json({ error: "Not a score" }, { status: 400 });
 
   const admin = createAdminClient();

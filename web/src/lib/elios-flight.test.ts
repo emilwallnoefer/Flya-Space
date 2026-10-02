@@ -7,7 +7,13 @@ import {
   GRAVITY,
   KIND_LABELS,
   MAX_FALL_SPEED,
+  BOUNCE_RECOIL,
+  CRUISE_SPEED,
+  CRUISE_TIME,
   MAX_SCROLL_SPEED,
+  METRES_PER_UNIT,
+  OPENING_TIME,
+  SAFE_SPEED,
   MIN_PASSAGE,
   OBSTACLE_GAP,
   OBSTACLE_KINDS,
@@ -28,6 +34,7 @@ import {
   hitsCeiling,
   hitsGround,
   hitsObstacle,
+  isCollisionTolerant,
   isNewBest,
   kindFor,
   nearestPointOnSolid,
@@ -37,6 +44,7 @@ import {
   seededRandom,
   speedAt,
   stepGame,
+  worldSpeed,
   zoneAt,
   type GameState,
   type Obstacle,
@@ -46,6 +54,9 @@ import {
 } from "@/lib/elios-flight";
 
 const INPUT: StepInput = { dt: 1 / 60, kindDraw: 0, placeDraw: 0.5, styleDraw: 0.5 };
+
+/** Far enough into a run that the cage no longer takes a hit: contact is a crash. */
+const PAST_SAFE = 30;
 
 function fly(state: GameState, frames: number, input: Partial<StepInput> = {}): GameState {
   let s = state;
@@ -420,7 +431,7 @@ describe("crash detection", () => {
   });
 
   it("parks the drone inside the world, not through a surface, and says it hit the floor", () => {
-    const s = fly({ ...createGame(), status: "flying", y: WORLD_HEIGHT - 20 }, 90);
+    const s = fly({ ...createGame(), status: "flying", y: WORLD_HEIGHT - 20, elapsed: PAST_SAFE }, 90);
     expect(s.status).toBe("crashed");
     expect(s.y).toBeLessThanOrEqual(WORLD_HEIGHT - DRONE_RADIUS);
     expect(s.y).toBeGreaterThanOrEqual(DRONE_RADIUS);
@@ -429,7 +440,14 @@ describe("crash detection", () => {
 
   it("names the obstacle it hit and marks the point of contact on it", () => {
     const pendant = at("PENDANT", 1, 7, 10);
-    const state: GameState = { ...createGame(), status: "flying", y: 40, velocity: 0, obstacles: [pendant] };
+    const state: GameState = {
+      ...createGame(),
+      status: "flying",
+      y: 40,
+      velocity: 0,
+      elapsed: PAST_SAFE,
+      obstacles: [pendant],
+    };
     const s = stepGame(state, INPUT);
     expect(s.status).toBe("crashed");
     expect(s.impact?.what).toBe("PENDANT");
@@ -533,6 +551,29 @@ describe("the run speeds up as it goes", () => {
     expect(speedAt(1e9)).toBe(MAX_SCROLL_SPEED);
   });
 
+  it("keeps the opening at the pace the game always had", () => {
+    for (const t of [0, 2.5, 5, 7.5, OPENING_TIME]) expect(speedAt(t)).toBeCloseTo(SCROLL_SPEED + t, 9);
+  });
+
+  it("reaches the old top speed at CRUISE_TIME, then keeps creeping up to the cap", () => {
+    expect(speedAt(CRUISE_TIME)).toBeCloseTo(CRUISE_SPEED, 9);
+    expect(speedAt(CRUISE_TIME + 30)).toBeGreaterThan(CRUISE_SPEED);
+    expect(speedAt(CRUISE_TIME + 30)).toBeLessThan(MAX_SCROLL_SPEED);
+    // At the cap within three minutes, so a long run does reach the hardest pace.
+    expect(speedAt(180)).toBe(MAX_SCROLL_SPEED);
+  });
+
+  it("never jumps or slows down along the way", () => {
+    let previous = speedAt(0);
+    for (let t = 0.05; t <= 240; t += 0.05) {
+      const now = speedAt(t);
+      expect(now).toBeGreaterThanOrEqual(previous);
+      // No step: at most the steepest phase's gain over one sample.
+      expect(now - previous).toBeLessThan(0.1);
+      previous = now;
+    }
+  });
+
   it("treats junk elapsed as the start of a run", () => {
     expect(speedAt(-5)).toBe(SCROLL_SPEED);
     expect(speedAt(Number.NaN)).toBe(SCROLL_SPEED);
@@ -550,7 +591,8 @@ describe("the run speeds up as it goes", () => {
       return 200 - stepGame(before, INPUT).obstacles[0].x;
     };
     expect(travelled(0)).toBeCloseTo(SCROLL_SPEED / 60, 1);
-    expect(travelled(90)).toBeCloseTo(MAX_SCROLL_SPEED / 60, 1);
+    expect(travelled(90)).toBeCloseTo(speedAt(90) / 60, 1);
+    expect(travelled(600)).toBeCloseTo(MAX_SCROLL_SPEED / 60, 1);
     expect(travelled(90)).toBeGreaterThan(travelled(0) * 1.7);
   });
 
@@ -629,5 +671,89 @@ describe("crashLine", () => {
       expect(crashLine(score).length).toBeGreaterThan(0);
     }
     expect(crashLine(0)).not.toMatch(/bad|terrible|useless|fail/i);
+  });
+});
+
+describe("the collision-tolerant opening", () => {
+  /** A free-flying drone that has not flapped for a while. */
+  const flying = (over: Partial<GameState> = {}): GameState => ({ ...createGame(), status: "flying", ...over });
+
+  it("lasts exactly until the readout passes 2 m/s", () => {
+    expect(SAFE_SPEED * METRES_PER_UNIT).toBeCloseTo(2, 9);
+    expect(isCollisionTolerant(0)).toBe(true);
+    expect(isCollisionTolerant(11)).toBe(true);
+    expect(isCollisionTolerant(13)).toBe(false);
+    expect(isCollisionTolerant(PAST_SAFE)).toBe(false);
+    for (let t = 0; t <= 60; t += 0.1) {
+      expect(isCollisionTolerant(t)).toBe(speedAt(t) * METRES_PER_UNIT <= 2);
+    }
+  });
+
+  it("bounces off the floor instead of crashing, and keeps flying", () => {
+    const s = fly(flying({ y: WORLD_HEIGHT - 20, velocity: 120 }), 6);
+    expect(s.status).toBe("flying");
+    expect(s.impact).toBeNull();
+    expect(s.velocity).toBeLessThan(0);
+    expect(s.y).toBeLessThanOrEqual(WORLD_HEIGHT - DRONE_RADIUS);
+  });
+
+  it("bounces off the ceiling back down", () => {
+    const s = stepGame(flying({ y: DRONE_RADIUS + 1, velocity: -140 }), INPUT);
+    expect(s.status).toBe("flying");
+    expect(s.bump?.what).toBe("CEILING");
+    expect(s.velocity).toBeGreaterThan(0);
+    expect(s.y).toBeGreaterThanOrEqual(DRONE_RADIUS);
+  });
+
+  it("throws the world back on a head-on hit and leaves the cage clear of the steel", () => {
+    // A web frame whose leading edge is just inside the cage, at a height where it is solid.
+    const built = buildObstacle("WEB_FRAME", 0.5, 7);
+    const frame: Obstacle = { id: 1, x: DRONE_X + DRONE_RADIUS - 2, kind: "WEB_FRAME", zone: 1, seed: 7, passed: false, ...built };
+    let y = DRONE_RADIUS + 1;
+    while (y < WORLD_HEIGHT - DRONE_RADIUS && !hitsObstacle(y, frame)) y += 1;
+    expect(hitsObstacle(y, frame)).toBe(true);
+
+    const s = stepGame(flying({ y, velocity: 0, obstacles: [frame] }), INPUT);
+    expect(s.status).toBe("flying");
+    expect(s.bump?.what).toBe("WEB_FRAME");
+    expect(s.recoil).toBe(BOUNCE_RECOIL);
+    expect(s.obstacles[0].x).toBeGreaterThan(frame.x);
+    expect(s.obstacles.some((o) => hitsObstacle(s.y, o))).toBe(false);
+  });
+
+  it("lets the recoil die away, so the run picks up again within a second", () => {
+    let s = flying({ y: 100, recoil: BOUNCE_RECOIL });
+    expect(worldSpeed(s)).toBeLessThan(0);
+    s = fly(s, 60, { dt: 1 / 60 });
+    expect(s.recoil).toBe(0);
+    expect(worldSpeed(s)).toBeCloseTo(speedAt(s.elapsed), 9);
+  });
+
+  it("cannot crash at all while the run is slow, whatever it flies into", () => {
+    // No pilot: the drone drops to the floor and bounces along it, and the
+    // spawner sends every kind of obstacle through it.
+    for (const zone of ZONES.keys()) {
+      let s = flap(createGame(zone));
+      for (let i = 0; s.status === "flying" && isCollisionTolerant(s.elapsed + INPUT.dt); i += 1) {
+        s = stepGame(s, {
+          ...INPUT,
+          kindDraw: (i * 0.6180339887) % 1,
+          placeDraw: (i * 0.4142135624) % 1,
+          styleDraw: (i * 0.7320508075) % 1,
+        });
+        expect(s.status, `zone ${zone} at ${s.elapsed.toFixed(2)} s`).toBe("flying");
+        expect(s.y).toBeGreaterThanOrEqual(DRONE_RADIUS);
+        expect(s.y).toBeLessThanOrEqual(WORLD_HEIGHT - DRONE_RADIUS);
+      }
+      expect(s.elapsed).toBeGreaterThan(11);
+    }
+  });
+
+  it("crashes on the same contact once the run is past 2 m/s", () => {
+    const s = fly(flying({ y: WORLD_HEIGHT - 20, velocity: 120, elapsed: PAST_SAFE }), 6);
+    expect(s.status).toBe("crashed");
+    expect(s.impact?.what).toBe("FLOOR");
+    expect(s.bump).toBeNull();
+    expect(s.recoil).toBe(0);
   });
 });

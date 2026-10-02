@@ -20,9 +20,11 @@
  *
  * The flight model is unchanged from the first version of the game, and so is
  * the spacing: the leaderboard counts obstacles cleared, and quietly making the
- * run easier would devalue every score on it. The one deliberate change is
+ * run easier would devalue every score on it. The deliberate changes are
  * `speedAt()` — the world accelerates the longer you stay up, which makes a
- * long run harder rather than an early one easier.
+ * long run harder rather than an early one easier — and the collision-tolerant
+ * opening below `SAFE_SPEED`. Changing either curve changes what a score means,
+ * so it comes with a leaderboard reset and a bump of `ELIOS_RULES_VERSION`.
  */
 
 /**
@@ -49,13 +51,40 @@ export const DRONE_RADIUS = 11;
 /** Speed a run starts at, world units per second. */
 export const SCROLL_SPEED = 78;
 /**
- * The run speeds up as it goes, the way the dino game does: obstacles stay the
- * same distance apart, so the time to read one and act on it shrinks. A flap
- * cycle is about 0.7 s, and at the cap there is still a little over a second
- * between obstacles — tight, not impossible.
+ * The run speeds up as it goes, the way Subway Surfers and the dino game do:
+ * obstacles stay the same distance apart, so the time to read one and act on
+ * it shrinks. Three phases:
+ *
+ *   opening   0–10 s   +1 unit/s each second — the pace the game always had
+ *   ramp     10–45 s   up to CRUISE_SPEED, the old top speed, in half the time
+ *   creep    45 s on   +0.35 unit/s each second to MAX_SCROLL_SPEED (~2.5 min)
+ *
+ * The creep is what keeps a long run getting harder instead of levelling off.
+ * The cap is held down by the double web frame: its second hole has to stay
+ * reachable inside the bay at the fastest the run ever gets (the test suite
+ * checks it against the flight constants), which stops being true a little
+ * above 190. At the cap a flap cycle is about 0.7 s and obstacles are just
+ * under a second apart — tight, not impossible.
  */
-export const SPEED_GAIN = 1;
-export const MAX_SCROLL_SPEED = 148;
+export const OPENING_TIME = 10;
+export const OPENING_GAIN = 1;
+export const CRUISE_TIME = 45;
+export const CRUISE_SPEED = 148;
+export const CREEP_GAIN = 0.35;
+export const MAX_SCROLL_SPEED = 185;
+/**
+ * Below this run speed (2 m/s on the readout) the cage takes the hit: the
+ * drone bounces off whatever it touched and keeps flying, the way the real
+ * collision-tolerant Elios does. At or above it, contact is a crash. On the
+ * curve above that is roughly the first 12 seconds of every run.
+ */
+export const SAFE_SPEED = 2 / METRES_PER_UNIT;
+/** Share of the vertical speed the cage keeps through a bounce. */
+export const BOUNCE_RESTITUTION = 0.55;
+/** A head-on bump throws the world back at this speed, world units per second… */
+export const BOUNCE_RECOIL = 110;
+/** …which dies away at this rate per second, so the run picks up again within half a second. */
+export const RECOIL_DECAY = 6;
 /** Clear air between one obstacle and the next. */
 export const OBSTACLE_GAP = 112;
 /** Never open a passage tighter than this, or it stops being playable. */
@@ -84,14 +113,31 @@ export const ZONE_NAMES: Record<Zone, { name: string; industry: string }> = {
 };
 
 /**
- * How fast the world is moving after `elapsed` seconds of flight: from
- * `SCROLL_SPEED` up to `MAX_SCROLL_SPEED`, reached a little over a minute in.
- * The first few obstacles of every run are at the old pace, so a short run is
- * still the run it always was.
+ * How fast the run is going after `elapsed` seconds of flight — the speed the
+ * readout shows, and the one `SAFE_SPEED` is measured against. See
+ * `SCROLL_SPEED` for the shape of the curve.
  */
 export function speedAt(elapsed: number): number {
-  const seconds = Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0;
-  return Math.min(MAX_SCROLL_SPEED, SCROLL_SPEED + SPEED_GAIN * seconds);
+  const t = Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0;
+  const opened = SCROLL_SPEED + OPENING_GAIN * Math.min(t, OPENING_TIME);
+  if (t <= OPENING_TIME) return opened;
+  if (t <= CRUISE_TIME) {
+    return opened + ((CRUISE_SPEED - opened) * (t - OPENING_TIME)) / (CRUISE_TIME - OPENING_TIME);
+  }
+  return Math.min(MAX_SCROLL_SPEED, CRUISE_SPEED + CREEP_GAIN * (t - CRUISE_TIME));
+}
+
+/** Is the run still slow enough for the cage to take a hit? */
+export function isCollisionTolerant(elapsed: number): boolean {
+  return speedAt(elapsed) <= SAFE_SPEED;
+}
+
+/**
+ * How fast the obstacles are actually moving: the run speed, less whatever a
+ * head-on bounce is still throwing the world back by. Negative while it does.
+ */
+export function worldSpeed(state: Pick<GameState, "elapsed" | "recoil">): number {
+  return speedAt(state.elapsed) - state.recoil;
 }
 
 /** The zone at a (possibly out-of-range) index, wrapping like the run does. */
@@ -895,6 +941,13 @@ export type GameState = {
   buildCount: number;
   nextId: number;
   impact: Impact | null;
+  /**
+   * How fast a head-on bounce is still throwing the world back, world units
+   * per second. Zero outside the collision-tolerant opening.
+   */
+  recoil: number;
+  /** Where the cage took a hit this step and flew on; null on a clean step. */
+  bump: Impact | null;
 };
 
 export function createGame(startZone = 0): GameState {
@@ -911,6 +964,8 @@ export function createGame(startZone = 0): GameState {
     buildCount: 0,
     nextId: 1,
     impact: null,
+    recoil: 0,
+    bump: null,
   };
 }
 
@@ -941,12 +996,14 @@ export function stepGame(state: GameState, input: StepInput): GameState {
   // ever being tested.
   const dt = Math.min(Math.max(input.dt, 0), 0.05);
 
-  const velocity = Math.min(state.velocity + GRAVITY * dt, MAX_FALL_SPEED);
-  const y = state.y + velocity * dt;
+  let velocity = Math.min(state.velocity + GRAVITY * dt, MAX_FALL_SPEED);
+  let y = state.y + velocity * dt;
 
   const elapsed = state.elapsed + dt;
+  const decayed = state.recoil * Math.exp(-RECOIL_DECAY * dt);
+  let recoil = decayed < 0.5 ? 0 : decayed;
   let obstacles = state.obstacles
-    .map((o) => ({ ...o, x: o.x - speedAt(elapsed) * dt }))
+    .map((o) => ({ ...o, x: o.x - worldSpeed({ elapsed, recoil }) * dt }))
     .filter((o) => o.x + o.width > -4);
 
   let { buildZone, buildCount, nextId } = state;
@@ -980,19 +1037,14 @@ export function stepGame(state: GameState, input: StepInput): GameState {
     return o;
   });
 
-  let impact: Impact | null = null;
-  if (hitsGround(y)) {
-    impact = { what: "FLOOR", x: DRONE_X, y: WORLD_HEIGHT };
-  } else if (hitsCeiling(y)) {
-    impact = { what: "CEILING", x: DRONE_X, y: 0 };
-  } else {
-    const hit = obstacles.find((o) => hitsObstacle(y, o));
-    if (hit) {
-      const solid = hit.solids.find((s) => circleHitsSolid(DRONE_X, y, DRONE_RADIUS, s, hit.x)) ?? hit.solids[0];
-      const [ix, iy] = nearestPointOnSolid(DRONE_X, y, solid, hit.x);
-      impact = { what: hit.kind, x: ix, y: iy };
-    }
+  let bump: Impact | null = null;
+  if (isCollisionTolerant(elapsed)) {
+    const bounced = bounceOff(y, velocity, obstacles);
+    ({ y, velocity, obstacles, bump } = bounced);
+    if (bounced.headOn) recoil = Math.max(recoil, BOUNCE_RECOIL);
   }
+
+  const impact = bump ? null : contactAt(y, obstacles);
   const crashed = impact !== null;
 
   return {
@@ -1008,10 +1060,87 @@ export function stepGame(state: GameState, input: StepInput): GameState {
     buildCount,
     nextId,
     impact,
+    recoil: crashed ? 0 : recoil,
+    bump,
   };
 }
 
-export const BEST_SCORE_KEY = "rolegate:elios-best";
+/** What the cage is touching at height `y`, if anything — floor and ceiling first. */
+function contactAt(y: number, obstacles: readonly Obstacle[]): Impact | null {
+  if (hitsGround(y)) return { what: "FLOOR", x: DRONE_X, y: WORLD_HEIGHT };
+  if (hitsCeiling(y)) return { what: "CEILING", x: DRONE_X, y: 0 };
+  const hit = obstacles.find((o) => hitsObstacle(y, o));
+  if (!hit) return null;
+  const solid = hit.solids.find((s) => circleHitsSolid(DRONE_X, y, DRONE_RADIUS, s, hit.x)) ?? hit.solids[0];
+  const [ix, iy] = nearestPointOnSolid(DRONE_X, y, solid, hit.x);
+  return { what: hit.kind, x: ix, y: iy };
+}
+
+/** Clearance the cage is pushed out to after a bounce, so the next step starts free. */
+const SEPARATION = 0.5;
+
+/**
+ * The collision-tolerant cage: push the drone clear of whatever it is touching
+ * and send it back the way it came.
+ *
+ * The drone cannot move sideways — the world moves past it — so a push along x
+ * is applied to the obstacles instead. Vertical speed into the surface is
+ * reflected with `BOUNCE_RESTITUTION`; a hit on the front of something also
+ * reports `headOn`, and the caller throws the world back with a recoil. A few
+ * passes cover being wedged between two surfaces.
+ */
+function bounceOff(
+  y0: number,
+  v0: number,
+  obstacles0: Obstacle[],
+): { y: number; velocity: number; obstacles: Obstacle[]; bump: Impact | null; headOn: boolean } {
+  let y = y0;
+  let velocity = v0;
+  let obstacles = obstacles0;
+  let bump: Impact | null = null;
+  let headOn = false;
+
+  for (let pass = 0; pass < 4; pass += 1) {
+    const contact = contactAt(y, obstacles);
+    if (!contact) break;
+    bump ??= contact;
+
+    if (contact.what === "FLOOR") {
+      y = WORLD_HEIGHT - DRONE_RADIUS - SEPARATION;
+      velocity = -Math.abs(velocity) * BOUNCE_RESTITUTION;
+      continue;
+    }
+    if (contact.what === "CEILING") {
+      y = DRONE_RADIUS + SEPARATION;
+      velocity = Math.abs(velocity) * BOUNCE_RESTITUTION;
+      continue;
+    }
+
+    // Normal from the contact point to the cage's centre. A centre already
+    // inside the steel has no usable normal; back straight out of it.
+    const dx = DRONE_X - contact.x;
+    const dy = y - contact.y;
+    const d = Math.hypot(dx, dy);
+    const [nx, ny, depth] = d > 1e-6 ? [dx / d, dy / d, DRONE_RADIUS - d] : [-1, 0, DRONE_RADIUS];
+    const push = depth + SEPARATION;
+
+    y += ny * push;
+    if (nx !== 0) obstacles = obstacles.map((o) => ({ ...o, x: o.x - nx * push }));
+    if (ny * velocity < 0) velocity = -velocity * BOUNCE_RESTITUTION;
+    if (nx < -0.5) headOn = true;
+  }
+
+  // A cage wedged into a corner can be pushed through the floor or ceiling by
+  // the last pass; never leave it outside the world.
+  y = Math.min(Math.max(y, DRONE_RADIUS + SEPARATION), WORLD_HEIGHT - DRONE_RADIUS - SEPARATION);
+  return { y, velocity, obstacles, bump, headOn };
+}
+
+/**
+ * Versioned with the rules: a best flown on an older speed curve is not
+ * comparable, so a rules change starts every browser's best afresh.
+ */
+export const BEST_SCORE_KEY = "rolegate:elios-best-v2";
 
 export function isNewBest(score: number, best: number | null): boolean {
   return score > 0 && (best === null || score > best);
