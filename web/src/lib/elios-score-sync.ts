@@ -19,6 +19,7 @@ import {
   parsePendingScore,
   pendingOutcome,
 } from "@/lib/elios-pending-score";
+import { ELIOS_RULES_VERSION } from "@/lib/elios-leaderboard";
 
 let pendingCache: number | null | undefined;
 const listeners = new Set<() => void>();
@@ -90,7 +91,7 @@ export async function submitEliosScore(score: number): Promise<boolean> {
     const res = await fetch("/api/elios-score", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ score }),
+      body: JSON.stringify({ score, rules: ELIOS_RULES_VERSION }),
     });
     if (pendingOutcome(res.status) === "keep") {
       queuePendingScore(score);
@@ -127,7 +128,7 @@ export function flushPendingScore(): Promise<boolean> {
       const res = await fetch("/api/elios-score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ score }),
+        body: JSON.stringify({ score, rules: ELIOS_RULES_VERSION }),
       });
       const outcome = pendingOutcome(res.status);
       if (outcome === "keep") return false;

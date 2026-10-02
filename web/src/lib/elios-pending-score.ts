@@ -12,7 +12,8 @@
  */
 import { MAX_PLAUSIBLE_SCORE } from "@/lib/elios-leaderboard";
 
-export const PENDING_SCORE_KEY = "elios:pending-score";
+/** Versioned with ELIOS_RULES_VERSION, so a score queued under older rules is never sent. */
+export const PENDING_SCORE_KEY = "elios:pending-score-v2";
 
 /** Anything that is not a score the server would accept is treated as nothing pending. */
 export function parsePendingScore(raw: string | null): number | null {

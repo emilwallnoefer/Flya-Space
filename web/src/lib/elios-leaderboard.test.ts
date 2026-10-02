@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  ELIOS_RULES_VERSION,
   LEADERBOARD_LIMIT,
   MAX_PLAUSIBLE_SCORE,
   firstNameOf,
+  isCurrentRules,
   parseSubmittedScore,
   rankBoard,
   shouldRecord,
@@ -113,5 +115,19 @@ describe("rankBoard", () => {
     const original = [...rows];
     rankBoard(rows, "a");
     expect(rows).toEqual(original);
+  });
+});
+
+describe("isCurrentRules", () => {
+  it("accepts only the rules the board is counting", () => {
+    expect(isCurrentRules(ELIOS_RULES_VERSION)).toBe(true);
+    expect(isCurrentRules(ELIOS_RULES_VERSION - 1)).toBe(false);
+    expect(isCurrentRules(ELIOS_RULES_VERSION + 1)).toBe(false);
+  });
+
+  it("refuses a submission with no version — what a tab on the previous build sends", () => {
+    expect(isCurrentRules(undefined)).toBe(false);
+    expect(isCurrentRules(null)).toBe(false);
+    expect(isCurrentRules(String(ELIOS_RULES_VERSION))).toBe(false);
   });
 });
