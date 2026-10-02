@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { forbidHeldAccount } from "@/lib/app-access";
 
 // Persist appearance prefs (theme + accent) to the signed-in user's account so
 // the choice survives refreshes, new sessions, and other devices. Stored in
@@ -15,6 +16,8 @@ export async function POST(req: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const held = forbidHeldAccount(user);
+  if (held) return held;
 
   let body: unknown;
   try {

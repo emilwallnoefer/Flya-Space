@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { forbidHeldAccount } from "@/lib/app-access";
 import { createClient } from "@/lib/supabase/server";
 import { readGmailConnection } from "@/lib/gmail-tokens";
 import {
@@ -23,6 +24,10 @@ export async function handleGetWeek(request: Request): Promise<NextResponse> {
   const claimsRes = await supabase.auth.getClaims();
   const claims = claimsRes.data?.claims ?? null;
   if (!claims) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // From the token, not a fresh read: a role change reaches it when the token
+  // is reissued, which the session refresher forces on the next page load.
+  const held = forbidHeldAccount(claims);
+  if (held) return held;
 
   const url = new URL(request.url);
   const weekStartDate = getWeekStartDate(url.searchParams.get("weekStart") ?? undefined);

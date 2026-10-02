@@ -10,6 +10,7 @@ import { handleFillMissing } from "./handlers/fill-missing";
 import { handleSetComp } from "./handlers/set-comp";
 import { handleImportJson } from "./handlers/import-json";
 import { handleExportJson } from "./handlers/export-json";
+import { forbidHeldAccount } from "@/lib/app-access";
 
 export async function GET(request: Request) {
   return handleGetWeek(request);
@@ -22,6 +23,8 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const held = forbidHeldAccount(user);
+  if (held) return held;
   const authedUser = user;
   const clientIp = getClientIp(request);
   const limitResult = await checkRateLimit(`time-tracker-write:${authedUser.id}:${clientIp}`, {

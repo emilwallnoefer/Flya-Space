@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { forbidHeldAccount } from "@/lib/app-access";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAdminEmails } from "@/lib/admin";
@@ -104,6 +105,8 @@ export async function POST(request: Request) {
   if (!user?.email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const held = forbidHeldAccount(user);
+  if (held) return held;
 
   const limitResult = await checkRateLimit(
     `certificate-request:${user.id}:${getClientIp(request)}`,

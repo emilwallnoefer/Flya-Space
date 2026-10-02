@@ -3,6 +3,7 @@ import {
   ADMIN,
   ASSET_ID,
   get,
+  HELD,
   MEMBER,
   OTHER,
   pooledAsset,
@@ -31,6 +32,13 @@ describe("who is allowed in at all", () => {
     const anonymous = { viewer: null, tables: { fleet_assets: assets() } };
     expect((await get(anonymous)).status).toBe(401);
     expect((await post(anonymous, { action: "confirm_location", asset_id: ASSET_ID })).status).toBe(401);
+  });
+
+  it("refuses an account still waiting for a role (audit run-4 F3)", async () => {
+    // The role gate page used to be the only thing standing here.
+    const held = { viewer: HELD, tables: { fleet_assets: assets() } };
+    expect((await get(held)).status).toBe(403);
+    expect((await post(held, { action: "confirm_location", asset_id: ASSET_ID })).status).toBe(403);
   });
 
   it("rejects an unknown action and a malformed payload", async () => {

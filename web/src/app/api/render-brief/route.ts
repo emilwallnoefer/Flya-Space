@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { MAIL_SIGNATURE_DEFAULT_NAME } from "@/lib/mail-signature-presets";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { forbidHeldAccount } from "@/lib/app-access";
 
 /**
  * Re-renders a Brief-mode email with an edited asset selection, WITHOUT calling the LLM.
@@ -48,6 +49,8 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const held = forbidHeldAccount(user);
+  if (held) return held;
 
   try {
     const parsed = renderSchema.safeParse(await request.json());
