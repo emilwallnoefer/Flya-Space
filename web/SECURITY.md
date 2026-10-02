@@ -81,6 +81,14 @@ Each item: **what** · **impact** · **fix** · **effort**.
 - **Lesson:** run-3's T0.6 fix revoked `tt_resolve_audit_user_id` from all three roles — the right pattern — but the same bug in the other RPCs was not looked for, and the live verification only checked the two functions it had touched. Grep for the pattern, not the instance.
 - **Effort:** XS. **✅ APPLIED and VERIFIED 2026-09-29** in the SQL editor (the closing guard block passed). Re-probed live with the bare anon key afterwards: all ten functions answer `401 / 42501`.
 
+**T0.11 — Domain restriction enforced only after the account exists** _(HIGH, run-4 F2)_
+- **What:** the `@flyability.com` rule lived only in `app/auth/callback/route.ts`, which runs after Supabase has already created the account and issued a session. Sign-up is open (email + Google), so a session obtained without passing through that route — e.g. `POST /auth/v1/signup`, confirm, password sign-in — kept every `to authenticated` grant.
+- **Impact:** an outsider reads all team chat and attachments, the fleet directory (staff emails), and uses the session-only API routes (paid LLM, mails to admins). Checked 2026-09-29: no outsider account existed — `auth.users` held only `flyability.com` accounts and the owner's own Gmail (created 2026-09-23 via Google, which itself shows the gap).
+- **Fix:** `supabase/2026-10-02-restrict-signup-domain.sql` — a Supabase Auth *Before User Created* hook that refuses any non-`@flyability.com` email for every provider. The callback check stays as a second layer.
+- **✅ APPLIED and VERIFIED 2026-09-29:** hook enabled in Authentication → Hooks; an anon-key sign-up for `audit-test@example.com` returned `403 "Sign-up is limited to @flyability.com accounts."` and created no user.
+- **Still open (run-4 F3):** the hook stops outsiders, but a held or role-revoked *employee* still reaches every non-admin route and the `to authenticated` RLS policies. That needs a server-side role check.
+- **Effort:** XS.
+
 ### Tier 1 — Hardening (defense-in-depth)
 
 **T1.1 — Security headers.** `next.config.ts` sets none. Add a `headers()` block: `Content-Security-Policy` (the mitigating layer for T0.2), `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`. Effort: S (CSP tuning is the only real work).

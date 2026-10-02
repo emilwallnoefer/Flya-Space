@@ -41,6 +41,10 @@ export async function GET(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
     const email = user?.email?.toLowerCase() ?? "";
+    // Second layer only. By the time this runs Supabase has already created
+    // the account, so the real gate is the Before User Created auth hook
+    // (supabase/2026-10-02-restrict-signup-domain.sql), which refuses the
+    // sign-up itself. Keep the two domain rules in step.
     if (!email.endsWith("@flyability.com")) {
       response = NextResponse.redirect(new URL("/login?error=domain_not_allowed", requestUrl.origin));
       await supabase.auth.signOut();
