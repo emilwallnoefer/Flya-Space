@@ -2,13 +2,25 @@ import "server-only";
 
 import { randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isFlightDataLink } from "@/lib/flight-data-link";
+import industryLinks from "@/mail-config/industry-training-links.json";
 import trainingLinks from "@/mail-config/training-links.json";
 
 /**
- * Rewrites every http(s) `<a href>` in the draft's HTML body to a
- * tracking redirect URL hosted by us, and persists each unique URL as a
- * `mail_send_links` row so the `/r/<id>` endpoint can resolve clicks
- * back to the send.
+ * Rewrites the draft's KNOWN http(s) `<a href>` links to a tracking redirect
+ * URL hosted by us, and persists each unique URL as a `mail_send_links` row so
+ * the `/r/<id>` endpoint can resolve clicks back to the send.
+ *
+ * Only links the app itself puts in a mail are tracked (`isTrackableUrl`):
+ * the training and course links in `web/src/mail-config/`, and Google Drive
+ * links (where the per-mail "Download your flight data" link points). Every
+ * other link is left exactly as written — it still works, it just is not
+ * counted. Tracking used to wrap ANY link, which let a signed-in user turn an
+ * arbitrary URL into a `/r/<id>` link on our own domain that forwards anyone,
+ * forever: an open redirect for phishing (security audit run-4 F6).
+ *
+ * Links already stored in `mail_send_links` are untouched by this and keep
+ * redirecting; the rule only decides what new drafts create.
  *
  * Inline images (`<img src>`), `cid:` references and `mailto:` links
  * are intentionally untouched. The plain-text email body never contains
@@ -49,6 +61,30 @@ function buildLinkKeyIndex(): Map<string, string> {
   }
   cachedKeyByUrl = map;
   return map;
+}
+
+let cachedTemplateUrls: Set<string> | null = null;
+
+/** Every URL the mail engine can emit: training links + industry courses. */
+function templateUrls(): Set<string> {
+  if (cachedTemplateUrls) return cachedTemplateUrls;
+  const urls = new Set<string>();
+  for (const url of Object.values(trainingLinks as Record<string, unknown>)) {
+    if (typeof url === "string" && /^https?:\/\//.test(url)) urls.add(url);
+  }
+  for (const course of (industryLinks.courses as Array<{ url?: unknown }>) ?? []) {
+    if (typeof course.url === "string" && /^https?:\/\//.test(course.url)) urls.add(course.url);
+  }
+  cachedTemplateUrls = urls;
+  return urls;
+}
+
+/**
+ * True for a link this app put in the mail, and so may track: an exact
+ * template URL, or a Google Drive flight-data link (`lib/flight-data-link.ts`).
+ */
+export function isTrackableUrl(url: string): boolean {
+  return templateUrls().has(url) || isFlightDataLink(url);
 }
 
 function randomSuffix(): string {
@@ -138,12 +174,14 @@ export async function rewriteHtmlForTracking(
 
   const rewritten = html.replace(
     TRACKABLE_ANCHOR_REGEX,
-    (_match, before: string, url: string, after: string, inner: string) => {
+    (match, before: string, url: string, after: string, inner: string) => {
       // The captured href is raw HTML, so `&` arrives as `&amp;` (and
       // similar entities). Decode before persisting/redirecting so the
       // stored `original_url` is the real target — otherwise the /r/<id>
       // redirect emits `...?a=1&amp;b=2`, corrupting query params.
       const cleanUrl = decodeBasicHtml(url.trim());
+      // Not ours: hand the anchor back byte-for-byte, attributes and all.
+      if (!isTrackableUrl(cleanUrl)) return match;
       let id = idByUrl.get(cleanUrl);
       if (!id) {
         const label = extractAnchorLabel(inner) || null;

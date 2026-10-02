@@ -105,6 +105,12 @@ Each item: **what** · **impact** · **fix** · **effort**.
 - **Verified:** three route tests, each confirmed to fail with the fix removed. Scoring logic unchanged, so existing scores do not move.
 - **Effort:** XS.
 
+**T0.14 — Tracked links were an open redirect on our domain** _(LOW, run-4 F6)_
+- **What:** `rewriteHtmlForTracking` wrapped every http(s) link in a draft's `html_body`, and `/r/<id>` redirects to the stored URL with no login. Any signed-in user could create a draft containing an arbitrary link (with a slug they chose from the link text) and get a permanent `flya.space/r/…` link forwarding anyone to it.
+- **Fix:** only links the app itself emits are tracked — the exact URLs in `training-links.json` and `industry-training-links.json`, plus https Google Drive links for the per-mail flight-data link (`lib/flight-data-link.ts`, shared with the composer, whose datasets field now says "Google Drive links only" and warns otherwise). Every other anchor is returned byte-for-byte: it still works, it is just not counted. Existing `mail_send_links` rows and `/r/[id]` are unchanged, so links already sent keep redirecting.
+- **Verified:** a test renders real Brief mails (all options, en/de/fr, Drive flight-data link) and requires every emitted link to stay tracked; three abuse tests confirmed to fail against the old tracker.
+- **Effort:** S.
+
 ### Tier 1 — Hardening (defense-in-depth)
 
 **T1.1 — Security headers.** `next.config.ts` sets none. Add a `headers()` block: `Content-Security-Policy` (the mitigating layer for T0.2), `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`. Effort: S (CSP tuning is the only real work).

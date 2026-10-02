@@ -11,6 +11,7 @@ import type { UserRole } from "@/lib/user-role";
 import { LazyEliosGame } from "@/components/elios-game-lazy";
 import { AssetChecklist } from "./asset-checklist";
 import { ComposerChoiceRow, composerSegmentClass, ProgressiveField } from "./composer-fields";
+import { FlightDataLinkInput } from "./flight-data-link-input";
 import { LivePreview } from "./live-preview";
 import { DAY_DISCIPLINE_KEYS, DAY_SITE_KEYS } from "./types";
 import type { MailComposerState } from "./use-mail-composer";
@@ -171,12 +172,9 @@ export function MailComposerPanel({
               </div>
               <div className="space-y-1">
                 <label className="block text-xs font-medium text-ink-3/80">Add-ons</label>
-                <Input
-                  type="url"
-                  inputMode="url"
-                  placeholder="Link to collected flight data (Optional)"
+                <FlightDataLinkInput
                   value={form.datasets_link}
-                  onChange={(e) => setForm({ ...form, datasets_link: e.target.value })}
+                  onChange={(value) => setForm({ ...form, datasets_link: value })}
                 />
               </div>
 
@@ -482,12 +480,9 @@ export function MailComposerPanel({
                 <ProgressiveField show={composer.shouldShowChanges}>
                   <div className="space-y-1">
                     <label className="block text-xs font-medium text-ink-3/80">Add-ons</label>
-                    <Input
-                      type="url"
-                      inputMode="url"
-                      placeholder="Link to collected flight data (Optional)"
+                    <FlightDataLinkInput
                       value={form.datasets_link}
-                      onChange={(e) => setForm({ ...form, datasets_link: e.target.value })}
+                      onChange={(value) => setForm({ ...form, datasets_link: value })}
                     />
                   </div>
                 </ProgressiveField>
