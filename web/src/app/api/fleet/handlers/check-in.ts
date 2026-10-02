@@ -13,12 +13,28 @@ export async function handleCheckIn(
   if (reservation.user_id !== viewer.id && !viewer.isAdmin) {
     return NextResponse.json({ error: "That booking is not yours." }, { status: 403 });
   }
-  if (reservation.status !== "picked_up" && reservation.status !== "reserved") {
+  // Only something that was picked up can be returned. A booking that never
+  // left the shelf is closed with `cancel`, which the reliability score ignores;
+  // accepting it here let anyone book today and "return" at once for an
+  // on-time return that never happened (security audit run-4 F4). The UI never
+  // offers it — this makes the server agree.
+  if (reservation.status === "reserved") {
+    return NextResponse.json(
+      { error: "That booking was never picked up. Cancel it instead." },
+      { status: 409 },
+    );
+  }
+  if (reservation.status !== "picked_up") {
     return NextResponse.json({ error: "That booking is already closed." }, { status: 409 });
   }
 
   const asset = reservation.asset;
   const landingSpot = payload.location ?? asset?.home_location ?? asset?.current_location ?? null;
+  // Free the unit only if this booking is what holds it. If someone else is
+  // recorded as having it, closing this booking must not reset their unit to
+  // available-at-home while it is still in their hands.
+  const holder = asset?.current_holder_user_id ?? null;
+  const holdsTheUnit = holder === null || holder === reservation.user_id;
 
   const [{ error: resError }, { error: assetError }] = await Promise.all([
     admin
@@ -30,16 +46,18 @@ export async function handleCheckIn(
         returned_on: today,
       })
       .eq("id", payload.reservation_id),
-    admin
-      .from("fleet_assets")
-      .update({
-        status: "available",
-        current_holder_user_id: null,
-        current_holder_label: null,
-        current_location: landingSpot,
-        location_confirmed_at: new Date().toISOString(),
-      })
-      .eq("id", reservation.asset_id),
+    holdsTheUnit
+      ? admin
+          .from("fleet_assets")
+          .update({
+            status: "available",
+            current_holder_user_id: null,
+            current_holder_label: null,
+            current_location: landingSpot,
+            location_confirmed_at: new Date().toISOString(),
+          })
+          .eq("id", reservation.asset_id)
+      : Promise.resolve({ error: null }),
   ]);
   if (resError) throw new Error(resError.message);
   if (assetError) throw new Error(assetError.message);

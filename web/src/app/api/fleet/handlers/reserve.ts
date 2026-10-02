@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchAssetSpans, fetchReliability, recordAssetEvent } from "@/lib/fleet-queries";
-import { checkReservation, parseDateKey, toDateKey } from "@/lib/fleet-rules";
+import { checkReservation, isBookable, parseDateKey, toDateKey } from "@/lib/fleet-rules";
 import { reserveErrorMessage } from "../reserve-message";
 import type { FleetActionContext } from "./shared";
 import type { FleetPayload } from "./schemas";
@@ -19,7 +19,7 @@ export async function handleReserve(
   const [{ data: asset, error: assetError }, reliability, existing] = await Promise.all([
     admin
       .from("fleet_assets")
-      .select("id, name, status, active, current_location")
+      .select("id, name, status, active, current_location, pooled")
       .eq("id", payload.asset_id)
       .maybeSingle(),
     fetchReliability(admin, viewer.id, today),
@@ -32,6 +32,18 @@ export async function handleReserve(
   if (asset.status === "retired" || asset.status === "in_repair") {
     return NextResponse.json(
       { error: `${asset.name} is ${asset.status === "retired" ? "retired" : "in repair"} and cannot be booked.` },
+      { status: 409 },
+    );
+  }
+
+  // A unit an admin assigned to someone (pooled = false) is not in the shared
+  // pool, and only `assign` / `return_to_pool` may change that. The calendar
+  // never shows it, but the id is readable, so the server has to refuse it too
+  // (security audit run-4 F5). Applies to admins as well: they move units in
+  // and out of the pool with those two actions, not by booking around them.
+  if (!isBookable(asset)) {
+    return NextResponse.json(
+      { error: `${asset.name} is assigned, not in the shared pool, and cannot be booked.` },
       { status: 409 },
     );
   }

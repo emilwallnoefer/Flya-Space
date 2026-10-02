@@ -86,7 +86,7 @@ export async function loadReservation(admin: Admin, id: string) {
   const { data, error } = await admin
     .from("fleet_reservations")
     .select(
-      "id, asset_id, user_id, start_date, end_date, status, destination, fleet_assets(current_location, home_location)",
+      "id, asset_id, user_id, start_date, end_date, status, destination, fleet_assets(current_location, home_location, current_holder_user_id)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -98,7 +98,7 @@ export async function loadReservation(admin: Admin, id: string) {
   // is dropped so callers have exactly one way to reach the asset.
   const { fleet_assets: embedded, ...reservation } = data as typeof data & { fleet_assets?: unknown };
   const asset = (Array.isArray(embedded) ? embedded[0] : embedded) as
-    | { current_location: string | null; home_location: string | null }
+    | { current_location: string | null; home_location: string | null; current_holder_user_id: string | null }
     | null
     | undefined;
 
