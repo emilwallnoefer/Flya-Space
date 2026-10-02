@@ -15,6 +15,8 @@
 //      working for your own), and tt_resolve_audit_user_id is not callable.
 //   6. The run-3 F4 fix: time_tracker_user_stats.overtime_bank_mins is readable
 //      but not writable by its own user (it is a derived cache admins report on).
+//   7. The run-4 F1 fix: no SECURITY DEFINER RPC answers to the bare anon key
+//      (supabase/2026-09-29-rpc-revoke-anon-execute.sql).
 //
 // Note what (5) exists for: before run-3 this script checked table isolation
 // only, and never called an RPC. A SECURITY DEFINER function bypasses RLS by
@@ -222,6 +224,39 @@ async function main() {
       !readErr,
       readErr ? `unexpectedly refused: ${readErr.message}` : "ok",
     );
+  }
+
+  // 7. run-4 F1 — no SECURITY DEFINER RPC answers to the bare anon key. The
+  // earlier checks all run as a signed-in user, so they could not see that the
+  // admin RPCs were open to *anonymous* callers: `revoke ... from public` left
+  // Supabase's by-name grants to anon/authenticated in place. Arguments are
+  // chosen to match nothing, so a regression reports without returning data.
+  {
+    const anon = freshClient();
+    const probes = [
+      ["tt_admin_overview", { p_week_start: "1900-01-01" }],
+      ["tt_workspace_summary", { p_week_start_date: "1900-01-01", p_month_start_date: "1900-01-01" }],
+      ["mail_recipient_recent", { p_limit: 1, p_offset: 0 }],
+      ["mail_recipient_week", { p_week_start: "1900-01-01T00:00:00Z", p_week_end: "1900-01-02T00:00:00Z" }],
+      ["mail_recipient_search", { p_query: "rls-smoke-no-match-7f3c", p_limit: 1 }],
+      ["mail_overview_stats", { p_range_start: "1900-01-01T00:00:00Z", p_top_limit: 1 }],
+      ["mail_click_timeline", { p_period: "day", p_anchor: "1900-01-01T00:00:00Z" }],
+      ["mail_link_leaderboard", { p_limit: 1 }],
+      ["tt_refresh_overtime_bank_stats", { p_user: a.user.id }],
+      ["tt_user_week_v1", { p_week_start: "1900-01-01" }],
+    ];
+    for (const [fn, args] of probes) {
+      const { error } = await anon.rpc(fn, args);
+      // Only Postgres's permission-denied code proves the grant is closed. Any
+      // other error — a stale signature (PGRST202), or the function rejecting
+      // its arguments — means the call REACHED the function, so it fails.
+      const refused = error?.code === "42501";
+      check(
+        `${fn}: not callable with the anon key`,
+        refused,
+        refused ? "refused: 42501" : error ? `reached the function: ${error.code} ${error.message}` : "CALLABLE BY ANON",
+      );
+    }
   }
 
   console.log(`\n${failures === 0 ? "All RLS checks passed." : `${failures} check(s) FAILED.`}`);

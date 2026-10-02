@@ -81,6 +81,13 @@ Vulnerabilities that live *inside* `next` (it vendors a pinned `postcss` and an 
 
 `web/supabase/` is a **flat** directory of `.sql` files, mostly dated (`YYYY-MM-DD-...sql`). They are not orchestrated by the Supabase CLI in this repo — apply them in order by hand against the project. When adding schema changes, write a new dated file; do not edit historical ones. RLS policies are part of the migrations; the service-role key is the only way to bypass them and is gated as described above.
 
+**Function grants: `revoke ... from public` is not enough on Supabase.** Supabase grants EXECUTE on functions in `public` to `anon` and `authenticated` *by name*, and a revoke from PUBLIC leaves those grants standing — which is how eight admin RPCs were callable with the bare anon key until `2026-09-29-rpc-revoke-anon-execute.sql` (SECURITY.md T0.10). That migration also changed the default so a function `postgres` creates now starts with **no** EXECUTE for anyone. So every new function must grant exactly what it needs, and name the roles it revokes:
+- service-role-only RPC: `revoke execute on function f(...) from public, anon, authenticated; grant execute on function f(...) to service_role;`
+- a user's own-data RPC, or a helper an RLS policy calls: `revoke ... from public, anon; grant ... to authenticated;` — a policy runs its helper as the querying role, so forgetting this grant makes every query the policy guards fail with "permission denied for function".
+- `SECURITY DEFINER` bypasses RLS, so it must check `auth.uid()` itself. A null `auth.uid()` means *either* service_role/a trigger *or* anon; treating it as trusted (as `tt_refresh_overtime_bank_stats` does) is only safe while anon's EXECUTE is revoked.
+
+`npm run test:rls` (check 7) probes the known RPCs with the anon key; add any new RPC to that list.
+
 ## Environment
 
 Required env (dev: a gitignored dotenv in `web/` — this checkout uses `web/.env`, and Next loads `.env` and `.env.local` alike, so check which one exists before telling anyone a var is missing; prod: the hosting platform):

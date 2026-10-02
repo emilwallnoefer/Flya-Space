@@ -1,6 +1,6 @@
 # Security Masterplan — Mail Automator (`web/`)
 
-_Last updated: 2026-07-26. Owner: admin. This document is the running plan for hardening the web app; update it as items ship._
+_Last updated: 2026-09-29. Owner: admin. This document is the running plan for hardening the web app; update it as items ship._
 
 > **Run-3 (2026-07-26)** added Tier 0 items **T0.6–T0.9** and Tier 1 items **T1.9–T1.11** from a
 > third audit pass weighted to Postgres function privileges — the area runs 1 and 2 never
@@ -73,6 +73,13 @@ Each item: **what** · **impact** · **fix** · **effort**.
 - **Impact:** **not XSS** — `html_body` has no in-app render sink and the author is authenticated. It is a broken escaping control and falsifies the "the model never emits or formats links" guarantee in `mail-brief-llm.ts`, since Brief-mode prose is LLM-written from briefs that carry pasted customer text.
 - **Fix:** placeholder-token approach — markdown constructs are swapped for `U+E000<n>U+E000` before the prose is escaped wholesale, then restored, so generated markup never passes through the escaper. Plus `sanitizeMailHtml` on `html_body` as an explicit second layer (a denylist, documented as such).
 - **Effort:** S.
+
+**T0.10 — Admin RPCs executable with the anon key** _(CRITICAL, run-4 F1)_
+- **What:** eight admin-only `SECURITY DEFINER` functions (`tt_admin_overview`, `tt_workspace_summary`, and the six `mail_*` tracking RPCs) paired their grant with `revoke all ... from public` only. On Supabase, default privileges grant EXECUTE on new `public` functions to `anon`, `authenticated` and `service_role` **by name**, and a revoke from PUBLIC does not touch named grants. Confirmed live 2026-09-29: `rpc/mail_recipient_search` answered 200 to an anon caller.
+- **Impact:** anyone holding the public anon key (it is in every page's JS) reads every employee's weekly hours and overtime balance, and every external mail recipient's name, company, sends and click history. RLS does not help — definer functions bypass it.
+- **Fix:** `supabase/2026-09-29-rpc-revoke-anon-execute.sql` revokes from `public, anon, authenticated` (admin RPCs) or `public, anon` (the two user RPCs), and changes the default privileges so future functions start with no EXECUTE for anyone. A closing `do` block raises if anon can still run any definer function, so a clean apply is itself the verification. `rls-smoke.mjs` check 7 probes all ten with the bare anon key and passes only on `42501`.
+- **Lesson:** run-3's T0.6 fix revoked `tt_resolve_audit_user_id` from all three roles — the right pattern — but the same bug in the other RPCs was not looked for, and the live verification only checked the two functions it had touched. Grep for the pattern, not the instance.
+- **Effort:** XS. **✅ APPLIED and VERIFIED 2026-09-29** in the SQL editor (the closing guard block passed). Re-probed live with the bare anon key afterwards: all ten functions answer `401 / 42501`.
 
 ### Tier 1 — Hardening (defense-in-depth)
 
