@@ -174,8 +174,8 @@ export function worldSpeed(state: Pick<GameState, "speed" | "recoil">): number {
 }
 
 /** Share of the battery left, 1 at launch and 0 when the run ends. */
-export function batteryLeft(state: Pick<GameState, "elapsed"> & Partial<Pick<GameState, "plan">>): number {
-  return Math.max(0, 1 - state.elapsed / (state.plan?.battery ?? BATTERY_SECONDS));
+export function batteryLeft(state: Pick<GameState, "elapsed">): number {
+  return Math.max(0, 1 - state.elapsed / BATTERY_SECONDS);
 }
 
 /** The zone at a (possibly out-of-range) index, wrapping like the run does. */
@@ -292,59 +292,6 @@ export type Obstacle = {
   solids: readonly Solid[];
   /** Scored once, when the drone is fully past the trailing edge. */
   passed: boolean;
-  /** An inspection point on the far wall, in the clear gap after this obstacle. */
-  poi?: Poi;
-};
-
-/**
- * Something to inspect: a crack, a weld, a corroded patch. It counts once the
- * drone has spent `INSPECT_TIME` within reach of it — which a fast pass never
- * does, so every one is a reason to slow down.
- */
-export type Poi = { y: number; dwell: number; done: boolean };
-
-/** How far either side of an inspection point the drone counts as on it, horizontally. */
-export const INSPECT_WINDOW = 30;
-/** How far above or below it the light still reaches. */
-export const INSPECT_REACH = 60;
-/** Seconds within reach it takes to inspect one: about 1.6 m/s is the fastest pass that still counts. */
-export const INSPECT_TIME = 0.8;
-
-/** Where an obstacle's inspection point sits: the middle of the gap behind it. */
-export function poiX(o: Pick<Obstacle, "x" | "width">): number {
-  return o.x + o.width + OBSTACLE_GAP / 2;
-}
-
-/** One obstacle of a mission's fixed course, drawn in advance from the mission's seed. */
-export type CourseEntry = {
-  kind: ObstacleKind;
-  /** Index into ZONES; for a bulkhead, the space it opens onto. */
-  zone: number;
-  place: number;
-  style: number;
-  /** Height of the inspection point in the gap after it, or null for none. */
-  poi: number | null;
-};
-
-/**
- * A stretch of a mission where some modes are unavailable — dust that blinds
- * the lidar the Assist modes hold position with. `from` and `to` count
- * obstacles passed: the stretch starts once `from` are behind the drone and
- * ends once `to` are.
- */
-export type Denial = { from: number; to: number; modes: readonly FlightMode[]; reason: string };
-
-/** Everything a run needs to fly a mission; built from a mission by `buildPlan()`. */
-export type MissionPlan = {
-  id: string;
-  /** The whole course, ending with the exit manhole. */
-  course: readonly CourseEntry[];
-  modes: readonly FlightMode[];
-  startMode: FlightMode;
-  /** Seconds of battery for this mission. */
-  battery: number;
-  denials: readonly Denial[];
-  pois: number;
 };
 
 const clamp01 = (n: number) => (Number.isFinite(n) ? Math.min(Math.max(n, 0), 1) : 0.5);
@@ -1009,11 +956,8 @@ export function hitsCeiling(y: number): boolean {
 // Game
 // ---------------------------------------------------------------------------
 
-/**
- * `landed` is a run that flew its battery flat: it ends there, and the score
- * stands. `complete` is a mission flown out through its exit.
- */
-export type GameStatus = "idle" | "flying" | "crashed" | "landed" | "complete";
+/** `landed` is a run that flew its battery flat: it ends there, and the score stands. */
+export type GameStatus = "idle" | "flying" | "crashed" | "landed";
 
 /** Where a run ended and what it ended on — the crash screen names it. */
 export type Impact = { what: ObstacleKind | "FLOOR" | "CEILING"; x: number; y: number };
@@ -1047,10 +991,6 @@ export type GameState = {
   speed: number;
   /** The throttle setting the forward speed is heading for. */
   target: number;
-  /** The mission being flown, or null for an open-ended run. */
-  plan: MissionPlan | null;
-  /** Inspection points done this run. */
-  inspected: number;
 };
 
 export function createGame(startZone = 0, mode: FlightMode = "ATTI_MAN", target = START_SPEED): GameState {
@@ -1074,33 +1014,7 @@ export function createGame(startZone = 0, mode: FlightMode = "ATTI_MAN", target 
     // A run launches already cruising at its setting rather than from a standstill.
     speed: set,
     target: set,
-    plan: null,
-    inspected: 0,
   };
-}
-
-/** A fresh run of a mission, waiting on the launch press. */
-export function createMission(plan: MissionPlan): GameState {
-  const first = plan.course[0]?.zone ?? 0;
-  return { ...createGame(first, plan.startMode), plan };
-}
-
-/** Modes the pilot may pick right now: the mission's, less any a stretch of dust takes away. */
-export function allowedModes(state: Pick<GameState, "plan" | "score">): readonly FlightMode[] {
-  const plan = state.plan;
-  if (!plan) return FLIGHT_MODES;
-  const active = plan.denials.filter((d) => state.score >= d.from && state.score < d.to);
-  return plan.modes.filter((m) => !active.some((d) => d.modes.includes(m)));
-}
-
-/** The stretch of dust the drone is in, if any. */
-export function activeDenial(state: Pick<GameState, "plan" | "score">): Denial | null {
-  return state.plan?.denials.find((d) => state.score >= d.from && state.score < d.to) ?? null;
-}
-
-/** Seconds of flight the battery holds on this run. */
-export function batteryFor(state: Pick<GameState, "plan">): number {
-  return state.plan?.battery ?? BATTERY_SECONDS;
 }
 
 function clampTarget(mode: FlightMode, target: number): number {
@@ -1115,7 +1029,7 @@ function clampTarget(mode: FlightMode, target: number): number {
  * brake, and dropping out of it leaves you coasting.
  */
 export function setMode(state: GameState, mode: FlightMode): GameState {
-  if (state.mode === mode || !allowedModes(state).includes(mode)) return state;
+  if (state.mode === mode) return state;
   const target = clampTarget(mode, state.target);
   // Before a run there is nothing to slow down from.
   const speed = state.status === "idle" ? target : state.speed;
@@ -1127,7 +1041,7 @@ export const THROTTLE_STEP = mps(0.25);
 
 /** Tap the throttle up (1) or down (-1). Holding it is `StepInput.throttle`. */
 export function nudgeThrottle(state: GameState, direction: 1 | -1): GameState {
-  if (state.status !== "idle" && state.status !== "flying") return state;
+  if (state.status === "crashed" || state.status === "landed") return state;
   const target = clampTarget(state.mode, state.target + direction * THROTTLE_STEP);
   return { ...state, target, speed: state.status === "idle" ? target : state.speed };
 }
@@ -1138,7 +1052,7 @@ export function nudgeThrottle(state: GameState, direction: 1 | -1): GameState {
  * gravity; with altitude hold, climbing is a held input to `stepGame` instead.
  */
 export function flap(state: GameState): GameState {
-  if (state.status !== "idle" && state.status !== "flying") return state;
+  if (state.status === "crashed" || state.status === "landed") return state;
   if (MODE_SPECS[state.mode].altitudeHold) return state.status === "idle" ? { ...state, status: "flying" } : state;
   return { ...state, status: "flying", velocity: FLAP_VELOCITY };
 }
@@ -1211,23 +1125,7 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
 
   let { buildZone, buildCount, nextId } = state;
   const last = obstacles[obstacles.length - 1];
-  const plan = state.plan;
-  const room = !last || last.x + last.width <= WORLD_WIDTH - OBSTACLE_GAP;
-  if (room && plan) {
-    // A mission's course was drawn in advance, so every attempt flies the same one.
-    const entry = plan.course[nextId - 1];
-    if (entry) {
-      buildZone = entry.zone;
-      const seed = seedFromDraw(entry.style);
-      const built = buildObstacle(entry.kind, entry.place, seed);
-      const poi = entry.poi === null ? undefined : { y: entry.poi, dwell: 0, done: false };
-      obstacles = [
-        ...obstacles,
-        { id: nextId, x: WORLD_WIDTH, kind: entry.kind, zone: entry.zone, seed, passed: false, ...built, ...(poi ? { poi } : {}) },
-      ];
-      nextId += 1;
-    }
-  } else if (room) {
+  if (!last || last.x + last.width <= WORLD_WIDTH - OBSTACLE_GAP) {
     let kind: ObstacleKind;
     if (buildCount >= ZONE_LENGTH) {
       // The space is done: seal it off and open the next one.
@@ -1246,36 +1144,15 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
 
   let score = state.score;
   let droneZone = state.droneZone;
-  let inspected = state.inspected;
-  let complete = false;
   obstacles = obstacles.map((o) => {
-    let next = o;
     if (!o.passed && o.x + o.width < DRONE_X - DRONE_RADIUS) {
       score += 1;
       // Through the manhole: the drone is in the next space now.
       if (o.kind === "BULKHEAD") droneZone = o.zone;
-      // Through the last one: the mission is flown.
-      if (plan && o.id === plan.course.length) complete = true;
-      next = { ...next, passed: true };
+      return { ...o, passed: true };
     }
-    const poi = o.poi;
-    if (poi && !poi.done && Math.abs(poiX(o) - DRONE_X) <= INSPECT_WINDOW && Math.abs(poi.y - y) <= INSPECT_REACH) {
-      const dwell = poi.dwell + dt;
-      const done = dwell >= INSPECT_TIME;
-      if (done) inspected += 1;
-      next = { ...next, poi: { ...poi, dwell, done } };
-    }
-    return next;
+    return o;
   });
-
-  // Into a stretch of dust: the mode switch drops to whatever still works.
-  let mode = state.mode;
-  let held = target;
-  const allowed = allowedModes({ plan, score });
-  if (!allowed.includes(mode) && allowed.length > 0) {
-    mode = allowed[0];
-    held = clampTarget(mode, target);
-  }
 
   let bump: Impact | null = null;
   if (isCollisionTolerant({ speed })) {
@@ -1290,17 +1167,16 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
 
   const impact = bump ? null : contactAt(y, obstacles);
   const crashed = impact !== null;
-  const battery = plan?.battery ?? BATTERY_SECONDS;
-  const flat = !crashed && !complete && elapsed >= battery;
+  const flat = !crashed && elapsed >= BATTERY_SECONDS;
 
   return {
-    status: crashed ? "crashed" : complete ? "complete" : flat ? "landed" : "flying",
+    status: crashed ? "crashed" : flat ? "landed" : "flying",
     // Park the drone inside the world rather than part-way through a wall.
     y: crashed ? Math.min(Math.max(y, DRONE_RADIUS), WORLD_HEIGHT - DRONE_RADIUS) : y,
     velocity,
     obstacles,
     score,
-    elapsed: Math.min(elapsed, battery),
+    elapsed: Math.min(elapsed, BATTERY_SECONDS),
     droneZone,
     buildZone,
     buildCount,
@@ -1308,11 +1184,9 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     impact,
     recoil: crashed ? 0 : recoil,
     bump,
-    mode,
+    mode: state.mode,
     speed: crashed ? 0 : speed,
-    target: held,
-    plan,
-    inspected,
+    target,
   };
 }
 
