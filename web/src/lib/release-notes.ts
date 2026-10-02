@@ -20,6 +20,17 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-02-elios-flight-modes",
+    date: "Oct 2, 2026",
+    title: "The drone game, reworked — fresh leaderboard",
+    highlights: [
+      "Tight spaces fly in Assist, open voids in ATTI — and dust can force ATTI on you.",
+      "Things go wrong like on a real inspection: drafts, lost signal with Return-to-Signal, dust, darkness, swinging cables, gas, radiation.",
+      "Grab ↻ Repeat Flight for a few seconds of autopilot, ✦ the dust-proof light to see through.",
+      "One touch ends the run — only a rope in the motors can be shaken off. New rules, new board.",
+    ],
+  },
+  {
     version: "2026-10-02-elios-harder",
     date: "Oct 2, 2026",
     title: "The drone game got harder — fresh leaderboard",

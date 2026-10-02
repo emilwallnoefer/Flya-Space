@@ -6,8 +6,13 @@ import {
   ZONES,
   ZONE_NAMES,
   clearance,
-  isCollisionTolerant,
-  speedAt,
+  AUTO_TIME,
+  KNOCK_TIME,
+  LIGHT_TIME,
+  MODE_SPECS,
+  gapX,
+  modeOf,
+  type FlightMode,
   worldSpeed,
   type GameState,
   type Impact,
@@ -18,6 +23,7 @@ import { LightMap, Motes, drawRims, easeToward, intensityAt, type Light } from "
 import { LOOK, rgba, type RGB } from "./look";
 import { drawObstacleMotion, paintObstacle, type Sprite } from "./obstacle-art";
 import { drawBackdrop, drawMidground, drawSurfaces, type ZoneSpan } from "./scenery";
+import { drawCables, drawEventHud, drawEventWorld, drawLostFeed, drawStatic, holdsFrame } from "./event-fx";
 
 /**
  * Puts a frame of the game on the canvas, back to front:
@@ -91,10 +97,14 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
   let lastElapsed = 0;
   let lastImpact: Impact | null = null;
   let crashAt = -10;
-  let bumpAt = -10;
   let debris: Debris[] = [];
   let shownZone = -1;
   let titleAt = -10;
+  /** Counts frames, so a weak link can let only some of them through. */
+  let frameNo = 0;
+  /** The mode last drawn, and when it changed: a switch gets a banner for a moment. */
+  let shownMode: FlightMode | null = null;
+  let modeAt = -10;
 
   const spriteFor = (o: GameState["obstacles"][number], scale: number): Sprite => {
     const from = `${o.kind}:${o.seed}:${o.zone}`;
@@ -107,14 +117,11 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
     return sprite;
   };
 
-  /** Grit knocked off by a bounce: a few specks, no puff, added to whatever is still settling. */
-  const BUMP_SPECKS = 10;
-  /** Bounces closer together than this share one burst of grit, so a cage resting on the floor does not smoke. */
-  const BUMP_GAP = 0.15;
+  /** When the drone last got knocked, for the shake and so a scrape does not smoke every frame. */
+  let knockAt = -10;
 
-  const spawnCrash = (impact: Impact, droneY: number, bump = false) => {
-    const count = bump ? BUMP_SPECKS : 34;
-    const power = bump ? 0.6 : 1;
+  const spawnCrash = (impact: Impact, droneY: number, knock = false) => {
+    const count = knock ? 14 : 34;
     // Dust thrown back off the surface, toward the side the drone came from.
     let nx = DRONE_X - impact.x;
     let ny = droneY - impact.y;
@@ -123,7 +130,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
     ny /= len;
     const thrown = Array.from({ length: count }, () => {
       const spread = (Math.random() - 0.5) * 2.2;
-      const speed = (12 + Math.random() * 46) * power;
+      const speed = 12 + Math.random() * 46;
       const ang = Math.atan2(ny, nx) + spread;
       return {
         x: impact.x,
@@ -134,14 +141,24 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
         size: 0.3 + Math.random() * 0.9,
       };
     });
-    // A crash is the end of the run and owns the screen; a bump adds to what is settling.
-    debris = bump ? [...debris, ...thrown] : thrown;
+    // A crash is the end of the run and owns the screen; a knock adds to what is settling.
+    debris = knock ? [...debris, ...thrown] : thrown;
   };
 
   const frame = (state: GameState, dt: number, t: number) => {
     if (disposed) return;
     const scale = canvas.width / W;
     if (!(scale > 0)) return;
+
+    // A stuttering feed: keep the last picture and only add static to it.
+    // The scroll still advances, so the next frame that gets through jumps.
+    frameNo += 1;
+    if (holdsFrame(state, frameNo)) {
+      scroll += (state.status === "flying" ? worldSpeed(state) : 0) * dt;
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      drawStatic(ctx, t, 0.6);
+      return;
+    }
 
     // The scenery keeps up with the run as it speeds up, or drifts while the
     // drone hovers before one.
@@ -159,7 +176,11 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
     const hover = state.status === "idle" ? Math.sin(t * 2.1) * 1.3 : 0;
     const droneY = state.y + hover;
     const tilt =
-      state.status === "idle" ? Math.sin(t * 1.3) * 0.04 : Math.max(-0.42, Math.min(0.55, state.velocity / 460));
+      state.status === "idle"
+        ? Math.sin(t * 1.3) * 0.04
+        : Math.max(-0.42, Math.min(0.55, state.velocity / 460)) +
+          // Knocked: it wobbles while it rights itself.
+          (state.stun > 0 ? Math.sin(t * 34) * 0.3 * (state.stun / KNOCK_TIME) : 0);
 
     if (state.status === "crashed" && state.impact && state.impact !== lastImpact) {
       lastImpact = state.impact;
@@ -167,8 +188,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
       spawnCrash(state.impact, state.y);
     }
     if (state.status !== "crashed") lastImpact = null;
-    if (state.bump && t - bumpAt > BUMP_GAP) {
-      bumpAt = t;
+    if (state.bump && t - knockAt > 0.15) {
+      knockAt = t;
       spawnCrash(state.bump, state.y, true);
     }
 
@@ -179,13 +200,13 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
     }
 
     const since = t - crashAt;
-    const sinceBump = t - bumpAt;
+    const sinceKnock = t - knockAt;
     const shake = options.reducedMotion
       ? 0
       : since < 0.32
         ? (1 - since / 0.32) * 1.8
-        : sinceBump < 0.18
-          ? (1 - sinceBump / 0.18) * 0.7
+        : sinceKnock < 0.25
+          ? (1 - sinceKnock / 0.25) * 1.1
           : 0;
     const sx = shake ? (Math.random() - 0.5) * shake : 0;
     const sy = shake ? (Math.random() - 0.5) * shake : 0;
@@ -224,6 +245,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
       ctx.drawImage(sprite.canvas, o.x + sprite.x0, sprite.y0, sprite.w, sprite.h);
       drawObstacleMotion(ctx, o, t);
     }
+    drawCables(ctx, state.obstacles);
 
     light.render(
       beam,
@@ -236,6 +258,53 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
 
     motes.update(dt, scrolled, t);
     motes.draw(ctx, beam, look.mote, look.moteDensity);
+
+    // Dust, the dark, glare — under the drone, so the aircraft itself always
+    // shows. The dust-proof light clears them from the picture.
+    if (state.light <= 0) drawEventWorld(ctx, state, t, droneY, look.mote);
+
+    // Pick-ups in the gaps: Repeat Flight in cyan, the dust-proof light in amber.
+    for (const o of state.obstacles) {
+      const p = o.pickup;
+      if (!p || p.taken) continue;
+      const px = gapX(o);
+      if (px < -10 || px > W + 10) continue;
+      const repeat = p.kind === "REPEAT";
+      const colour = repeat ? "120,220,255" : "255,205,110";
+      const r = 5.5 + Math.sin(t * 5 + o.id) * 0.5;
+      const glow = ctx.createRadialGradient(px, p.y, 0, px, p.y, r * 2.6);
+      glow.addColorStop(0, `rgba(${colour},0.55)`);
+      glow.addColorStop(1, `rgba(${colour},0)`);
+      ctx.fillStyle = glow;
+      ctx.fillRect(px - r * 3, p.y - r * 3, r * 6, r * 6);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = `rgba(${colour},0.95)`;
+      ctx.beginPath();
+      ctx.arc(px, p.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = `rgba(${colour},0.95)`;
+      ctx.font = "700 6.5px ui-sans-serif, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(repeat ? "↻" : "✦", px, p.y + 0.3);
+    }
+
+    // Fast, the air goes past in streaks — more of them the faster.
+    const streaksFrom = 3 / METRES_PER_UNIT;
+    if (state.status === "flying" && state.speed > streaksFrom) {
+      const n = Math.round(((state.speed - streaksFrom) / streaksFrom) * 8);
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i < n; i += 1) {
+        const seed = Math.sin(i * 91.7) * 1000;
+        const yy = (seed - Math.floor(seed)) * H;
+        const xx = W - ((scroll * 2.2 + i * 53) % (W + 40));
+        ctx.beginPath();
+        ctx.moveTo(xx, yy);
+        ctx.lineTo(xx + 14, yy);
+        ctx.stroke();
+      }
+    }
 
     drone.draw(ctx, DRONE_X, droneY, tilt, t, scale);
 
@@ -268,6 +337,14 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
       debris = debris.filter((d) => d.life > 0);
     }
 
+    // A lost or stuttering video link, over everything but the HUD.
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    const lost = state.event?.kind === "SIGNAL" && state.event.phase === "rts" && state.status === "flying";
+    if (lost) drawLostFeed(ctx, t);
+    else if (state.event?.kind === "SIGNAL" && state.status === "flying" && state.event.phase !== "warning") {
+      drawStatic(ctx, t, 0.4);
+    }
+
     // HUD, in world units again but without the shake. A hard offset shadow
     // keeps the text legible on a bright wall; a blurred one costs a filter
     // pass per glyph.
@@ -296,17 +373,52 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
       ctx.font = "600 5.5px ui-monospace, SFMono-Regular, Menlo, monospace";
       ctx.textAlign = "left";
       label(`CLEARANCE ${clear.toFixed(2)} m`, 9, H - 7, warn);
-      // Ground speed, which climbs all run: the number that says why it is
-      // getting harder.
+
       ctx.textAlign = "right";
-      // The readout is the run speed, not the momentary recoil after a bounce.
-      label(`${(speedAt(state.elapsed) * METRES_PER_UNIT).toFixed(1)} m/s`, W - 9, H - 7, "rgba(255,255,255,0.6)");
-      // While the cage still shrugs off contact, say so — and the moment it
-      // stops, the label going away is the warning.
-      if (isCollisionTolerant(state.elapsed)) {
-        ctx.textAlign = "center";
-        label("COLLISION-TOLERANT", W / 2, H - 7, "rgba(140,220,255,0.75)");
+      label(`${(state.speed * METRES_PER_UNIT).toFixed(1)} m/s`, W - 9, H - 7, "rgba(255,255,255,0.6)");
+
+      // The mode, chosen by the space: what the aircraft can do for you right now.
+      const mode = modeOf(state);
+      const spec = MODE_SPECS[mode];
+      const colour = mode === "ASSIST" ? "140,220,255" : mode === "ATTI" ? "255,206,110" : "255,140,100";
+      if (mode !== shownMode) {
+        if (shownMode !== null) modeAt = t;
+        shownMode = mode;
       }
+      ctx.textBaseline = "top";
+      ctx.textAlign = "left";
+      ctx.font = "700 6px ui-monospace, SFMono-Regular, Menlo, monospace";
+      label(spec.label.toUpperCase(), 9, 26, `rgba(${colour},0.98)`);
+      ctx.font = "600 4.5px ui-monospace, SFMono-Regular, Menlo, monospace";
+      label(spec.why.toUpperCase(), 9, 33, "rgba(255,255,255,0.55)");
+      // A switch gets its moment in the middle of the screen, then gets out of the way.
+      const sinceSwitch = t - modeAt;
+      if (sinceSwitch < 1.6) {
+        const a = Math.min(1, sinceSwitch / 0.15, (1.6 - sinceSwitch) / 0.4);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = "800 10px ui-sans-serif, system-ui, sans-serif";
+        label(`${spec.label.toUpperCase()}`, W / 2, H * 0.58, `rgba(${colour},${0.95 * a})`, a);
+        ctx.font = "600 5px ui-sans-serif, system-ui, sans-serif";
+        label(mode === "ASSIST" ? "Sensors back — it holds again" : "It drifts now — fly it", W / 2, H * 0.58 + 9, `rgba(255,255,255,${0.75 * a})`, a);
+      }
+
+      // Power-ups running: what they are and how long they have left.
+      const running: Array<[string, number, string]> = [];
+      if (state.auto > 0) running.push(["A11 REPEAT FLIGHT", state.auto / AUTO_TIME, "120,220,255"]);
+      if (state.light > 0) running.push(["DUST-PROOF LIGHT", state.light / LIGHT_TIME, "255,205,110"]);
+      running.forEach(([name, left, colour], i) => {
+        const yy = H - 30 - i * 8;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.font = "700 5px ui-monospace, SFMono-Regular, Menlo, monospace";
+        label(name, W / 2, yy, `rgba(${colour},0.98)`);
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(W / 2 - 20, yy + 0.5, 40, 2);
+        ctx.fillStyle = `rgba(${colour},0.95)`;
+        ctx.fillRect(W / 2 - 20, yy + 0.5, 40 * left, 2);
+      });
+      drawEventHud(ctx, state, t, label);
     }
 
     const titleAge = t - titleAt;

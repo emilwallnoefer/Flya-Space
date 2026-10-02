@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createRenderer } from "@/components/elios/renderer";
+import { EVENT_KINDS } from "@/lib/elios-events";
 import type { LeaderboardRow } from "@/lib/elios-leaderboard";
 import {
   flushPendingScore,
@@ -12,9 +13,11 @@ import {
 import {
   BEST_SCORE_KEY,
   KIND_LABELS,
+  MODE_SPECS,
   WORLD_HEIGHT,
   WORLD_WIDTH,
   ZONES,
+  ZONE_MODE,
   ZONE_NAMES,
   createGame,
   crashLine,
@@ -29,18 +32,23 @@ import {
 /**
  * "Fly where people can't" — the Elios 3 flies through the confined spaces it
  * really inspects, a boiler, a ballast tank, a mine stope, a sewer and a
- * storage tank, past what a pilot meets in each of them.
+ * storage tank, while the things that really go wrong in there go wrong.
+ *
+ * One control, the same all run: hold up or down to fly. The space decides
+ * whether the aircraft holds itself steady (Assist) or drifts (ATTI), and dust
+ * can force the drift on it — the controls never change meaning, only how
+ * well the aircraft obeys them.
  *
  * This file is input, the frame loop and the chrome around the canvas. The
- * rules live in `lib/elios-flight.ts` and are unit-tested; the look — real
- * Flyability photographs, the drone as the only light — lives in
- * `components/elios/`. The game itself stays inert: the only network it
- * touches is the leaderboard, and only when a caller opts in.
- *
- * A run flown without a connection still counts: its score waits in
- * localStorage (`lib/elios-score-sync.ts`) and is posted the moment the
- * browser is back online.
+ * rules live in `lib/elios-flight.ts` and `lib/elios-events.ts` and are
+ * unit-tested; the look lives in `components/elios/`. The game itself stays
+ * inert: the only network it touches is the leaderboard, and only when a
+ * caller opts in.
  */
+
+/** What the pilot is holding right now; read by the frame loop every step. */
+type Held = { climb: boolean; descend: boolean };
+const NOTHING_HELD: Held = { climb: false, descend: false };
 
 /** Frame rate while nothing is being flown: waiting for a press, or after a crash has settled. */
 const RESTING_FPS = 24;
@@ -95,6 +103,26 @@ function nextZone(previous: number): number {
   return (previous + 1 + Math.floor(Math.random() * (n - 1))) % n;
 }
 
+/**
+ * A fresh run with events and pick-ups — the game as it is meant to be flown.
+ * In development `?event=DARKNESS` (any kind) makes that event come first, a
+ * few seconds in, so each one can be tried on demand.
+ */
+function newRun(zone: number): GameState {
+  const run = createGame(zone, true);
+  if (process.env.NODE_ENV === "production") return run;
+  const asked = new URLSearchParams(window.location.search).get("event")?.toUpperCase();
+  const kind = EVENT_KINDS.find((k) => k === asked);
+  return kind ? { ...run, queued: kind, nextEventAt: 250 } : run;
+}
+
+/** Keys: ↑/W/Space/Enter climb, ↓/S descend. */
+function heldKeyFor(key: string): keyof Held | null {
+  if (key === " " || key === "Enter" || key === "ArrowUp" || key === "w" || key === "W") return "climb";
+  if (key === "ArrowDown" || key === "s" || key === "S") return "descend";
+  return null;
+}
+
 export type EliosGameProps = {
   /** Extra classes for the wrapper — the composer needs different spacing. */
   className?: string;
@@ -113,16 +141,27 @@ export type EliosGameProps = {
   paused?: boolean;
 };
 
-type Hud = { status: GameState["status"]; score: number; impact: Impact | null; zone: number };
+type Hud = {
+  status: GameState["status"];
+  score: number;
+  impact: Impact | null;
+  zone: number;
+};
+
+function hudOf(s: GameState, impact: Impact | null = s.impact): Hud {
+  return { status: s.status, score: s.score, impact, zone: s.droneZone };
+}
 
 export function EliosGame({ className = "mt-4", leaderboard = false, paused = false }: EliosGameProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stateRef = useRef<GameState>(createGame());
+  const stateRef = useRef<GameState>(createGame(0));
   // Server render has no localStorage, so the server snapshot is always null.
   const best = useSyncExternalStore(subscribeBest, readBest, () => null);
-  const [hud, setHud] = useState<Hud>({ status: "idle", score: 0, impact: null, zone: 0 });
+  const [hud, setHud] = useState<Hud>(() => hudOf(createGame(0)));
+  const heldRef = useRef<Held>(NOTHING_HELD);
   const [board, setBoard] = useState<LeaderboardRow[] | null>(null);
   const pending = useSyncExternalStore(subscribePendingScore, readPendingScore, () => null);
+  const showBoard = leaderboard;
 
   /**
    * Refresh the board. Silent on failure: an unapplied migration or a dropped
@@ -141,7 +180,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
   }, []);
 
   useEffect(() => {
-    if (!leaderboard) return;
+    if (!showBoard) return;
     // Fetched inline with a cancel flag rather than by calling loadBoard():
     // the React Compiler treats an effect that calls a setState-bearing
     // callback as a synchronous set, and this shape also stops a late response
@@ -160,7 +199,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
     return () => {
       cancelled = true;
     };
-  }, [leaderboard]);
+  }, [showBoard]);
 
   // The first space is drawn here rather than during render: the server has
   // to render the same markup the client hydrates, so nothing random may
@@ -169,7 +208,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
   useEffect(() => {
     const s = stateRef.current;
     if (s.status === "idle" && s.obstacles.length === 0) {
-      stateRef.current = createGame(Math.floor(Math.random() * ZONES.length));
+      stateRef.current = newRun(Math.floor(Math.random() * ZONES.length));
     }
   }, []);
 
@@ -184,24 +223,30 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
     [loadBoard],
   );
 
-  // Coming back online: post whatever was flown while away, then refresh the
-  // board — which may well have failed to load in the first place.
+  // Coming back online: post whatever was flown while away, then refresh the board.
   useEffect(() => {
-    if (!leaderboard) return;
+    if (!showBoard) return;
     const sync = () => {
       void flushPendingScore().then(() => loadBoard());
     };
     if (readPendingScore() !== null) sync();
     window.addEventListener("online", sync);
     return () => window.removeEventListener("online", sync);
-  }, [leaderboard, loadBoard]);
+  }, [showBoard, loadBoard]);
 
+  /** A press: launches, or starts a fresh run after one ends. */
   const press = useCallback(() => {
     if (paused) return;
     const s = stateRef.current;
-    stateRef.current = s.status === "crashed" ? flap(createGame(nextZone(s.droneZone))) : flap(s);
-    setHud({ status: "flying", score: stateRef.current.score, impact: null, zone: stateRef.current.droneZone });
+    const over = s.status === "crashed";
+    stateRef.current = over ? flap(newRun(nextZone(s.droneZone))) : flap(s);
+    setHud(hudOf(stateRef.current, null));
   }, [paused]);
+
+
+  const hold = useCallback((key: keyof Held, on: boolean) => {
+    heldRef.current = { ...heldRef.current, [key]: on };
+  }, []);
 
   // The frame loop is set up once and must not restart when a callback
   // identity changes — restarting it mid-flight would reset the canvas.
@@ -259,9 +304,8 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       // read the same at a low rate, and drawing the lit canvas at the display
       // rate cost half a core doing nothing. A run, and the crash dust that
       // ends one, keep the full rate.
-      const resting =
-        stateRef.current.status === "idle" ||
-        (stateRef.current.status === "crashed" && now - crashedAt > CRASH_SETTLE_MS);
+      const status = stateRef.current.status;
+      const resting = status === "idle" || (status !== "flying" && now - crashedAt > CRASH_SETTLE_MS);
       if (resting && now - last < 1000 / RESTING_FPS) {
         raf = requestAnimationFrame(frame);
         return;
@@ -271,21 +315,25 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       last = now;
 
       const before = stateRef.current;
+      const held = heldRef.current;
       const after = stepGame(before, {
         dt,
         kindDraw: Math.random(),
         placeDraw: Math.random(),
         styleDraw: Math.random(),
+        eventDraw: Math.random(),
+        climb: held.climb,
+        descend: held.descend,
       });
       stateRef.current = after;
 
-      if (before.status === "flying" && after.status === "crashed") {
+      if (before.status === "flying" && after.status !== "flying") {
         crashedAt = now;
         if (isNewBest(after.score, readBest())) writeBest(after.score);
         if (leaderboard && after.score > 0) void submitScoreRef.current(after.score);
-        setHud({ status: "crashed", score: after.score, impact: after.impact, zone: after.droneZone });
+        setHud(hudOf(after));
       } else if (after.score !== before.score) {
-        setHud({ status: after.status, score: after.score, impact: null, zone: after.droneZone });
+        setHud(hudOf(after, null));
       }
 
       // The renderer's clock is capped separately: a tab coming back from
@@ -318,36 +366,62 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
     };
   }, [leaderboard, paused]);
 
-  // Space and Enter must fly too — the canvas is focusable and this is the
-  // whole control scheme.
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === " " || e.key === "Enter" || e.key === "ArrowUp") {
-        e.preventDefault();
-        press();
-      }
+      const key = heldKeyFor(e.key);
+      if (!key) return;
+      e.preventDefault();
+      if (!e.repeat && stateRef.current.status !== "flying") press();
+      hold(key, true);
     },
-    [press],
+    [press, hold],
   );
 
+  const onKeyUp = useCallback(
+    (e: React.KeyboardEvent) => {
+      const key = heldKeyFor(e.key);
+      if (key) hold(key, false);
+    },
+    [hold],
+  );
+
+  /** Touch and mouse on the canvas: the upper half climbs, the lower half descends. */
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      // preventDefault stops the tap selecting text or starting a drag — but
+      // it also suppresses the focus that would normally follow, which left
+      // Space doing nothing after a click. Focus explicitly instead.
+      e.preventDefault();
+      e.currentTarget.focus();
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      const box = e.currentTarget.getBoundingClientRect();
+      const lower = e.clientY - box.top > box.height / 2;
+      if (stateRef.current.status !== "flying") press();
+      hold(lower ? "descend" : "climb", true);
+    },
+    [press, hold],
+  );
+
+  const release = useCallback(() => {
+    heldRef.current = NOTHING_HELD;
+  }, []);
+
   const where = ZONE_NAMES[ZONES[hud.zone]]?.name.toLowerCase();
+  const mode = MODE_SPECS[ZONE_MODE[ZONES[hud.zone]]];
 
   return (
     <div className={className}>
       <div
         role="button"
         tabIndex={0}
-        aria-label="Fly where people can't: fly the Elios 3 through real confined spaces. Press space to fly."
-        onPointerDown={(e) => {
-          // preventDefault stops the tap selecting text or starting a drag —
-          // but it also suppresses the focus that would normally follow, which
-          // left Space doing nothing after a click even though the label says
-          // to press it. Focus explicitly instead.
-          e.preventDefault();
-          e.currentTarget.focus();
-          press();
-        }}
+        aria-label="Fly where people can't: fly the Elios 3 through real confined spaces. Hold up to climb, down to descend."
+        onPointerDown={onPointerDown}
+        onPointerUp={release}
+        onPointerCancel={release}
+        onLostPointerCapture={release}
+        onBlur={release}
         onKeyDown={onKeyDown}
+        onKeyUp={onKeyUp}
         className="relative block w-full cursor-pointer overflow-hidden rounded-xl border border-glass/20 bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         <canvas
@@ -359,8 +433,8 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
           // The scene behind is always dark, whatever the app theme, so the
           // title card uses fixed light text rather than theme tokens. It
           // sits low, under the drone rather than over it.
-          <div className="pointer-events-none absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/80 via-black/25 to-transparent px-4 pb-[7%] text-center">
-            <div>
+          <div className="pointer-events-none absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/85 via-black/30 to-transparent px-4 pb-[6%] text-center">
+            <div className="max-w-sm">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200/90">
                 Fly where people can&rsquo;t
               </p>
@@ -371,31 +445,45 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
                   </p>
                   {hud.impact && where ? (
                     <p className="mt-0.5 text-[11px] text-white/65">
-                      Hit {KIND_LABELS[hud.impact.what]} in the {where}.
+                      {hud.impact.what === "RADIATION"
+                        ? "E04 — dose limit reached. The flight is over."
+                        : hud.impact.what === "GAS"
+                          ? "PA08 — not out of the gas fast enough."
+                          : `Hit ${KIND_LABELS[hud.impact.what]} in the ${where}.`}
                     </p>
                   ) : null}
                 </>
-              ) : null}
+              ) : (
+                <p className="mt-1.5 text-[12px] leading-snug text-white/85">
+                  Hold up / down to fly. Tight spaces fly in Assist; open voids and dust drop you to ATTI — it drifts. It gets faster.
+                </p>
+              )}
               <p className="mt-1.5 text-[11px] text-white/65">
-                Tap or press space to {hud.status === "crashed" ? "go again" : "fly"}
+                Tap or press space to {hud.status === "idle" ? "fly" : "go again"}
               </p>
+              {hud.status === "idle" ? (
+                <p className="mt-0.5 text-[10px] text-white/45">
+                  Grab ↻ for Repeat Flight, ✦ for the dust-proof light · this space: {mode.label}
+                </p>
+              ) : null}
             </div>
           </div>
         ) : null}
       </div>
+
       <div className="mt-2 flex items-start justify-between gap-3">
-        {best !== null || (leaderboard && pending !== null) ? (
+        {best !== null || (showBoard && pending !== null) ? (
           <p className="text-[11px] text-ink-5">
             {best !== null ? `Best ${best}` : null}
-            {best !== null && leaderboard && pending !== null ? " · " : null}
-            {leaderboard && pending !== null ? (
+            {best !== null && showBoard && pending !== null ? " · " : null}
+            {showBoard && pending !== null ? (
               <span className="text-ink-5/80">{pending} waiting to post to the board</span>
             ) : null}
           </p>
         ) : (
           <span />
         )}
-        {leaderboard && board && board.length > 0 ? (
+        {showBoard && board && board.length > 0 ? (
           <ol className="min-w-0 text-right text-[11px] leading-5 text-ink-4/80">
             {board.slice(0, 5).map((row, i) => (
               <li key={`${row.name}-${i}`} className={row.you ? "text-accent-soft/90" : undefined}>
