@@ -20,6 +20,16 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-02-idle-energy",
+    date: "Oct 2, 2026",
+    title: "Easier on your battery",
+    highlights: [
+      "Leaving the dashboard open no longer keeps your computer busy.",
+      "The underwater background now holds still — same look, no drifting or bubbles.",
+      "The drone game rests while you're not flying, and stops when it's scrolled out of view.",
+    ],
+  },
+  {
     version: "2026-10-02-flight-data-drive",
     date: "Oct 2, 2026",
     title: "Flight data links go through Google Drive",

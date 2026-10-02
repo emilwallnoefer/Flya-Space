@@ -36,7 +36,6 @@
   mix-blend-mode: screen;
   filter: blur(14px);
   opacity: 0.54;
-  animation: waterCausticSweep 18s linear infinite;
 }
 
 /* Secondary ripple layer for realistic underwater shimmer spread. */
@@ -54,7 +53,6 @@
   mix-blend-mode: screen;
   filter: blur(10px);
   opacity: 0.34;
-  animation: waterCausticPulse 11s ease-in-out infinite alternate;
 }
 
 .glass-card {
@@ -87,7 +85,6 @@
     radial-gradient(22rem 14rem at 86% 72%, rgba(103, 232, 249, 0.12), transparent 74%);
   filter: blur(12px);
   mix-blend-mode: screen;
-  animation: glassRefractionDrift 15s ease-in-out infinite alternate;
 }
 
 .glass-card::after {
@@ -343,7 +340,6 @@
   background:
     radial-gradient(40rem 30rem at 15% 25%, rgba(34, 211, 238, 0.18), transparent 65%),
     radial-gradient(36rem 26rem at 80% 80%, rgba(56, 189, 248, 0.16), transparent 65%);
-  animation: underwaterDrift 16s ease-in-out infinite alternate;
 }
 
 .underwater-panel::after {
@@ -353,48 +349,16 @@
   opacity: 0.22;
   mix-blend-mode: screen;
   filter: blur(5px);
-  animation: shimmerSweep 12s linear infinite;
 }
 
-/* Ambient decoration pauses for users who prefer reduced motion. The static
- * gradients/tints remain, so the underwater skin keeps its look — only the
- * perpetual drift/sweep/rise motion stops. Finite feedback animations (day
- * reveal, refresh sweeps, freshness state changes) are intentionally not
- * listed: they convey state and run once. */
-@media (prefers-reduced-motion: reduce) {
-  .aurora-bg::before,
-  .aurora-bg::after,
-  .glass-card::before,
-  .underwater-panel::before,
-  .underwater-panel::after,
-  .liquid-day-card::before,
-  .day-progress-algae::after,
-  .bubble,
-  .wave-fill::before,
-  .wave-fill::after {
-    animation: none;
-  }
-}
-
-.bubble-layer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.bubble {
-  position: absolute;
-  bottom: -30px;
-  width: var(--bubble-size);
-  height: var(--bubble-size);
-  left: var(--bubble-left);
-  border-radius: 9999px;
-  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.75), rgba(125, 211, 252, 0.15) 65%, transparent);
-  opacity: 0.65;
-  animation: bubbleRise var(--bubble-duration) linear infinite;
-  animation-delay: var(--bubble-delay);
-}
+/* The underwater skin is deliberately still. Its layers are large, blurred
+ * and blend-moded, and sit under backdrop-filter glass: moving any one of them
+ * makes the browser recomposite the whole stack on every display frame, for as
+ * long as the page is open. On a page laid out like the Time Tracker, the drift,
+ * sweeps and rising bubbles together held a full core in the GPU process at idle;
+ * with them still, it costs nothing. Motion here should be finite feedback — the day
+ * reveal, the refresh sweeps, the freshness states — that runs once and stops.
+ * Do not add an `infinite` animation to anything that is always on screen. */
 
 .wave-tank {
   position: relative;
@@ -426,13 +390,11 @@
 
 .wave-fill::before {
   top: -7px;
-  animation: waveShift 3.8s ease-in-out infinite;
 }
 
 .wave-fill::after {
   top: -9px;
   opacity: 0.55;
-  animation: waveShift 5.2s ease-in-out infinite reverse;
 }
 
 .day-progress {
@@ -505,7 +467,6 @@
     transparent 2px,
     transparent 8px
   );
-  animation: shimmerSweep 7s linear infinite;
 }
 
 .day-progress-comp {
@@ -540,7 +501,6 @@
     radial-gradient(16rem 12rem at 76% 72%, rgba(90, 214, 255, 0.17), transparent 70%);
   filter: blur(14px);
   mix-blend-mode: screen;
-  animation: liquidRefractionDrift 11s ease-in-out infinite alternate;
 }
 
 .liquid-day-card::after {

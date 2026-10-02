@@ -1,6 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { SETTINGS_NAV, type SettingsPanelProps } from "./types";
 import { useSettings } from "./use-settings";
 import { SettingsNav } from "./settings-nav";
@@ -26,29 +25,6 @@ export function SettingsPanel({
   return (
     <section className="underwater-panel relative overflow-hidden rounded-2xl">
       <div className="relative min-h-0 min-w-0 w-full">
-        <div className="bubble-layer pointer-events-none absolute inset-0 z-0" aria-hidden="true">
-          {[
-            { left: "7%", size: "8px", duration: "9.5s", delay: "0s" },
-            { left: "24%", size: "7px", duration: "11s", delay: "-2.2s" },
-            { left: "39%", size: "10px", duration: "10.2s", delay: "-1.4s" },
-            { left: "57%", size: "8px", duration: "12.4s", delay: "-3.6s" },
-            { left: "73%", size: "9px", duration: "9.2s", delay: "-2.8s" },
-            { left: "88%", size: "11px", duration: "13.5s", delay: "-5s" },
-          ].map((bubble, idx) => (
-            <span
-              key={`${bubble.left}-${idx}`}
-              className="bubble"
-              style={
-                {
-                  "--bubble-left": bubble.left,
-                  "--bubble-size": bubble.size,
-                  "--bubble-duration": bubble.duration,
-                  "--bubble-delay": bubble.delay,
-                } as CSSProperties
-              }
-            />
-          ))}
-        </div>
 
         <section className="glass-card hourlogger-surface relative z-[1] w-full min-w-0 overflow-hidden rounded-2xl">
           <div className="flex min-h-[min(70vh,560px)] flex-col md:flex-row">
