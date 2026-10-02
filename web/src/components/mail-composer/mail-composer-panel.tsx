@@ -525,17 +525,24 @@ export function MailComposerPanel({
               write effect, so this hands the space over exactly as the mail
               starts appearing in it. Height and opacity animate together so the
               card does not jump, and `paused` stops the loop once it is hidden.
+
+              The collapse animates a grid row between 1fr and 0fr rather than
+              max-height: the canvas scales with the column, so any fixed cap is
+              wrong at some width — 560px cut the leaderboard off in a wide one.
+              A 1fr row is exactly as tall as the content, whatever that is.
             */
             <div
               aria-hidden={mailIsWriting}
-              className={`overflow-hidden transition-all duration-700 ease-out ${
-                mailIsWriting ? "mt-0 max-h-0 opacity-0" : "mt-4 max-h-[560px] opacity-100"
+              className={`grid transition-all duration-700 ease-out ${
+                mailIsWriting ? "mt-0 grid-rows-[0fr] opacity-0" : "mt-4 grid-rows-[1fr] opacity-100"
               }`}
             >
-              <p className="text-[11px] uppercase tracking-[0.15em] text-accent-soft/75">
-                {loading ? "Writing your draft" : "While you wait"}
-              </p>
-              <LazyEliosGame className="mt-2" leaderboard paused={mailIsWriting} />
+              <div className="min-h-0 overflow-hidden">
+                <p className="text-[11px] uppercase tracking-[0.15em] text-accent-soft/75">
+                  {loading ? "Writing your draft" : "While you wait"}
+                </p>
+                <LazyEliosGame className="mt-2" leaderboard paused={mailIsWriting} />
+              </div>
             </div>
           }
         />
