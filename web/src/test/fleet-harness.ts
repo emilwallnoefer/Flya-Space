@@ -139,6 +139,7 @@ export const ADMIN: FakeUser = {
   id: "11111111-1111-4111-8111-111111111111",
   email: "admin@flyability.com",
   user_metadata: { full_name: "Ada Admin" },
+  identities: [{ provider: "google", identity_data: { full_name: "Ada Admin" } }],
   app_metadata: { role: "sales" },
 };
 
@@ -146,6 +147,7 @@ export const MEMBER: FakeUser = {
   id: "22222222-2222-4222-8222-222222222222",
   email: "member@flyability.com",
   user_metadata: { full_name: "Mel Member" },
+  identities: [{ provider: "google", identity_data: { full_name: "Mel Member" } }],
   app_metadata: { role: "eu_pilot" },
 };
 
@@ -153,6 +155,7 @@ export const OTHER: FakeUser = {
   id: "33333333-3333-4333-8333-333333333333",
   email: "other@flyability.com",
   user_metadata: { full_name: "Otto Other" },
+  identities: [{ provider: "google", identity_data: { full_name: "Otto Other" } }],
   app_metadata: { role: "us_pilot" },
 };
 
@@ -161,6 +164,7 @@ export const HELD: FakeUser = {
   id: "44444444-4444-4444-8444-444444444444",
   email: "new@flyability.com",
   user_metadata: { full_name: "Nia New" },
+  identities: [{ provider: "google", identity_data: { full_name: "Nia New" } }],
   app_metadata: {},
 };
 

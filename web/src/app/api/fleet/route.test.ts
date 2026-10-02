@@ -240,6 +240,50 @@ describe("a return has to follow a pickup (audit run-4 F4)", () => {
   });
 });
 
+describe("a self-chosen profile name proves nothing (audit run-4 F7)", () => {
+  it("does not count a claim on a colleague's name as a self-match", async () => {
+    // MEMBER renamed themselves in user_metadata (anyone can, via updateUser)
+    // to look like OTHER, then claims OTHER's label.
+    const spoofer = {
+      ...MEMBER,
+      user_metadata: { full_name: "Otto Other" },
+    };
+    const res = await post(
+      {
+        viewer: spoofer,
+        tables: {
+          fleet_assets: assets(),
+          fleet_reservations: [reservation({ user_id: null, holder_label: "Otto Other", source: "sheet_import" })],
+          fleet_holder_aliases: [],
+          fleet_holder_directory: [],
+        },
+      },
+      { action: "claim_holder", label: "Otto Other" },
+    );
+    expect(res.status).toBe(200);
+    // The claim is allowed (permissive by design) but flagged for the admins.
+    expect(res.body.self_match).toBe(false);
+    expect(res.tables.fleet_holder_aliases[0].self_match).toBe(false);
+  });
+
+  it("still recognises a claim on your own provider name", async () => {
+    const res = await post(
+      {
+        viewer: MEMBER,
+        tables: {
+          fleet_assets: assets(),
+          fleet_reservations: [reservation({ user_id: null, holder_label: "Mel Member", source: "sheet_import" })],
+          fleet_holder_aliases: [],
+          fleet_holder_directory: [],
+        },
+      },
+      { action: "claim_holder", label: "Mel Member" },
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.self_match).toBe(true);
+  });
+});
+
 describe("only the shared pool can be booked (audit run-4 F5)", () => {
   it("refuses a unit an admin assigned out of the pool", async () => {
     for (const viewer of [MEMBER, ADMIN]) {

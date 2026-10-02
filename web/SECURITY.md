@@ -111,6 +111,18 @@ Each item: **what** · **impact** · **fix** · **effort**.
 - **Verified:** a test renders real Brief mails (all options, en/de/fr, Drive flight-data link) and requires every emitted link to stay tracked; three abuse tests confirmed to fail against the old tracker.
 - **Effort:** S.
 
+**T0.15 — Display names came from a field users can rewrite** _(LOW, run-4 F7)_
+- **What:** `displayNameFor` (and the certificate route's own copy) took the name from `user_metadata.full_name`, which any user can set with `updateUser()`. A user renamed as a colleague got `self_match = true` on a holder claim (no admin mail, no flag, history naming the colleague), auto-linked that colleague's sheet bookings, posted leaderboard scores as them, and signed certificate requests in their name.
+- **Fix:** names come from the sign-in provider (`identities[].identity_data`, the Google Workspace name), which `updateUser()` cannot change, falling back to the email. Used by every caller; the dashboard fetches the user only when Fleet opens, and the role-gate admin mail uses the email-derived name. The weekly reminder's own greeting still reads `user_metadata` — it only greets the user themselves.
+- **Residual:** a Workspace user can change their Google name if the Workspace admin allows it.
+- **Effort:** S.
+
+**T0.16 — Certificate requests could be forged straight into chat** _(LOW, run-4 F8)_
+- **What:** `authenticated` can INSERT into `chat_messages` with only `sender_id` checked, so a direct insert could create a `certificate_request` (or retired `change_request`) row with made-up details and no admin mail, with any `created_at`; and the `(body, edited_at)` column grant allowed rewriting a message while keeping `edited_at` null, so "(edited)" never showed.
+- **Fix:** `supabase/2026-10-02-chat-request-integrity.sql` — a BEFORE INSERT trigger refuses those kinds from user tokens and forces `created_at = now()`; a BEFORE UPDATE trigger stamps `edited_at` on every body change and keeps it from being cleared alone. Editing your own messages still works; it just always shows. The service role (the certificate route, mark-done) is unaffected.
+- **Verified:** 11 checks on a local Postgres. **Applied by hand?** ⚠️ yes, required.
+- **Effort:** XS.
+
 ### Tier 1 — Hardening (defense-in-depth)
 
 **T1.1 — Security headers.** `next.config.ts` sets none. Add a `headers()` block: `Content-Security-Policy` (the mitigating layer for T0.2), `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`. Effort: S (CSP tuning is the only real work).

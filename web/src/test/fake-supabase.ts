@@ -30,6 +30,8 @@ export type FakeUser = {
   user_metadata?: Record<string, unknown> | null;
   /** Where the role lives (service-role writable only). See lib/app-access.ts. */
   app_metadata?: Record<string, unknown> | null;
+  /** Provider identities: where display names come from (lib/fleet-queries displayNameFor). */
+  identities?: Array<{ provider: string; identity_data: Record<string, unknown> }>;
 };
 
 type Filter =

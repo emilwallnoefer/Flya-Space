@@ -62,10 +62,7 @@ async function loadDirectory(admin: Admin): Promise<Map<string, Person>> {
       people.set(user.id, {
         id: user.id,
         email: user.email ?? null,
-        name: displayNameFor({
-          email: user.email,
-          user_metadata: (user.user_metadata ?? null) as Record<string, unknown> | null,
-        }),
+        name: displayNameFor({ email: user.email, identities: user.identities }),
       });
     }
     if (users.length < 200) break;

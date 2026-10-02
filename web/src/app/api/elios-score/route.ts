@@ -110,12 +110,7 @@ export async function POST(request: Request) {
   }
 
   // Derived from the session, never from the body.
-  const firstName = firstNameOf(
-    displayNameFor({
-      email: user.email,
-      user_metadata: (user.user_metadata ?? null) as Record<string, unknown> | null,
-    }),
-  );
+  const firstName = firstNameOf(displayNameFor({ email: user.email, identities: user.identities }));
 
   const { error: writeError } = await admin.from("elios_scores").upsert(
     { user_id: user.id, first_name: firstName, score, achieved_at: new Date().toISOString() },

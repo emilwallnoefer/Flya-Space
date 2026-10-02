@@ -4,6 +4,7 @@ import { forbidHeldAccount } from "@/lib/app-access";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAdminEmails } from "@/lib/admin";
+import { displayNameFor } from "@/lib/fleet-queries";
 import { isResendConfigured, sendEmailViaResend } from "@/lib/email/resend";
 import { checkRateLimit, createRateLimitHeaders, getClientIp } from "@/lib/security/rate-limit";
 import { sanitizeText } from "@/lib/security/input-sanitize";
@@ -79,24 +80,6 @@ function isRealCalendarDate(iso: string): boolean {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === iso;
 }
 
-/** Trainer display name: the same derivation the chat widget uses for avatars,
- *  preferring an explicit profile name when the account has one. */
-function trainerNameFor(user: { email: string; user_metadata?: unknown }): string {
-  const metadata =
-    user.user_metadata && typeof user.user_metadata === "object" && !Array.isArray(user.user_metadata)
-      ? (user.user_metadata as Record<string, unknown>)
-      : null;
-  for (const candidate of [metadata?.full_name, metadata?.name, metadata?.display_name]) {
-    if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
-  }
-  const local = user.email.split("@")[0] ?? user.email;
-  return local
-    .split(/[._-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ") || user.email;
-}
-
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -140,7 +123,8 @@ export async function POST(request: Request) {
       email: sanitizeText(p.email, { maxLen: MAX_FIELD_LEN }).toLowerCase(),
     })),
     trainer: {
-      name: trainerNameFor({ email: user.email, user_metadata: user.user_metadata }),
+      // Provider name, never user_metadata (security audit run-4 F7).
+      name: displayNameFor({ email: user.email, identities: user.identities }),
       email: user.email,
     },
   };

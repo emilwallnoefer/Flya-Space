@@ -214,15 +214,31 @@ function toSpan(row: FleetReservationRow): ReservationSpan {
   };
 }
 
-/** Best-effort display name from auth metadata, falling back to the email local part. */
+/**
+ * The name to show for — and attribute actions to — an account.
+ *
+ * Read from the sign-in provider's profile (`identities[].identity_data`, e.g.
+ * the Google Workspace name), falling back to the email local part. NEVER from
+ * `user_metadata`: the user can rewrite that from the browser with
+ * `updateUser()`, so a name taken from it is a name they chose. It used to be,
+ * which let anyone appear as a colleague on the leaderboard, in fleet history,
+ * and to the holder-claim check that decides whether admins are alerted
+ * (security audit run-4 F7). Supabase writes identity data from the provider
+ * at sign-in; `updateUser()` cannot touch it.
+ */
 export function displayNameFor(user: {
   email?: string | null;
-  user_metadata?: Record<string, unknown> | null;
+  identities?: ReadonlyArray<{ provider?: string; identity_data?: Record<string, unknown> | null }> | null;
 }): string {
-  const metadata = user.user_metadata ?? null;
-  for (const key of ["full_name", "name", "display_name"]) {
-    const value = metadata?.[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
+  const identities = [...(user.identities ?? [])].sort(
+    // Prefer the Google profile when an account has several identities.
+    (a, b) => Number(b.provider === "google") - Number(a.provider === "google"),
+  );
+  for (const identity of identities) {
+    for (const key of ["full_name", "name"]) {
+      const value = identity.identity_data?.[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
   }
   const local = (user.email ?? "").split("@")[0] ?? "";
   if (!local) return "Unknown";
@@ -523,10 +539,7 @@ async function loadAllUserNames(admin: AnySupabase): Promise<Map<string, string>
   for (const user of data.users) {
     names.set(
       user.id,
-      displayNameFor({
-        email: user.email,
-        user_metadata: (user.user_metadata ?? null) as Record<string, unknown> | null,
-      }),
+      displayNameFor({ email: user.email, identities: user.identities }),
     );
   }
   userNameCache = { names, expiresAt: now + USER_NAME_TTL_MS };
