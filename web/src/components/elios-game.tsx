@@ -11,7 +11,10 @@ import {
 } from "@/lib/elios-score-sync";
 import {
   BEST_SCORE_KEY,
+  FLIGHT_MODES,
   KIND_LABELS,
+  METRES_PER_UNIT,
+  MODE_SPECS,
   WORLD_HEIGHT,
   WORLD_WIDTH,
   ZONES,
@@ -20,8 +23,11 @@ import {
   crashLine,
   flap,
   isNewBest,
+  nudgeThrottle,
   parseStoredBest,
+  setMode,
   stepGame,
+  type FlightMode,
   type GameState,
   type Impact,
 } from "@/lib/elios-flight";
@@ -41,6 +47,67 @@ import {
  * localStorage (`lib/elios-score-sync.ts`) and is posted the moment the
  * browser is back online.
  */
+
+/**
+ * Flight-modes preview: scores flown under the new rules are kept off the live
+ * board until the release that resets it. Flip this with that release.
+ */
+const POST_SCORES = false;
+
+/** Where the player left the mode switch, so the next visit starts there. */
+const MODE_KEY = "rolegate:elios-mode";
+
+const DEFAULT_MODE: FlightMode = "ASSIST_SPORT";
+
+/** Read through `useSyncExternalStore`, the same way and for the same reasons as the best score below. */
+let modeCache: FlightMode | undefined;
+const modeListeners = new Set<() => void>();
+
+function readMode(): FlightMode {
+  if (modeCache === undefined) {
+    modeCache = DEFAULT_MODE;
+    try {
+      const raw = window.localStorage.getItem(MODE_KEY);
+      if (raw && (FLIGHT_MODES as readonly string[]).includes(raw)) modeCache = raw as FlightMode;
+    } catch {
+      // Private windows: start in the default.
+    }
+  }
+  return modeCache;
+}
+
+function writeMode(mode: FlightMode) {
+  modeCache = mode;
+  try {
+    window.localStorage.setItem(MODE_KEY, mode);
+  } catch {
+    // A nicety.
+  }
+  for (const listener of modeListeners) listener();
+}
+
+function subscribeMode(onChange: () => void) {
+  modeListeners.add(onChange);
+  return () => {
+    modeListeners.delete(onChange);
+  };
+}
+
+/** What the pilot is holding right now; read by the frame loop every step. */
+type Held = { climb: boolean; descend: boolean; slower: boolean; faster: boolean };
+const NOTHING_HELD: Held = { climb: false, descend: false, slower: false, faster: false };
+
+/**
+ * Keys. ↑/W/Space/Enter climb (a flap in ATTI MAN), ↓/S descend, ←/→ (A/D)
+ * move the throttle; 1–5 pick a mode and M steps through them.
+ */
+function heldKeyFor(key: string): keyof Held | null {
+  if (key === " " || key === "Enter" || key === "ArrowUp" || key === "w" || key === "W") return "climb";
+  if (key === "ArrowDown" || key === "s" || key === "S") return "descend";
+  if (key === "ArrowLeft" || key === "a" || key === "A") return "slower";
+  if (key === "ArrowRight" || key === "d" || key === "D") return "faster";
+  return null;
+}
 
 /** Frame rate while nothing is being flown: waiting for a press, or after a crash has settled. */
 const RESTING_FPS = 24;
@@ -121,6 +188,8 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
   // Server render has no localStorage, so the server snapshot is always null.
   const best = useSyncExternalStore(subscribeBest, readBest, () => null);
   const [hud, setHud] = useState<Hud>({ status: "idle", score: 0, impact: null, zone: 0 });
+  const mode = useSyncExternalStore(subscribeMode, readMode, () => DEFAULT_MODE);
+  const heldRef = useRef<Held>(NOTHING_HELD);
   const [board, setBoard] = useState<LeaderboardRow[] | null>(null);
   const pending = useSyncExternalStore(subscribePendingScore, readPendingScore, () => null);
 
@@ -169,7 +238,7 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
   useEffect(() => {
     const s = stateRef.current;
     if (s.status === "idle" && s.obstacles.length === 0) {
-      stateRef.current = createGame(Math.floor(Math.random() * ZONES.length));
+      stateRef.current = createGame(Math.floor(Math.random() * ZONES.length), readMode());
     }
   }, []);
 
@@ -196,12 +265,28 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
     return () => window.removeEventListener("online", sync);
   }, [leaderboard, loadBoard]);
 
+  /** A press: launches, relaunches after a run, and flaps in ATTI MAN. */
   const press = useCallback(() => {
     if (paused) return;
     const s = stateRef.current;
-    stateRef.current = s.status === "crashed" ? flap(createGame(nextZone(s.droneZone))) : flap(s);
-    setHud({ status: "flying", score: stateRef.current.score, impact: null, zone: stateRef.current.droneZone });
+    const over = s.status === "crashed" || s.status === "landed";
+    stateRef.current = over ? flap(createGame(nextZone(s.droneZone), s.mode)) : flap(s);
+    const n = stateRef.current;
+    setHud({ status: n.status, score: n.score, impact: null, zone: n.droneZone });
   }, [paused]);
+
+  const chooseMode = useCallback((next: FlightMode) => {
+    stateRef.current = setMode(stateRef.current, next);
+    writeMode(next);
+  }, []);
+
+  /** A held input; a fresh press of the throttle also steps it, so a tap does something. */
+  const hold = useCallback((key: keyof Held, on: boolean) => {
+    if (on && !heldRef.current[key] && (key === "slower" || key === "faster")) {
+      stateRef.current = nudgeThrottle(stateRef.current, key === "faster" ? 1 : -1);
+    }
+    heldRef.current = { ...heldRef.current, [key]: on };
+  }, []);
 
   // The frame loop is set up once and must not restart when a callback
   // identity changes — restarting it mid-flight would reset the canvas.
@@ -261,7 +346,8 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       // ends one, keep the full rate.
       const resting =
         stateRef.current.status === "idle" ||
-        (stateRef.current.status === "crashed" && now - crashedAt > CRASH_SETTLE_MS);
+        ((stateRef.current.status === "crashed" || stateRef.current.status === "landed") &&
+          now - crashedAt > CRASH_SETTLE_MS);
       if (resting && now - last < 1000 / RESTING_FPS) {
         raf = requestAnimationFrame(frame);
         return;
@@ -271,19 +357,23 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       last = now;
 
       const before = stateRef.current;
+      const held = heldRef.current;
       const after = stepGame(before, {
         dt,
         kindDraw: Math.random(),
         placeDraw: Math.random(),
         styleDraw: Math.random(),
+        climb: held.climb,
+        descend: held.descend,
+        throttle: held.faster === held.slower ? 0 : held.faster ? 1 : -1,
       });
       stateRef.current = after;
 
-      if (before.status === "flying" && after.status === "crashed") {
+      if (before.status === "flying" && (after.status === "crashed" || after.status === "landed")) {
         crashedAt = now;
         if (isNewBest(after.score, readBest())) writeBest(after.score);
-        if (leaderboard && after.score > 0) void submitScoreRef.current(after.score);
-        setHud({ status: "crashed", score: after.score, impact: after.impact, zone: after.droneZone });
+        if (POST_SCORES && leaderboard && after.score > 0) void submitScoreRef.current(after.score);
+        setHud({ status: after.status, score: after.score, impact: after.impact, zone: after.droneZone });
       } else if (after.score !== before.score) {
         setHud({ status: after.status, score: after.score, impact: null, zone: after.droneZone });
       }
@@ -318,17 +408,58 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
     };
   }, [leaderboard, paused]);
 
-  // Space and Enter must fly too — the canvas is focusable and this is the
-  // whole control scheme.
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === " " || e.key === "Enter" || e.key === "ArrowUp") {
+      const n = Number(e.key);
+      if (e.key !== " " && Number.isInteger(n) && n >= 1 && n <= FLIGHT_MODES.length) {
         e.preventDefault();
-        press();
+        chooseMode(FLIGHT_MODES[n - 1]);
+        return;
       }
+      if (e.key === "m" || e.key === "M") {
+        e.preventDefault();
+        const i = FLIGHT_MODES.indexOf(stateRef.current.mode);
+        chooseMode(FLIGHT_MODES[(i + 1) % FLIGHT_MODES.length]);
+        return;
+      }
+      const key = heldKeyFor(e.key);
+      if (!key) return;
+      e.preventDefault();
+      if (!e.repeat && (key === "climb" || (key === "descend" && stateRef.current.status !== "flying"))) press();
+      hold(key, true);
     },
-    [press],
+    [press, hold, chooseMode],
   );
+
+  const onKeyUp = useCallback(
+    (e: React.KeyboardEvent) => {
+      const key = heldKeyFor(e.key);
+      if (key) hold(key, false);
+    },
+    [hold],
+  );
+
+  /** Touch and mouse on the canvas: the upper half climbs, the lower half descends. */
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      // preventDefault stops the tap selecting text or starting a drag — but
+      // it also suppresses the focus that would normally follow, which left
+      // Space doing nothing after a click. Focus explicitly instead.
+      e.preventDefault();
+      e.currentTarget.focus();
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      const box = e.currentTarget.getBoundingClientRect();
+      const lower = e.clientY - box.top > box.height / 2;
+      press();
+      hold(lower ? "descend" : "climb", true);
+    },
+    [press, hold],
+  );
+
+  const release = useCallback(() => {
+    hold("climb", false);
+    hold("descend", false);
+  }, [hold]);
 
   const where = ZONE_NAMES[ZONES[hud.zone]]?.name.toLowerCase();
 
@@ -337,17 +468,16 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
       <div
         role="button"
         tabIndex={0}
-        aria-label="Fly where people can't: fly the Elios 3 through real confined spaces. Press space to fly."
-        onPointerDown={(e) => {
-          // preventDefault stops the tap selecting text or starting a drag —
-          // but it also suppresses the focus that would normally follow, which
-          // left Space doing nothing after a click even though the label says
-          // to press it. Focus explicitly instead.
-          e.preventDefault();
-          e.currentTarget.focus();
-          press();
+        aria-label="Fly where people can't: fly the Elios 3 through real confined spaces. Space or up to climb, down to descend, left and right for speed, 1 to 5 for the flight mode."
+        onPointerDown={onPointerDown}
+        onPointerUp={release}
+        onPointerCancel={release}
+        onLostPointerCapture={release}
+        onBlur={() => {
+          heldRef.current = NOTHING_HELD;
         }}
         onKeyDown={onKeyDown}
+        onKeyUp={onKeyUp}
         className="relative block w-full cursor-pointer overflow-hidden rounded-xl border border-glass/20 bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         <canvas
@@ -364,7 +494,11 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200/90">
                 Fly where people can&rsquo;t
               </p>
-              {hud.status === "crashed" ? (
+              {hud.status === "landed" ? (
+                <p className="mt-1.5 text-sm font-medium text-white">
+                  Battery flat — {hud.score} cleared in {MODE_SPECS[mode].label}
+                </p>
+              ) : hud.status === "crashed" ? (
                 <>
                   <p className="mt-1.5 text-sm font-medium text-white">
                     {hud.score} cleared — {crashLine(hud.score)}
@@ -377,11 +511,59 @@ export function EliosGame({ className = "mt-4", leaderboard = false, paused = fa
                 </>
               ) : null}
               <p className="mt-1.5 text-[11px] text-white/65">
-                Tap or press space to {hud.status === "crashed" ? "go again" : "fly"}
+                Tap or press space to {hud.status === "idle" ? "fly" : "go again"}
               </p>
+              {hud.status === "idle" ? (
+                <p className="mt-1 text-[10px] text-white/50">
+                  {MODE_SPECS[mode].altitudeHold
+                    ? "Hold top half / ↑ to climb, bottom half / ↓ to descend · ← → speed"
+                    : "Tap / space to flap against gravity · ← → speed"}
+                </p>
+              ) : null}
             </div>
           </div>
         ) : null}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {FLIGHT_MODES.map((option, i) => {
+          const spec = MODE_SPECS[option];
+          const on = mode === option;
+          const limit = option === "ATTI_MAN" ? "unlimited" : `${(spec.maxSpeed * METRES_PER_UNIT).toFixed(1)} m/s max`;
+          return (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={on}
+              title={`${spec.holds} · ${limit} · key ${i + 1}`}
+              onClick={() => chooseMode(option)}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                on ? "border-accent/60 bg-accent/15 text-ink" : "border-glass/20 text-ink-4 hover:text-ink-2"
+              }`}
+            >
+              {spec.label}
+            </button>
+          );
+        })}
+        <span className="ml-auto flex gap-1.5">
+          {(["slower", "faster"] as const).map((key) => (
+            <button
+              key={key}
+              type="button"
+              aria-label={key === "slower" ? "Slower" : "Faster"}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.currentTarget.setPointerCapture?.(e.pointerId);
+                hold(key, true);
+              }}
+              onPointerUp={() => hold(key, false)}
+              onPointerCancel={() => hold(key, false)}
+              onLostPointerCapture={() => hold(key, false)}
+              className="size-8 touch-none select-none rounded-full border border-glass/20 text-sm text-ink-3 active:bg-accent/15"
+            >
+              {key === "slower" ? "−" : "+"}
+            </button>
+          ))}
+        </span>
       </div>
       <div className="mt-2 flex items-start justify-between gap-3">
         {best !== null || (leaderboard && pending !== null) ? (

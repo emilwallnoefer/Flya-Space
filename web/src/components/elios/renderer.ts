@@ -6,8 +6,9 @@ import {
   ZONES,
   ZONE_NAMES,
   clearance,
+  MODE_SPECS,
+  batteryLeft,
   isCollisionTolerant,
-  speedAt,
   worldSpeed,
   type GameState,
   type Impact,
@@ -290,22 +291,42 @@ export function createRenderer(canvas: HTMLCanvasElement, options: { reducedMoti
     label(`${zone.name.toUpperCase()} · ${zone.industry.toUpperCase()}`, W - 8, 9, "rgba(255,255,255,0.62)");
 
     if (state.status === "flying") {
+      // Battery, under the score: the run ends when it does.
+      const charge = batteryLeft(state);
+      ctx.fillStyle = "rgba(0,0,0,0.45)";
+      ctx.fillRect(9, 25, 30, 3.2);
+      ctx.fillStyle = charge < 0.2 ? "rgba(255,120,100,0.95)" : "rgba(255,255,255,0.75)";
+      ctx.fillRect(9.5, 25.5, 29 * charge, 2.2);
+
       const clear = Math.max(0, clearance(state.y, state.obstacles)) * METRES_PER_UNIT;
       const warn = clear < 0.25 ? "rgba(255,120,100,0.95)" : clear < 0.5 ? "rgba(255,206,110,0.9)" : "rgba(255,255,255,0.6)";
       ctx.textBaseline = "bottom";
       ctx.font = "600 5.5px ui-monospace, SFMono-Regular, Menlo, monospace";
       ctx.textAlign = "left";
       label(`CLEARANCE ${clear.toFixed(2)} m`, 9, H - 7, warn);
-      // Ground speed, which climbs all run: the number that says why it is
-      // getting harder.
+
+      // Ground speed over the setting, and the mode: the two numbers a pilot
+      // watches. The speed goes amber once the cage would no longer save you.
+      const spec = MODE_SPECS[state.mode];
+      const caged = isCollisionTolerant(state);
+      const setting = state.mode === "ATTI_MAN" ? "∞" : (spec.maxSpeed * METRES_PER_UNIT).toFixed(1);
       ctx.textAlign = "right";
-      // The readout is the run speed, not the momentary recoil after a bounce.
-      label(`${(speedAt(state.elapsed) * METRES_PER_UNIT).toFixed(1)} m/s`, W - 9, H - 7, "rgba(255,255,255,0.6)");
+      label(
+        `${(state.speed * METRES_PER_UNIT).toFixed(1)} m/s · SET ${(state.target * METRES_PER_UNIT).toFixed(1)}/${setting}`,
+        W - 9,
+        H - 7,
+        caged ? "rgba(255,255,255,0.6)" : "rgba(255,206,110,0.9)",
+      );
+      ctx.textBaseline = "top";
+      ctx.textAlign = "left";
+      ctx.font = "700 5.5px ui-monospace, SFMono-Regular, Menlo, monospace";
+      label(spec.label.toUpperCase(), 9, 31, "rgba(255,255,255,0.75)");
       // While the cage still shrugs off contact, say so — and the moment it
       // stops, the label going away is the warning.
-      if (isCollisionTolerant(state.elapsed)) {
+      if (caged) {
+        ctx.textBaseline = "bottom";
         ctx.textAlign = "center";
-        label("COLLISION-TOLERANT", W / 2, H - 7, "rgba(140,220,255,0.75)");
+        label("COLLISION-TOLERANT", W / 2, H - 15, "rgba(140,220,255,0.75)");
       }
     }
 

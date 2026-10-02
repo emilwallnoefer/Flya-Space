@@ -18,13 +18,14 @@
  * seeded generator — so a whole run replays exactly in a test, the same
  * discipline `fleet-rules.ts` follows.
  *
- * The flight model is unchanged from the first version of the game, and so is
- * the spacing: the leaderboard counts obstacles cleared, and quietly making the
- * run easier would devalue every score on it. The deliberate changes are
- * `speedAt()` — the world accelerates the longer you stay up, which makes a
- * long run harder rather than an early one easier — and the collision-tolerant
- * opening below `SAFE_SPEED`. Changing either curve changes what a score means,
- * so it comes with a leaderboard reset and a bump of `ELIOS_RULES_VERSION`.
+ * The run is flown in one of five flight modes (`MODE_SPECS`), switchable
+ * mid-flight, on a throttle the pilot controls, until the battery runs flat;
+ * the score is obstacles cleared on one battery. The collision-tolerant cage
+ * is a rule about speed, not mode: at or below `SAFE_SPEED` contact bounces,
+ * above it contact is a crash. The ATTI MAN flap physics and the obstacle
+ * spacing are unchanged from the first version of the game; changing any of
+ * this changes what a score means, so it comes with a leaderboard reset and a
+ * bump of `ELIOS_RULES_VERSION`.
  */
 
 /**
@@ -48,35 +49,71 @@ export const DRONE_X = 68;
 /** The Elios 3 flies inside a cage — one radius covers the whole aircraft. */
 export const DRONE_RADIUS = 11;
 
-/** Speed a run starts at, world units per second. */
-export const SCROLL_SPEED = 78;
 /**
- * The run speeds up as it goes, the way Subway Surfers and the dino game do:
- * obstacles stay the same distance apart, so the time to read one and act on
- * it shrinks. Three phases:
+ * The Elios flies in five modes, the ones on the real remote. Each one caps
+ * the forward speed and decides how much the aircraft holds for the pilot:
  *
- *   opening   0–10 s   +1 unit/s each second — the pace the game always had
- *   ramp     10–45 s   up to CRUISE_SPEED, the old top speed, in half the time
- *   creep    45 s on   +0.35 unit/s each second to MAX_SCROLL_SPEED (~2.5 min)
+ *   Assist        position + altitude hold   1.5 m/s
+ *   Assist Sport  position + altitude hold   2 m/s
+ *   ATTI          altitude hold only         5 m/s
+ *   ATTI Sport    altitude hold only         7 m/s
+ *   ATTI MAN      nothing held               unlimited
  *
- * The creep is what keeps a long run getting harder instead of levelling off.
- * The cap is held down by the double web frame: its second hole has to stay
- * reachable inside the bay at the fastest the run ever gets (the test suite
- * checks it against the flight constants), which stops being true a little
- * above 190. At the cap a flap cycle is about 0.7 s and obstacles are just
- * under a second apart — tight, not impossible.
+ * In the side view, up/down is altitude and left/right is forward speed:
+ *
+ * - Position hold means the speed you set is the speed you fly: the aircraft
+ *   brakes and accelerates hard, and nothing pushes it around.
+ * - Without it (ATTI) the forward speed has momentum and drifts with the air,
+ *   so braking for an obstacle is something you start early.
+ * - Altitude hold means no gravity: hold to climb, hold to descend, let go and
+ *   it stays where it is. ATTI MAN drops it, and you are back to flapping
+ *   against gravity — the game as it always was.
+ *
+ * `maxSpeed` and the rates are in world units per second; `speedTau` is how
+ * long the forward speed takes to cover most of the way to the throttle
+ * setting; `gust` is how hard the air pushes on an aircraft that is not
+ * holding its position.
  */
-export const OPENING_TIME = 10;
-export const OPENING_GAIN = 1;
-export const CRUISE_TIME = 45;
-export const CRUISE_SPEED = 148;
-export const CREEP_GAIN = 0.35;
-export const MAX_SCROLL_SPEED = 185;
+export const FLIGHT_MODES = ["ASSIST", "ASSIST_SPORT", "ATTI", "ATTI_SPORT", "ATTI_MAN"] as const;
+export type FlightMode = (typeof FLIGHT_MODES)[number];
+
+export type ModeSpec = {
+  label: string;
+  holds: string;
+  maxSpeed: number;
+  /** Altitude hold: no gravity, climb and descend at `climbRate` on request. */
+  altitudeHold: boolean;
+  climbRate: number;
+  speedTau: number;
+  gust: number;
+};
+
+const mps = (metres: number) => metres / METRES_PER_UNIT;
+
+export const MODE_SPECS: Record<FlightMode, ModeSpec> = {
+  ASSIST: { label: "Assist", holds: "Position + altitude hold", maxSpeed: mps(1.5), altitudeHold: true, climbRate: 95, speedTau: 0.25, gust: 0 },
+  ASSIST_SPORT: { label: "Assist Sport", holds: "Position + altitude hold", maxSpeed: mps(2), altitudeHold: true, climbRate: 110, speedTau: 0.3, gust: 0 },
+  ATTI: { label: "ATTI", holds: "Altitude hold only", maxSpeed: mps(5), altitudeHold: true, climbRate: 125, speedTau: 1.1, gust: 22 },
+  ATTI_SPORT: { label: "ATTI Sport", holds: "Altitude hold only", maxSpeed: mps(7), altitudeHold: true, climbRate: 165, speedTau: 0.9, gust: 22 },
+  // "Unlimited" still needs a number: 12 m/s crosses the screen in half a second.
+  ATTI_MAN: { label: "ATTI MAN", holds: "No stabilisation", maxSpeed: mps(12), altitudeHold: false, climbRate: 0, speedTau: 1.2, gust: 26 },
+};
+
+/** How fast holding the throttle moves the speed setting, world units per second per second. */
+export const THROTTLE_RATE = mps(2.5);
+/** Speed setting a run starts with, clipped to the mode: right on the edge of the cage. */
+export const START_SPEED = mps(2);
+/** How quickly an altitude-holding aircraft reaches the climb rate asked for. */
+export const VERTICAL_TAU = 0.12;
+/** Seconds of flight on one battery. The score is obstacles cleared before it runs out. */
+export const BATTERY_SECONDS = 90;
+
 /**
- * Below this run speed (2 m/s on the readout) the cage takes the hit: the
+ * Below this forward speed (2 m/s on the readout) the cage takes the hit: the
  * drone bounces off whatever it touched and keeps flying, the way the real
- * collision-tolerant Elios does. At or above it, contact is a crash. On the
- * curve above that is roughly the first 12 seconds of every run.
+ * collision-tolerant Elios does. Above it, contact is a crash — in every mode.
+ * The mode does not protect you; your speed does. Assist and Assist Sport
+ * simply cannot go fast enough to lose it.
  */
 export const SAFE_SPEED = 2 / METRES_PER_UNIT;
 /** Share of the vertical speed the cage keeps through a bounce. */
@@ -113,31 +150,32 @@ export const ZONE_NAMES: Record<Zone, { name: string; industry: string }> = {
 };
 
 /**
- * How fast the run is going after `elapsed` seconds of flight — the speed the
- * readout shows, and the one `SAFE_SPEED` is measured against. See
- * `SCROLL_SPEED` for the shape of the curve.
+ * The air an aircraft without position hold drifts in: a smooth, repeatable
+ * push, so a run replays exactly. Zero in the Assist modes.
  */
-export function speedAt(elapsed: number): number {
-  const t = Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0;
-  const opened = SCROLL_SPEED + OPENING_GAIN * Math.min(t, OPENING_TIME);
-  if (t <= OPENING_TIME) return opened;
-  if (t <= CRUISE_TIME) {
-    return opened + ((CRUISE_SPEED - opened) * (t - OPENING_TIME)) / (CRUISE_TIME - OPENING_TIME);
-  }
-  return Math.min(MAX_SCROLL_SPEED, CRUISE_SPEED + CREEP_GAIN * (t - CRUISE_TIME));
+export function gustAt(mode: FlightMode, elapsed: number): number {
+  const g = MODE_SPECS[mode].gust;
+  if (g === 0) return 0;
+  const t = Number.isFinite(elapsed) ? elapsed : 0;
+  return (g * (Math.sin(0.83 * t) + 0.7 * Math.sin(2.1 * t + 1.7) + 0.4 * Math.sin(4.3 * t + 0.4))) / 2.1;
 }
 
-/** Is the run still slow enough for the cage to take a hit? */
-export function isCollisionTolerant(elapsed: number): boolean {
-  return speedAt(elapsed) <= SAFE_SPEED;
+/** Is the drone slow enough right now for the cage to take a hit? */
+export function isCollisionTolerant(state: Pick<GameState, "speed">): boolean {
+  return Math.abs(state.speed) <= SAFE_SPEED + 1e-9;
 }
 
 /**
- * How fast the obstacles are actually moving: the run speed, less whatever a
- * head-on bounce is still throwing the world back by. Negative while it does.
+ * How fast the obstacles are actually moving: the forward speed, less whatever
+ * a head-on bounce is still throwing the world back by. Negative while it does.
  */
-export function worldSpeed(state: Pick<GameState, "elapsed" | "recoil">): number {
-  return speedAt(state.elapsed) - state.recoil;
+export function worldSpeed(state: Pick<GameState, "speed" | "recoil">): number {
+  return state.speed - state.recoil;
+}
+
+/** Share of the battery left, 1 at launch and 0 when the run ends. */
+export function batteryLeft(state: Pick<GameState, "elapsed">): number {
+  return Math.max(0, 1 - state.elapsed / BATTERY_SECONDS);
 }
 
 /** The zone at a (possibly out-of-range) index, wrapping like the run does. */
@@ -591,11 +629,10 @@ export function buildObstacle(
       // first leaves you badly placed for the second.
       //
       // The offset is bounded by what the drone can actually cover inside the
-      // bay, at the fastest the run ever gets: one flap climbs about 25 units
-      // (FLAP_VELOCITY² / 2·GRAVITY), and the bay lasts bay/MAX_SCROLL_SPEED
-      // seconds. Beyond that the pair stops being a slalom and becomes a wall
-      // — which is exactly what it had become since the run started speeding
-      // up. The test suite holds this to the flight constants.
+      // bay: an altitude-holding mode's climb rate at its top speed, and in
+      // ATTI MAN one flap (about 25 units, FLAP_VELOCITY² / 2·GRAVITY) up to
+      // about 4 m/s — faster than that in ATTI MAN is the pilot's own risk.
+      // The test suite holds this to the flight constants.
       const width = 96;
       const bar = 16;
       const passage = MIN_PASSAGE + 20;
@@ -919,7 +956,8 @@ export function hitsCeiling(y: number): boolean {
 // Game
 // ---------------------------------------------------------------------------
 
-export type GameStatus = "idle" | "flying" | "crashed";
+/** `landed` is a run that flew its battery flat: it ends there, and the score stands. */
+export type GameStatus = "idle" | "flying" | "crashed" | "landed";
 
 /** Where a run ended and what it ended on — the crash screen names it. */
 export type Impact = { what: ObstacleKind | "FLOOR" | "CEILING"; x: number; y: number };
@@ -931,7 +969,7 @@ export type GameState = {
   velocity: number;
   obstacles: Obstacle[];
   score: number;
-  /** Seconds elapsed this run; drives rotor and impeller animation. */
+  /** Seconds elapsed this run; drains the battery and drives the animation. */
   elapsed: number;
   /** Index into ZONES of the space the drone is flying in right now. */
   droneZone: number;
@@ -943,15 +981,21 @@ export type GameState = {
   impact: Impact | null;
   /**
    * How fast a head-on bounce is still throwing the world back, world units
-   * per second. Zero outside the collision-tolerant opening.
+   * per second. Zero unless the cage just took a hit.
    */
   recoil: number;
   /** Where the cage took a hit this step and flew on; null on a clean step. */
   bump: Impact | null;
+  mode: FlightMode;
+  /** Forward speed over the ground, world units per second. What the readout shows. */
+  speed: number;
+  /** The throttle setting the forward speed is heading for. */
+  target: number;
 };
 
-export function createGame(startZone = 0): GameState {
+export function createGame(startZone = 0, mode: FlightMode = "ATTI_MAN", target = START_SPEED): GameState {
   const zone = ZONES.indexOf(zoneAt(startZone));
+  const set = clampTarget(mode, target);
   return {
     status: "idle",
     y: WORLD_HEIGHT / 2,
@@ -966,15 +1010,50 @@ export function createGame(startZone = 0): GameState {
     impact: null,
     recoil: 0,
     bump: null,
+    mode,
+    // A run launches already cruising at its setting rather than from a standstill.
+    speed: set,
+    target: set,
   };
 }
 
+function clampTarget(mode: FlightMode, target: number): number {
+  const t = Number.isFinite(target) ? target : START_SPEED;
+  return Math.min(Math.max(t, 0), MODE_SPECS[mode].maxSpeed);
+}
+
 /**
- * A flap only does something mid-flight. From `idle` it also launches the run,
- * so one tap starts and flies — there is no separate start button to hunt for.
+ * Flip the mode switch. Allowed mid-flight, the way a pilot really does it:
+ * the speed setting is clipped to the new mode's limit, and the aircraft then
+ * slows toward it at the new mode's rate — so dropping into Assist is the hard
+ * brake, and dropping out of it leaves you coasting.
+ */
+export function setMode(state: GameState, mode: FlightMode): GameState {
+  if (state.mode === mode) return state;
+  const target = clampTarget(mode, state.target);
+  // Before a run there is nothing to slow down from.
+  const speed = state.status === "idle" ? target : state.speed;
+  return { ...state, mode, target, speed };
+}
+
+/** One tap of the throttle: a quarter metre per second, clipped to the mode. */
+export const THROTTLE_STEP = mps(0.25);
+
+/** Tap the throttle up (1) or down (-1). Holding it is `StepInput.throttle`. */
+export function nudgeThrottle(state: GameState, direction: 1 | -1): GameState {
+  if (state.status === "crashed" || state.status === "landed") return state;
+  const target = clampTarget(state.mode, state.target + direction * THROTTLE_STEP);
+  return { ...state, target, speed: state.status === "idle" ? target : state.speed };
+}
+
+/**
+ * A press. From `idle` it launches the run, so one tap starts and flies — there
+ * is no separate start button to hunt for. In ATTI MAN it is a flap against
+ * gravity; with altitude hold, climbing is a held input to `stepGame` instead.
  */
 export function flap(state: GameState): GameState {
-  if (state.status === "crashed") return state;
+  if (state.status === "crashed" || state.status === "landed") return state;
+  if (MODE_SPECS[state.mode].altitudeHold) return state.status === "idle" ? { ...state, status: "flying" } : state;
   return { ...state, status: "flying", velocity: FLAP_VELOCITY };
 }
 
@@ -986,7 +1065,15 @@ export type StepInput = {
   placeDraw: number;
   /** Draw in [0, 1) that cuts ragged shapes; defaults to a fixed cut. */
   styleDraw?: number;
+  /** Held inputs. Climb/descend only mean something with altitude hold. */
+  climb?: boolean;
+  descend?: boolean;
+  /** Throttle held: -1 slows the speed setting down, 1 speeds it up. */
+  throttle?: -1 | 0 | 1;
 };
+
+/** Longest distance anything may move in one sub-step, so a fast run cannot tunnel through steel. */
+const MAX_STEP_TRAVEL = 6;
 
 export function stepGame(state: GameState, input: StepInput): GameState {
   if (state.status !== "flying") return state;
@@ -996,14 +1083,44 @@ export function stepGame(state: GameState, input: StepInput): GameState {
   // ever being tested.
   const dt = Math.min(Math.max(input.dt, 0), 0.05);
 
-  let velocity = Math.min(state.velocity + GRAVITY * dt, MAX_FALL_SPEED);
+  // At ATTI speeds one frame can carry an obstacle further than the cage is
+  // wide; split the step so every contact is still tested.
+  const travel = Math.max(Math.abs(state.speed) + state.recoil, Math.abs(state.velocity), MAX_FALL_SPEED) * dt;
+  const steps = Math.min(8, Math.max(1, Math.ceil(travel / MAX_STEP_TRAVEL)));
+  let s = state;
+  let bump: Impact | null = null;
+  for (let i = 0; i < steps && s.status === "flying"; i += 1) {
+    s = subStep(s, input, dt / steps);
+    bump ??= s.bump;
+  }
+  return { ...s, bump };
+}
+
+function subStep(state: GameState, input: StepInput, dt: number): GameState {
+  const spec = MODE_SPECS[state.mode];
+
+  let velocity: number;
+  if (spec.altitudeHold) {
+    // Altitude hold: the aircraft climbs or descends at the rate asked for and
+    // holds height when nothing is.
+    const wanted = input.climb && !input.descend ? -spec.climbRate : input.descend && !input.climb ? spec.climbRate : 0;
+    velocity = state.velocity + (wanted - state.velocity) * (1 - Math.exp(-dt / VERTICAL_TAU));
+  } else {
+    velocity = Math.min(state.velocity + GRAVITY * dt, MAX_FALL_SPEED);
+  }
   let y = state.y + velocity * dt;
 
   const elapsed = state.elapsed + dt;
+  const target = clampTarget(state.mode, state.target + (input.throttle ?? 0) * THROTTLE_RATE * dt);
+  // Forward speed heads for the setting; without position hold the air pushes it about too.
+  let speed =
+    state.speed + (target - state.speed) * (1 - Math.exp(-dt / spec.speedTau)) + gustAt(state.mode, elapsed) * dt;
+  speed = Math.max(0, speed);
+
   const decayed = state.recoil * Math.exp(-RECOIL_DECAY * dt);
   let recoil = decayed < 0.5 ? 0 : decayed;
   let obstacles = state.obstacles
-    .map((o) => ({ ...o, x: o.x - worldSpeed({ elapsed, recoil }) * dt }))
+    .map((o) => ({ ...o, x: o.x - worldSpeed({ speed, recoil }) * dt }))
     .filter((o) => o.x + o.width > -4);
 
   let { buildZone, buildCount, nextId } = state;
@@ -1038,23 +1155,28 @@ export function stepGame(state: GameState, input: StepInput): GameState {
   });
 
   let bump: Impact | null = null;
-  if (isCollisionTolerant(elapsed)) {
+  if (isCollisionTolerant({ speed })) {
     const bounced = bounceOff(y, velocity, obstacles);
     ({ y, velocity, obstacles, bump } = bounced);
-    if (bounced.headOn) recoil = Math.max(recoil, BOUNCE_RECOIL);
+    if (bounced.headOn) {
+      recoil = Math.max(recoil, BOUNCE_RECOIL);
+      // A head-on hit stops the aircraft; it has to pick up speed again.
+      speed = 0;
+    }
   }
 
   const impact = bump ? null : contactAt(y, obstacles);
   const crashed = impact !== null;
+  const flat = !crashed && elapsed >= BATTERY_SECONDS;
 
   return {
-    status: crashed ? "crashed" : "flying",
+    status: crashed ? "crashed" : flat ? "landed" : "flying",
     // Park the drone inside the world rather than part-way through a wall.
     y: crashed ? Math.min(Math.max(y, DRONE_RADIUS), WORLD_HEIGHT - DRONE_RADIUS) : y,
     velocity,
     obstacles,
     score,
-    elapsed,
+    elapsed: Math.min(elapsed, BATTERY_SECONDS),
     droneZone,
     buildZone,
     buildCount,
@@ -1062,6 +1184,9 @@ export function stepGame(state: GameState, input: StepInput): GameState {
     impact,
     recoil: crashed ? 0 : recoil,
     bump,
+    mode: state.mode,
+    speed: crashed ? 0 : speed,
+    target,
   };
 }
 
