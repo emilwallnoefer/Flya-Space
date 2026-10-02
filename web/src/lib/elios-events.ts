@@ -11,7 +11,9 @@
  *                         and the drone flies itself back along its path
  *                         (Return-to-Signal) until it has signal again
  *   Lighting error (S16)  the panel goes dark; only the lidar sees
- *   Hanging cables        rigging hanging into the gaps; go under it
+ *   Hanging cables        rigging swinging in the gaps, pulled in by the
+ *                         downwash; one in the motors drops the drone until
+ *                         it sheds it — the one thing it can survive
  *   Radiation (E04)       a hot band across the space: the dose builds the
  *                         closer you fly to it
  *   Gas (PA08)            a layer of it — methane under the roof, hydrogen
@@ -94,7 +96,7 @@ export const EVENT_SPECS: Record<EventKind, EventSpec> = {
   CABLES: {
     code: "!",
     title: "Hanging cables",
-    hint: "Go under them",
+    hint: "Keep clear — they get sucked in",
     zones: ["MINE", "SEWER", "BALLAST"],
     length: 500,
     minScore: 2,

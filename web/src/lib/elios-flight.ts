@@ -1070,9 +1070,9 @@ export type GameState = {
   light: number;
   /** Id of the obstacle the next pick-up is built on. */
   nextPickupAt: number;
-  /** Seconds left of being knocked about after hitting something; the sticks do nothing meanwhile. */
+  /** Seconds left of shaking off a rope caught in the motors; the sticks do nothing meanwhile. */
   stun: number;
-  /** What the drone hit this step and recovered from; null on a clean step. */
+  /** The rope the drone caught this step and is recovering from; null on a clean step. */
   bump: Impact | null;
 };
 
@@ -1251,7 +1251,7 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     const lane = next?.lane ?? WORLD_HEIGHT / 2;
     velocity = Math.max(-170, Math.min(170, (lane - state.y) * 7));
   } else if (state.stun > 0) {
-    // Knocked about: the aircraft sinks while it gets itself back together.
+    // A rope in the motors: the aircraft sinks while it sheds it.
     velocity = state.velocity + (KNOCK_DROP - state.velocity) * (1 - Math.exp(-dt / 0.1));
   } else {
     // Altitude hold in every mode: up and down ask for a climb rate, nothing
@@ -1383,8 +1383,9 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
     else if (lel >= 1) ended = { what: "GAS", x: DRONE_X, y };
   }
 
-  // ---- Contact. Steel or the roof knocks the drone away and down, and it
-  // recovers; the floor, or a cable in the propellers, brings it down for good.
+  // ---- Contact. Steel, the roof or the floor ends the run there and then.
+  // A cable is the one thing it survives: the rope wraps the motors, the
+  // drone drops and wobbles while it sheds it, and then flies on.
   // Repeat Flight and Return-to-Signal fly a safe path, so only stay inside the world.
   let impact: Impact | null = ended;
   let bump: Impact | null = null;
@@ -1392,17 +1393,17 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
   if (flownForYou) {
     y = Math.min(Math.max(y, DRONE_RADIUS + 1), WORLD_HEIGHT - DRONE_RADIUS - 1);
   } else if (!impact) {
-    impact = cableAt(y, obstacles) ?? (hitsGround(y) ? { what: "FLOOR", x: DRONE_X, y: WORLD_HEIGHT } : null);
+    impact = contactAt(y, obstacles);
     if (!impact) {
-      const knocked = knockAway(y, obstacles);
-      if (knocked.bump) {
-        ({ y, obstacles, bump } = knocked);
+      const tangled = obstacles.find((o) => cableAt(y, [o]) !== null);
+      if (tangled) {
+        bump = cableAt(y, [tangled]);
         velocity = KNOCK_DROP;
         stun = KNOCK_TIME;
         // It loses its way forward too, and has to pick the pace back up.
         speed *= KNOCK_SPEED;
-        // Knocked into the floor is the end of it.
-        if (hitsGround(y)) impact = { what: "FLOOR", x: DRONE_X, y: WORLD_HEIGHT };
+        // Shaken off: that rope is gone, so it cannot catch the drone twice.
+        obstacles = obstacles.map((o) => (o === tangled ? { ...o, cable: undefined } : o));
       }
     }
   }
@@ -1438,44 +1439,10 @@ function subStep(state: GameState, input: StepInput, dt: number): GameState {
   };
 }
 
-/** How fast a knocked drone sinks, how long the sticks are dead, and how much forward speed it keeps. */
+/** A drone with a rope in its motors: how fast it sinks, how long the sticks are dead, and how much forward speed it keeps. */
 export const KNOCK_DROP = 85;
 export const KNOCK_TIME = 0.45;
 export const KNOCK_SPEED = 0.35;
-
-/**
- * Push the drone clear of whatever steel (or roof) it is touching. The drone
- * cannot move sideways — the world moves past it — so a push along x is
- * applied to the obstacles instead. A few passes cover being wedged between
- * two surfaces. Reports the first thing touched as `bump`.
- */
-function knockAway(y0: number, obstacles0: Obstacle[]): { y: number; obstacles: Obstacle[]; bump: Impact | null } {
-  let y = y0;
-  let obstacles = obstacles0;
-  let bump: Impact | null = null;
-  for (let pass = 0; pass < 4; pass += 1) {
-    const contact = contactAt(y, obstacles);
-    if (!contact || contact.what === "FLOOR") break;
-    bump ??= contact;
-    if (contact.what === "CEILING") {
-      y = DRONE_RADIUS + 0.5;
-      continue;
-    }
-    // Normal from the contact point to the drone's centre; a centre already
-    // inside the steel has no usable normal, so back straight out of it.
-    const dx = DRONE_X - contact.x;
-    const dy = y - contact.y;
-    const d = Math.hypot(dx, dy);
-    const [nx, ny, depth] = d > 1e-6 ? [dx / d, dy / d, DRONE_RADIUS - d] : [-1, 0, DRONE_RADIUS];
-    const push = depth + 0.5 + KNOCK_GAP;
-    y += ny * push;
-    if (nx !== 0) obstacles = obstacles.map((o) => ({ ...o, x: o.x - nx * push }));
-  }
-  return { y: Math.max(y, DRONE_RADIUS + 0.5), obstacles, bump };
-}
-
-/** Clear air a knock leaves between the drone and what it hit, so it is not straight back in. */
-const KNOCK_GAP = 3;
 
 /** A cable caught in the propellers, if any: anywhere along it, not just its end. */
 export function cableAt(y: number, obstacles: readonly Pick<Obstacle, "x" | "width" | "cable">[]): Impact | null {

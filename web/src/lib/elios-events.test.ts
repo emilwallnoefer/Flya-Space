@@ -189,10 +189,17 @@ describe("hanging cables", () => {
     return { ...flying("BOILER", { y }), obstacles: [placed] };
   };
 
-  it("snag the drone", () => {
+  it("tangle in the motors: the drone drops and shakes, sheds the rope, and flies on", () => {
     const s = stepGame(cabled(80, 70), INPUT);
-    expect(s.status).toBe("crashed");
-    expect(s.impact?.what).toBe("CABLE");
+    expect(s.status).toBe("flying");
+    expect(s.bump?.what).toBe("CABLE");
+    expect(s.stun).toBeGreaterThan(0);
+    expect(s.velocity).toBeGreaterThan(0);
+    // The rope is gone, so it cannot catch the drone a second time.
+    expect(s.obstacles[0].cable).toBeUndefined();
+    const after = fly(s, 60);
+    expect(after.status).toBe("flying");
+    expect(after.stun).toBe(0);
   });
 
   it("let the drone pass beneath", () => {
@@ -331,10 +338,9 @@ describe("pick-ups", () => {
 });
 
 describe("a long run with everything switched on", () => {
-  it("never throws, never goes non-finite, and survives the knocks along the way", () => {
+  it("never throws and never goes non-finite", () => {
     for (const zone of ZONES) {
       let s = flying(zone);
-      let knocks = 0;
       for (let i = 0; i < 60 * 120; i += 1) {
         // A clumsy pilot: climbs and descends in turns, and hits things now and then.
         const phase = Math.floor(i / 40) % 3;
@@ -347,13 +353,11 @@ describe("a long run with everything switched on", () => {
           climb: phase === 0 || s.y > WORLD_HEIGHT - 50,
           descend: phase === 2 && s.y < WORLD_HEIGHT - 50,
         });
-        if (s.bump) knocks += 1;
         expect(Number.isFinite(s.y) && Number.isFinite(s.speed) && Number.isFinite(s.velocity), `${zone} @ ${i}`).toBe(true);
         for (const o of s.obstacles) if (o.cable) expect(Number.isFinite(o.cable.angle)).toBe(true);
         // A crash just starts another run, so the whole two minutes get flown.
         if (s.status === "crashed") s = { ...flying(zone), nextId: s.nextId };
       }
-      expect(knocks, zone).toBeGreaterThan(0);
     }
   });
 });

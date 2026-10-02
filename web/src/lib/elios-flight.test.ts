@@ -491,8 +491,8 @@ describe("physics", () => {
     let y = DRONE_RADIUS + 1;
     while (y < WORLD_HEIGHT - DRONE_RADIUS && !hitsObstacle(y, { ...pendant, x: DRONE_X - 4 })) y += 1;
     const s = stepGame({ ...flap(createGame()), y, speed: MAX_SPEED, obstacles: [pendant] }, { ...INPUT, dt: 0.05 });
-    expect(s.bump?.what).toBe("PENDANT");
-    expect(s.obstacles.some((o) => hitsObstacle(s.y, o))).toBe(false);
+    expect(s.status).toBe("crashed");
+    expect(s.impact?.what).toBe("PENDANT");
   });
 });
 
@@ -512,18 +512,21 @@ describe("contact", () => {
     expect(s.impact?.what).toBe("FLOOR");
   });
 
-  it("knocks the drone clear of steel and down a little, and keeps it flying", () => {
+  it("ends the run on any steel, even at the slowest pace", () => {
     const pendant = at("PENDANT", 1, 7, 10);
     const s = stepGame({ ...flap(createGame()), y: 40, obstacles: [pendant] }, INPUT);
-    expect(s.status).toBe("flying");
-    expect(s.bump?.what).toBe("PENDANT");
-    expect(s.stun).toBeCloseTo(KNOCK_TIME, 1);
-    expect(s.velocity).toBe(KNOCK_DROP);
-    expect(s.speed).toBeLessThan(START_SPEED);
-    expect(s.obstacles.some((o) => hitsObstacle(s.y, o))).toBe(false);
+    expect(s.status).toBe("crashed");
+    expect(s.impact?.what).toBe("PENDANT");
+    expect(Math.hypot((s.impact?.x ?? 0) - DRONE_X, (s.impact?.y ?? 0) - s.y)).toBeLessThanOrEqual(DRONE_RADIUS + 1);
   });
 
-  it("gives the sticks back once it has righted itself, having dropped only a little", () => {
+  it("ends the run on the roof", () => {
+    const s = fly(noSteel({ ...flap(createGame()), y: 20 }), 60, { climb: true });
+    expect(s.status).toBe("crashed");
+    expect(s.impact?.what).toBe("CEILING");
+  });
+
+  it("after a rope, gives the sticks back once it has shed it, having dropped only a little", () => {
     const knocked = { ...noSteel(flap(createGame())), y: 100, stun: KNOCK_TIME, velocity: KNOCK_DROP };
     const righted = fly(noSteel(knocked), Math.ceil(KNOCK_TIME * 60) + 1);
     expect(righted.stun).toBe(0);
@@ -534,7 +537,7 @@ describe("contact", () => {
     expect(fly(noSteel(righted), 30, { climb: true }).y).toBeLessThan(righted.y - 5);
   });
 
-  it("ends the run if the knock drops it into the floor", () => {
+  it("ends the run if a rope drops it into the floor", () => {
     const s = fly(noSteel({ ...flap(createGame()), y: WORLD_HEIGHT - 30, stun: KNOCK_TIME, velocity: KNOCK_DROP }), 60);
     expect(s.status).toBe("crashed");
     expect(s.impact?.what).toBe("FLOOR");
