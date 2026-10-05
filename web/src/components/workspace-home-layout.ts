@@ -17,17 +17,21 @@ export const NAVBAR_TITLE_CLASS = "truncate text-xs font-medium md:text-sm";
 export const NAVBAR_MENU_BUTTON_CLASS =
   "inline-flex items-center gap-2 rounded-lg border border-glass/15 bg-glass/8 px-2.5 py-1.5 text-xs transition ease-fluid hover:bg-glass/12";
 
-/** Fills the first screen, so Field stats start below the fold. */
-export const HOME_HERO_CLASS = "relative flex min-h-[calc(100svh-7rem)] flex-col justify-center";
+/**
+ * Fills the first screen, so Field stats start below the fold. Content sits at
+ * the top, not centred: with two rows of cards, centring left a band of empty
+ * page above the greeting.
+ */
+export const HOME_HERO_CLASS = "relative flex min-h-[calc(100svh-7rem)] flex-col justify-start pt-4 md:pt-8";
 export const HOME_CONTENT_CLASS = "relative z-[1] mx-auto w-full max-w-5xl";
-export const HOME_INTRO_CLASS = "mb-10 md:mb-14";
+export const HOME_INTRO_CLASS = "mb-7 md:mb-9";
 export const HOME_EYEBROW_CLASS = "text-[11px] font-medium uppercase tracking-[0.28em] text-accent-soft/65";
 export const HOME_GREETING_CLASS =
   "mt-3 max-w-2xl text-balance text-3xl font-semibold tracking-tight text-ink md:text-4xl lg:text-[2.65rem] lg:leading-[1.12]";
-export const HOME_SUBTITLE_CLASS = "mt-4 max-w-lg text-pretty text-sm leading-relaxed text-ink-4 md:text-base";
+export const HOME_SUBTITLE_CLASS = "mt-3 max-w-lg text-pretty text-sm leading-relaxed text-ink-4 md:text-base";
 export const HOME_SUBTITLE = "Open a module below and pick up right where you left off.";
 export const HOME_ROLE_PILL_CLASS =
-  "mt-5 inline-flex items-center rounded-full border border-glass/10 bg-glass/[0.06] px-3 py-1 text-[11px] font-medium tracking-wide text-ink-3";
+  "mt-4 inline-flex items-center rounded-full border border-glass/10 bg-glass/[0.06] px-3 py-1 text-[11px] font-medium tracking-wide text-ink-3";
 
 /** At most three cards a row; the Google sheets and form wrap underneath. */
 export function homeGridClass(cardCount: number): string {
@@ -35,7 +39,7 @@ export function homeGridClass(cardCount: number): string {
 }
 
 export const MODULE_CARD_CLASS =
-  "group relative flex flex-col overflow-hidden rounded-[1.4rem] border border-glass/[0.09] bg-glass/[0.04] p-1.5 text-left shadow-[0_24px_48px_-12px_rgba(0,0,0,0.55)] transition duration-150 ease-fluid hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2";
+  "group relative flex flex-col overflow-hidden rounded-[1.4rem] border border-glass/[0.09] bg-glass/[0.04] p-1.5 text-left shadow-[var(--module-card-shadow)] transition duration-150 ease-fluid hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2";
 export const MODULE_CARD_CORE_CLASS =
   "relative flex flex-1 flex-col overflow-hidden rounded-[calc(1.4rem-0.375rem)] bg-gradient-to-br from-panel/95 via-surface/90 to-surface/80 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
 export const MODULE_CARD_ICON_CLASS = "mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl border";

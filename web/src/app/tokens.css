@@ -46,6 +46,15 @@
 
   --neutral: #64748b;   /* neutral chips/fills */
   --shade: #000000;     /* shadow color base */
+
+  /* Workspace-home card hues (CTA text + icon glyph) for the cards that have
+   * no semantic token of their own. Raw Tailwind -200 shades vanish on the
+   * light paper, so light mode swaps in the Solarized hues below. */
+  --card-sky: #bae6fd;    /* sky-200 */
+  --card-violet: #ddd6fe; /* violet-200 */
+  --card-amber: #fde68a;  /* amber-200 */
+  --card-rose: #fecdd3;   /* rose-200 */
+  --module-card-shadow: 0 24px 48px -12px rgb(0 0 0 / 0.55);
 }
 
 /* Solarized Light — softened. The original base3 cream (253 246 227) read too
@@ -87,6 +96,13 @@
 
   --neutral: #93a1a1;
   --shade: #073642;
+
+  --card-sky: #268bd2;    /* Solarized blue */
+  --card-violet: #6c71c4; /* Solarized violet */
+  --card-amber: #9a7400;  /* same as --warn */
+  --card-rose: #c7365f;   /* Solarized magenta, eased toward red */
+  /* The dark skin's deep black drop reads as a smudge on paper. */
+  --module-card-shadow: 0 14px 32px -16px rgb(7 54 66 / 0.22);
 }
 
 html {
@@ -130,6 +146,10 @@ html[data-theme="light"] {
   --color-warn: var(--warn);
   --color-positive: var(--positive);
   --color-danger: var(--danger);
+  --color-card-sky: var(--card-sky);
+  --color-card-violet: var(--card-violet);
+  --color-card-amber: var(--card-amber);
+  --color-card-rose: var(--card-rose);
   --color-neutral: var(--neutral);
   --color-shade: var(--shade);
 

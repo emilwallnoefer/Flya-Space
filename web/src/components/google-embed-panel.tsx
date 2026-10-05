@@ -25,8 +25,8 @@ const COPY: Record<GoogleEmbed["kind"], { hint: string; app: string; frame: stri
  * Google's own UI in a frame. See lib/google-embeds.ts for why it is an iframe
  * and who sees it.
  *
- * It takes over the whole window: a slim bar on top (back, title, buttons) and
- * the page below. It is portalled to <body> so no transformed or
+ * It takes over the whole window: a slim bar on top (back, title, and a quiet
+ * "Not loading?" that reveals the fixes) and the page below. It is portalled to <body> so no transformed or
  * backdrop-filtered ancestor can turn `fixed` into "fixed to that ancestor".
  *
  * The page underneath stops scrolling while it is open. A scrollable page under
@@ -34,8 +34,8 @@ const COPY: Record<GoogleEmbed["kind"], { hint: string; app: string; frame: stri
  * up to the page and moved it instead of the grid.
  *
  * The frame is cross-origin, so the page cannot tell whether it shows the
- * content or a sign-in prompt. The buttons cover both escape hatches: sign in on
- * Google in a new tab and reload the frame, or skip the frame entirely.
+ * content or a sign-in prompt. The hidden buttons cover both escape hatches:
+ * sign in on Google in a new tab and reload the frame, or skip the frame entirely.
  */
 export function GoogleEmbedPanel({
   title,
@@ -47,6 +47,7 @@ export function GoogleEmbedPanel({
   onBack: () => void;
 }) {
   const [frameKey, setFrameKey] = useState(0);
+  const [showHelp, setShowHelp] = useState(false);
   const copy = COPY[urls.kind];
 
   useEffect(() => {
@@ -66,19 +67,32 @@ export function GoogleEmbedPanel({
             <span aria-hidden>←</span> Workspace
           </button>
           <h1 className="truncate text-xs font-semibold text-ink">{title}</h1>
-          <p className="hidden truncate text-[11px] text-ink-4 lg:block">{copy.hint}</p>
+          {showHelp ? <p className="hidden truncate text-[11px] text-ink-4 lg:block">{copy.hint}</p> : null}
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          <a href={urls.signIn} target="_blank" rel="noopener noreferrer" className={BUTTON_CLASS}>
-            Sign in to Google
-          </a>
-          <button type="button" onClick={() => setFrameKey((key) => key + 1)} className={BUTTON_CLASS}>
-            Reload
+        {/* The page cannot see into Google's frame, so it cannot tell a working
+            sheet from a sign-in wall. The fixes stay one click away instead of
+            cluttering the bar for everyone it already works for. */}
+        {showHelp ? (
+          <div className="flex flex-wrap gap-1.5">
+            <a href={urls.signIn} target="_blank" rel="noopener noreferrer" className={BUTTON_CLASS}>
+              Sign in to Google
+            </a>
+            <button type="button" onClick={() => setFrameKey((key) => key + 1)} className={BUTTON_CLASS}>
+              Reload
+            </button>
+            <a href={urls.open} target="_blank" rel="noopener noreferrer" className={BUTTON_CLASS}>
+              Open in {copy.app} ↗
+            </a>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowHelp(true)}
+            className="text-[11px] text-ink-5 underline-offset-2 transition hover:text-ink-3 hover:underline"
+          >
+            Not loading?
           </button>
-          <a href={urls.open} target="_blank" rel="noopener noreferrer" className={BUTTON_CLASS}>
-            Open in {copy.app} ↗
-          </a>
-        </div>
+        )}
       </div>
       <iframe
         key={frameKey}
