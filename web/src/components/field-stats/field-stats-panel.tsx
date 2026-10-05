@@ -231,7 +231,7 @@ function BarCard({
   return (
     <div
       ref={containerRef}
-      className="relative overflow-hidden rounded-xl border border-glass/10 bg-overlay/30 p-3"
+      className="relative rounded-xl border border-glass/10 bg-overlay/30 p-3"
       onMouseLeave={() => setHover(null)}
     >
       <div className="mb-2 flex items-baseline justify-between gap-2">
@@ -275,7 +275,10 @@ function BarCard({
                           <div className="text-ink-2">{plural(row.value, unit)}</div>
                           {row.detail ? <div className="text-ink-4">{row.detail}</div> : null}
                           {total > 0 ? (
-                            <div className="text-ink-4">{Math.round((row.value / total) * 100)}% of {period}</div>
+                            <div className="text-ink-4">
+                              {Math.round((row.value / total) * 100)}% of all {unit}s{" "}
+                              {period.startsWith("since") ? period : `in ${period}`}
+                            </div>
                           ) : null}
                         </div>
                       ),
@@ -348,7 +351,7 @@ function MonthlyCard({ stats, onPick }: { stats: FieldStats; onPick: (month: str
   return (
     <div
       ref={containerRef}
-      className="relative overflow-hidden rounded-xl border border-glass/10 bg-overlay/30 p-3"
+      className="relative rounded-xl border border-glass/10 bg-overlay/30 p-3"
       onMouseLeave={() => setHover(null)}
     >
       <div className="mb-2 flex items-center gap-1.5">
