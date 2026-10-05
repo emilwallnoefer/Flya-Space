@@ -88,7 +88,7 @@ export function FieldStatsPanel() {
           <h2 className="text-lg font-semibold text-ink">Field stats</h2>
           <InfoTooltip label="Where these numbers come from">
             Counted from the &ldquo;Mission planning&rdquo; tab of the planning sheet, from 1 January 2026 up to
-            today. Multi-day POCs and trainings count once, in the month they start. Unconfirmed entries (TBC,
+            today. Back-to-back days for the same customer count as one POC or training, in the month it starts. Unconfirmed entries (TBC,
             pre-booked) and days off are not counted. Regions follow the salesperson in &ldquo;Reporting to&rdquo;.
             Click a name in a chart to see exactly what it counts.
           </InfoTooltip>
@@ -155,7 +155,7 @@ export function FieldStatsPanel() {
             />
             <BarCard
               title="POCs per pilot"
-              info="Entries naming a POC or demo. A POC spread over several days counts once."
+              info="Entries naming a POC or demo. Back-to-back days for the same customer count as one POC."
               period={periodLabel}
               unit="POC"
               rows={pilotRows(bucket, "poc", (pilot) =>
@@ -165,7 +165,7 @@ export function FieldStatsPanel() {
             />
             <BarCard
               title="Trainings per pilot"
-              info="Entries naming a training. A training spread over several days counts once."
+              info="Entries naming a training. Back-to-back days for the same customer count as one training, even when the course changes (Intro, then AIIM)."
               period={periodLabel}
               unit="training"
               rows={pilotRows(bucket, "training", (pilot) =>

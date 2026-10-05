@@ -183,6 +183,44 @@ function eventKey(activity: string): string {
   return activity.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+/**
+ * Words that name the kind of work rather than the customer: course and visit
+ * names change from day to day of one booking ("Intro Training Tesla", then
+ * "AIIM Training Tesla") while the customer stays.
+ */
+const NON_CUSTOMER_WORDS = new Set([
+  "training", "trainings", "poc", "pocs", "demo", "demos", "intro", "introduction", "aiim", "ut",
+  "advanced", "basic", "basics", "refresher", "recurrent", "theory", "practical", "practice", "flight",
+  "flights", "inspection", "inspections", "mission", "day", "days", "part", "session", "onsite",
+  "on-site", "online", "remote", "follow", "up", "follow-up", "continued", "continuation", "visit",
+  "and", "with", "for", "the", "at", "in", "of", "to", "a", "an", "by", "on", "plus",
+]);
+
+/**
+ * The customer words of an activity. Anything in brackets is a note
+ * ("(learn from Emil)"), not the customer, so it is dropped.
+ */
+export function customerWords(activity: string): Set<string> {
+  const words = activity
+    .toLowerCase()
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
+    .split(/[^\p{L}\p{N}-]+/u)
+    .filter((word) => word.length > 1 && !/^\d+$/.test(word) && !NON_CUSTOMER_WORDS.has(word));
+  return new Set(words);
+}
+
+/**
+ * Whether two consecutive days of the same kind belong to one booking: the
+ * same text, or a customer word in common. Two days that name no customer at
+ * all only merge when their text is identical.
+ */
+export function sameBooking(a: string, b: string): boolean {
+  if (eventKey(a) === eventKey(b)) return true;
+  const first = customerWords(a);
+  for (const word of customerWords(b)) if (first.has(word)) return true;
+  return false;
+}
+
 function daysBetween(a: string, b: string): number {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 }
@@ -256,7 +294,7 @@ export function computeFieldStats({
   const travelDays: FieldTravelDay[] = [];
 
   // Open event per pilot: the last POC/training day seen, to merge multi-day events.
-  const open = new Map<string, { kind: DayKind; key: string; lastDate: string; event: FieldEvent }>();
+  const open = new Map<string, { kind: DayKind; activity: string; lastDate: string; event: FieldEvent }>();
 
   let activeMonthYear = "";
   for (const row of rows) {
@@ -281,15 +319,15 @@ export function computeFieldStats({
       }
       if (kind === "other") continue;
 
-      const key = eventKey(activity);
       const previous = open.get(pilot.name);
       const continues =
         previous !== undefined &&
         previous.kind === kind &&
-        previous.key === key &&
+        sameBooking(previous.activity, activity) &&
         daysBetween(previous.lastDate, date) <= MAX_EVENT_GAP_DAYS;
       if (previous && continues) {
         previous.lastDate = date;
+        previous.activity = activity;
         previous.event.end = date;
         previous.event.days += 1;
         continue;
@@ -301,7 +339,7 @@ export function computeFieldStats({
       const region = regionFor(salesName, salesRegions);
       const event: FieldEvent = { pilot: pilot.name, kind, start: date, end: date, days: 1, title: activity, salesName, region };
       events.push(event);
-      open.set(pilot.name, { kind, key, lastDate: date, event });
+      open.set(pilot.name, { kind, activity, lastDate: date, event });
       for (const tally of [all, month]) {
         tally.pilots.get(pilot.name)![kind] += 1;
         const entry = tally.regions.get(region) ?? { region, events: 0, poc: 0, training: 0 };

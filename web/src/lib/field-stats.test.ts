@@ -5,6 +5,7 @@ import {
   findPilotColumns,
   regionFor,
   salesNameFrom,
+  sameBooking,
   UNASSIGNED_REGION,
 } from "./field-stats";
 
@@ -160,6 +161,53 @@ describe("computeFieldStats", () => {
     expect(stats.travel[0]).toEqual({
       pilot: "Emil", date: "2026-01-05", activity: "travel to Tronder Energie", status: "travel time",
     });
+  });
+
+  it("counts one training when the course changes but the customer does not", () => {
+    // Verbatim from the sheet: travel, three Tesla training days, travel.
+    const tesla = computeFieldStats({
+      header: HEADER,
+      rows: [
+        row("March 2026", 9, "travel", "travel time"),
+        row("", 10, "Intro Training Tesla (learn from Emil)", "booked out of the office", "Igor"),
+        row("", 11, "AIIM Training Tesla (learn from Emil)", "booked out of the office", "Igor"),
+        row("", 12, "AIIM Training Tesla (learn from Emil)", "booked out of the office", "Igor"),
+        row("", 13, "travel", "travel time"),
+      ],
+      today: "2026-03-31",
+    });
+    expect(tesla.events).toEqual([
+      {
+        pilot: "Emil", kind: "training", start: "2026-03-10", end: "2026-03-12", days: 3,
+        title: "Intro Training Tesla (learn from Emil)", salesName: "Igor", region: "Igor",
+      },
+    ]);
+    expect(tesla.all.pilots.find((p) => p.pilot === "Emil")).toEqual({
+      pilot: "Emil", poc: 0, training: 1, travelDays: 5,
+    });
+  });
+
+  it("starts a new event for back-to-back bookings of different customers", () => {
+    const two = computeFieldStats({
+      header: HEADER,
+      rows: [row("March 2026", 10, "Intro Training Tesla"), row("", 11, "UT Training Kiwa Latvia")],
+      today: "2026-03-31",
+    });
+    expect(two.all.pilots.find((p) => p.pilot === "Emil")?.training).toBe(2);
+  });
+
+  it.each([
+    ["Intro Training Tesla (learn from Emil)", "AIIM Training Tesla (learn from Emil)", true],
+    ["Kiwa Latvia Intro + UT Training", "Kiwa Latvia AIIM Training", true],
+    ["Tronder Energie POC", "Tronder Energie POC day 2", true],
+    ["Intro Training Tesla", "Intro Training Apave", false],
+    // A shared note in brackets is not a shared customer.
+    ["Training Tesla (learn from Emil)", "Training Apave (learn from Emil)", false],
+    // No customer named on either day: only identical text merges.
+    ["Intro Training", "AIIM Training", false],
+    ["Intro Training", "Intro Training", true],
+  ])("sameBooking(%j, %j) is %s", (a, b, expected) => {
+    expect(sameBooking(a, b)).toBe(expected);
   });
 
   it("starts a new event when the same text recurs after a long gap", () => {
