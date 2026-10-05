@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import type { MissionPlanningUrls } from "@/lib/mission-planning";
+import type { SheetEmbedUrls } from "@/lib/embedded-sheets";
 
 const BUTTON_CLASS =
   "inline-flex items-center gap-1.5 rounded-lg border border-glass/15 bg-glass/8 px-2.5 py-1 text-[11px] font-medium text-ink-2 transition ease-fluid hover:bg-glass/12 hover:text-ink";
 
 /**
- * The "Mission planning" tab, as Google's own editor in a frame. See
- * lib/mission-planning.ts for why it is an iframe and who sees it.
+ * One Google Sheet (Mission planning, Fleet management), as Google's own editor
+ * in a frame. See lib/embedded-sheets.ts for why it is an iframe and who sees it.
  *
  * It takes over the whole window: a slim bar on top (back, title, buttons) and
  * the sheet below. It is portalled to <body> so no transformed or
@@ -23,7 +23,15 @@ const BUTTON_CLASS =
  * or a sign-in prompt. The buttons cover both escape hatches: sign in on Google
  * in a new tab and reload the frame, or skip the frame entirely.
  */
-export function MissionPlanningPanel({ urls, onBack }: { urls: MissionPlanningUrls; onBack: () => void }) {
+export function SheetEmbedPanel({
+  title,
+  urls,
+  onBack,
+}: {
+  title: string;
+  urls: SheetEmbedUrls;
+  onBack: () => void;
+}) {
   const [frameKey, setFrameKey] = useState(0);
 
   useEffect(() => {
@@ -42,7 +50,7 @@ export function MissionPlanningPanel({ urls, onBack }: { urls: MissionPlanningUr
           <button type="button" onClick={onBack} className={BUTTON_CLASS}>
             <span aria-hidden>←</span> Workspace
           </button>
-          <h1 className="truncate text-xs font-semibold text-ink">Mission planning</h1>
+          <h1 className="truncate text-xs font-semibold text-ink">{title}</h1>
           <p className="hidden truncate text-[11px] text-ink-4 lg:block">
             Edits save to Google under your name. Blank? Sign in to Google, then reload. On Safari, open it in Google
             Sheets.
@@ -63,7 +71,7 @@ export function MissionPlanningPanel({ urls, onBack }: { urls: MissionPlanningUr
       <iframe
         key={frameKey}
         src={urls.embed}
-        title="Mission planning sheet"
+        title={`${title} sheet`}
         allow="clipboard-read; clipboard-write"
         referrerPolicy="strict-origin-when-cross-origin"
         className="min-h-0 w-full flex-1 rounded-lg border border-glass/10 bg-white"

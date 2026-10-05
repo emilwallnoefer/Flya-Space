@@ -22,10 +22,10 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   {
     version: "2026-10-05-mission-planning",
     date: "Oct 5, 2026",
-    title: "Mission planning, inside the app",
+    title: "Mission planning and Fleet management, inside the app",
     highlights: [
-      "Pilots and admins: a new Mission planning card on the workspace home.",
-      "It's the live planning sheet — edit it right here, saved to Google under your name.",
+      "Pilots and admins: new Mission planning and Fleet management cards on the workspace home.",
+      "They're the live Google Sheets, full screen — edit right here, saved to Google under your name.",
       "Blank? Sign in to Google, then reload. On Safari, open it in Google Sheets.",
     ],
   },

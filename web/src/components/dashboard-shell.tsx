@@ -37,7 +37,7 @@ import type { ModuleKey } from "@/lib/dashboard-modules";
 import { writeViewParams } from "@/lib/view-params";
 import { LATEST_RELEASE } from "@/lib/release-notes";
 import { userRoleLabel, type UserRole } from "@/lib/user-role";
-import type { MissionPlanningUrls } from "@/lib/mission-planning";
+import type { SheetEmbedUrls } from "@/lib/embedded-sheets";
 
 function PanelLoading() {
   return <div className="min-h-[40vh] animate-pulse rounded-2xl border border-glass/10 bg-glass/5" aria-hidden />;
@@ -70,10 +70,10 @@ const FleetPanel = dynamic(
   () => import("@/components/fleet/fleet-panel").then((m) => m.FleetPanel),
   { ssr: false, loading: PanelLoading },
 );
-// Mission planning is a card for pilots and admins only; its chunk is tiny,
-// but the iframe should not exist until someone opens it.
-const MissionPlanningPanel = dynamic(
-  () => import("@/components/mission-planning-panel").then((m) => m.MissionPlanningPanel),
+// The embedded sheets are cards for pilots and admins only; the chunk is tiny,
+// but no iframe should exist until someone opens one.
+const SheetEmbedPanel = dynamic(
+  () => import("@/components/sheet-embed-panel").then((m) => m.SheetEmbedPanel),
   { ssr: false, loading: PanelLoading },
 );
 // Field stats sit open at the bottom of the workspace home, below the fold. The
@@ -183,11 +183,12 @@ type DashboardShellProps = {
    */
   initialModule?: ModuleKey | null;
   /**
-   * Links to the planning sheet, built server-side only for the roles allowed
-   * to see it (`canSeeMissionPlanning`). `null` hides the module entirely, so
-   * other roles never receive the sheet URL.
+   * Links to the embedded sheets, built server-side only for the roles allowed
+   * to see them (`canSeeEmbeddedSheets`) and only when the sheet id is set.
+   * `null` hides that module entirely, so other roles never receive the URL.
    */
-  missionPlanning?: MissionPlanningUrls | null;
+  missionPlanning?: SheetEmbedUrls | null;
+  fleetSheet?: SheetEmbedUrls | null;
 };
 
 import type { FleetBoardResponse } from "@/components/fleet/types";
@@ -261,6 +262,18 @@ function IconCalendar({ className }: { className?: string }) {
   );
 }
 
+function IconTable({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0112 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5"
+      />
+    </svg>
+  );
+}
+
 function IconArrow({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
@@ -282,6 +295,7 @@ export function DashboardShell({
   initialFleet = RESOLVED_NULL,
   initialModule = null,
   missionPlanning = null,
+  fleetSheet = null,
 }: DashboardShellProps) {
   // The role is decided entirely on the server: it lives in `app_metadata`,
   // only PATCH /api/admin/users writes it, and an account without one never
@@ -297,14 +311,16 @@ export function DashboardShell({
         ? ["time", "fleet", "settings"]
         : ["mail", "time", "fleet", "settings"];
     if (missionPlanning) base.push("planning");
+    if (fleetSheet) base.push("fleetsheet");
     if (isAdmin || userRole === "hr") base.push("admin");
     return base;
-  }, [userRole, isAdmin, missionPlanning]);
+  }, [userRole, isAdmin, missionPlanning, fleetSheet]);
 
-  // Cards on the workspace home: Time Tracker always, Mail, Fleet and Mission
-  // planning when available. Settings and Admin live in the burger menu, not here.
+  // Cards on the workspace home: Time Tracker always, the rest when available.
+  // Settings and Admin live in the burger menu, not here.
   const homeCardCount =
-    1 + (["mail", "fleet", "planning"] as const).filter((key) => availableModules.includes(key)).length;
+    1 +
+    (["mail", "fleet", "planning", "fleetsheet"] as const).filter((key) => availableModules.includes(key)).length;
 
   const [showComposer, setShowComposer] = useState(initialModule != null);
   const [beginAnimating, setBeginAnimating] = useState(false);
@@ -317,6 +333,8 @@ export function DashboardShell({
     const preferred = initialModule ?? (userRole === "sales" || userRole === "hr" ? "time" : "mail");
     return availableModules.includes(preferred) ? preferred : availableModules[0];
   });
+  // An embedded sheet covers the whole window while it is open.
+  const sheetOpen = showComposer && (activeModule === "planning" || activeModule === "fleetsheet");
   const [showProgramReadmePrompt, setShowProgramReadmePrompt] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   // The floating chat pill shares the bottom-right corner with the first-launch
@@ -495,6 +513,11 @@ export function DashboardShell({
     }, 180);
   }
 
+  function leaveSheet() {
+    playUiSound("switchWhoosh");
+    setShowComposer(false);
+  }
+
   function openModuleCard(module: ModuleKey) {
     if (activeModule !== module) playUiSound("switchWhoosh");
     switchModule(module);
@@ -541,6 +564,8 @@ export function DashboardShell({
                     ? "Fleet (beta)"
                     : activeModule === "planning"
                       ? HOME_CARDS[3].title
+                    : activeModule === "fleetsheet"
+                      ? HOME_CARDS[4].title
                     : activeModule === "admin"
                       ? adminModuleLabel
                       : "Settings"}
@@ -671,6 +696,31 @@ export function DashboardShell({
                     </span>
                   </m.button>
                 ) : null}
+
+                {availableModules.includes("fleetsheet") ? (
+                  <m.button
+                    type="button"
+                    initial={false}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => openModuleCard("fleetsheet")}
+                    className={`${MODULE_CARD_CLASS} hover:border-amber-400/35 hover:shadow-[0_28px_56px_-12px_rgba(251,191,36,0.1)] focus-visible:outline-amber-400/80`}
+                  >
+                    <span className={MODULE_CARD_CORE_CLASS}>
+                      <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-amber-400/12 blur-2xl transition group-hover:bg-amber-400/22" aria-hidden />
+                      <span className={`${MODULE_CARD_ICON_CLASS} border-amber-400/25 bg-amber-400/10 text-amber-200`}>
+                        <IconTable className="h-5 w-5" />
+                      </span>
+                      <span className={MODULE_CARD_TITLE_CLASS}>{HOME_CARDS[4].title}</span>
+                      <span className={MODULE_CARD_DESCRIPTION_CLASS}>{HOME_CARDS[4].description}</span>
+                      <span className={`${MODULE_CARD_CTA_CLASS} text-amber-200/90`}>
+                        Continue
+                        <span className={MODULE_CARD_ARROW_CLASS}>
+                          <IconArrow className="h-3.5 w-3.5" />
+                        </span>
+                      </span>
+                    </span>
+                  </m.button>
+                ) : null}
               </div>
             </div>
           </m.div>
@@ -708,13 +758,9 @@ export function DashboardShell({
                       <StreamedFleetPanel board={initialFleet} />
                     </Suspense>
                   ) : activeModule === "planning" && missionPlanning ? (
-                    <MissionPlanningPanel
-                      urls={missionPlanning}
-                      onBack={() => {
-                        playUiSound("switchWhoosh");
-                        setShowComposer(false);
-                      }}
-                    />
+                    <SheetEmbedPanel title={HOME_CARDS[3].title} urls={missionPlanning} onBack={leaveSheet} />
+                  ) : activeModule === "fleetsheet" && fleetSheet ? (
+                    <SheetEmbedPanel title={HOME_CARDS[4].title} urls={fleetSheet} onBack={leaveSheet} />
                   ) : activeModule === "admin" ? (
                     <Suspense fallback={<PanelLoading />}>
                       <StreamedAdminPanel
@@ -752,7 +798,7 @@ export function DashboardShell({
         {/* Hidden while the panel is open, and while a bottom-right popup
             (program readme, what's new) holds that corner. */}
         {/* Also hidden over the full-screen planning sheet, where it would cover the sheet's corner. */}
-        {!chatOpen && !showProgramReadmePrompt && !showWhatsNew && !(showComposer && activeModule === "planning") ? (
+        {!chatOpen && !showProgramReadmePrompt && !showWhatsNew && !sheetOpen ? (
           <m.button
             key="chat-trigger"
             type="button"
