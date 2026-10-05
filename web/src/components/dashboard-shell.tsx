@@ -150,6 +150,34 @@ function IconCog({ className }: { className?: string }) {
   );
 }
 
+function IconDrone({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9.5 9.5h5v5h-5zM9.5 9.5 7 7m7.5 2.5L17 7m-2.5 7.5L17 17m-7.5-2.5L7 17"
+      />
+      <circle cx="5.5" cy="5.5" r="2.5" />
+      <circle cx="18.5" cy="5.5" r="2.5" />
+      <circle cx="5.5" cy="18.5" r="2.5" />
+      <circle cx="18.5" cy="18.5" r="2.5" />
+    </svg>
+  );
+}
+
+function IconChart({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
+      />
+    </svg>
+  );
+}
+
 function IconArrow({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
@@ -193,6 +221,11 @@ export function DashboardShell({
     if (isAdmin || userRole === "hr") base.push("admin");
     return base;
   }, [userRole, isAdmin]);
+
+  // Cards on the workspace home: Time Tracker always, the rest when available.
+  // Admin lives in the burger menu, not here.
+  const homeCardCount =
+    1 + (["settings", "mail", "fleet", "stats"] as const).filter((key) => availableModules.includes(key)).length;
 
   const [showComposer, setShowComposer] = useState(initialModule != null);
   const [beginAnimating, setBeginAnimating] = useState(false);
@@ -474,7 +507,15 @@ export function DashboardShell({
               </div>
 
               <div
-                className={`grid gap-4 ${availableModules.filter((m) => m !== "admin").length >= 3 ? "md:grid-cols-3" : "sm:mx-auto sm:max-w-2xl sm:grid-cols-2"}`}
+                className={`grid gap-4 ${
+                  homeCardCount >= 5
+                    ? "sm:grid-cols-2 lg:grid-cols-3"
+                    : homeCardCount === 4
+                      ? "sm:grid-cols-2 lg:grid-cols-4"
+                      : homeCardCount === 3
+                      ? "md:grid-cols-3"
+                        : "sm:mx-auto sm:max-w-2xl sm:grid-cols-2"
+                }`}
               >
                 {availableModules.includes("settings") ? (
                   <m.button
@@ -554,6 +595,65 @@ export function DashboardShell({
                     </span>
                   </span>
                 </m.button>
+
+                {availableModules.includes("fleet") ? (
+                  <m.button
+                    type="button"
+                    initial={false}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => openModuleCard("fleet")}
+                    className={`${MODULE_CARD_CLASS} hover:border-sky-400/35 hover:shadow-[0_28px_56px_-12px_rgba(56,189,248,0.1)] focus-visible:outline-sky-400/80`}
+                  >
+                    <span className={MODULE_CARD_CORE_CLASS}>
+                      <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-sky-400/12 blur-2xl transition group-hover:bg-sky-400/22" aria-hidden />
+                      <span className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-sky-400/25 bg-sky-400/10 text-sky-200">
+                        <IconDrone className="h-5 w-5" />
+                      </span>
+                      <span className="inline-flex items-center gap-2 text-lg font-semibold text-ink">
+                        Fleet
+                        <span className="rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-normal uppercase tracking-wider text-warn">
+                          Beta
+                        </span>
+                      </span>
+                      <span className="mt-2 text-sm leading-relaxed text-ink-4">
+                        Book drones and material by the day, and see who has what.
+                      </span>
+                      <span className="mt-6 inline-flex items-center gap-2 text-xs font-semibold text-sky-200/90">
+                        Continue
+                        <span className="grid h-6 w-6 place-items-center rounded-full border border-glass/15 bg-glass/10 transition ease-fluid group-hover:-translate-y-[1px] group-hover:translate-x-1">
+                          <IconArrow className="h-3.5 w-3.5" />
+                        </span>
+                      </span>
+                    </span>
+                  </m.button>
+                ) : null}
+
+                {availableModules.includes("stats") ? (
+                  <m.button
+                    type="button"
+                    initial={false}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => openModuleCard("stats")}
+                    className={`${MODULE_CARD_CLASS} hover:border-amber-400/35 hover:shadow-[0_28px_56px_-12px_rgba(251,191,36,0.1)] focus-visible:outline-amber-400/80`}
+                  >
+                    <span className={MODULE_CARD_CORE_CLASS}>
+                      <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-amber-400/12 blur-2xl transition group-hover:bg-amber-400/22" aria-hidden />
+                      <span className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-amber-400/25 bg-amber-400/10 text-warn">
+                        <IconChart className="h-5 w-5" />
+                      </span>
+                      <span className="text-lg font-semibold text-ink">Field stats</span>
+                      <span className="mt-2 text-sm leading-relaxed text-ink-4">
+                        Regions, POCs, trainings, and travel days from the planning sheet.
+                      </span>
+                      <span className="mt-6 inline-flex items-center gap-2 text-xs font-semibold text-warn/90">
+                        Continue
+                        <span className="grid h-6 w-6 place-items-center rounded-full border border-glass/15 bg-glass/10 transition ease-fluid group-hover:-translate-y-[1px] group-hover:translate-x-1">
+                          <IconArrow className="h-3.5 w-3.5" />
+                        </span>
+                      </span>
+                    </span>
+                  </m.button>
+                ) : null}
 
               </div>
             </div>

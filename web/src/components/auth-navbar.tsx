@@ -25,7 +25,7 @@ export function AuthNavbar({
   gmailConnected,
   gmailEmail,
   activeModule,
-  availableModules = ["mail", "time", "fleet", "stats", "settings"],
+  availableModules = ["mail", "time", "settings"],
   showGmailStatus = true,
   userRole = null,
   adminModuleLabel = "Admin",
@@ -133,47 +133,6 @@ export function AuthNavbar({
                   >
                     <span>Time Tracker</span>
                     {activeModule === "time" ? <span className="text-[11px] opacity-80">Active</span> : null}
-                  </button>
-                ) : null}
-                {availableModules.includes("fleet") ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (activeModule !== "fleet") playUiSound("switchWhoosh");
-                      onSelectModule("fleet");
-                      setMenuOpen(false);
-                    }}
-                    role="tab"
-                    aria-selected={activeModule === "fleet"}
-                    className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/70 hover:bg-accent/95 hover:text-slate-900 ${
-                      activeModule === "fleet" ? "border-accent/55 bg-glass/12" : "border-glass/10 bg-glass/5"
-                    }`}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      Fleet
-                      <span className="rounded bg-amber-500/20 px-1 py-0.5 text-[9px] uppercase tracking-wider text-warn">
-                        Beta
-                      </span>
-                    </span>
-                    {activeModule === "fleet" ? <span className="text-[11px] opacity-80">Active</span> : null}
-                  </button>
-                ) : null}
-                {availableModules.includes("stats") ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (activeModule !== "stats") playUiSound("switchWhoosh");
-                      onSelectModule("stats");
-                      setMenuOpen(false);
-                    }}
-                    role="tab"
-                    aria-selected={activeModule === "stats"}
-                    className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/70 hover:bg-accent/95 hover:text-slate-900 ${
-                      activeModule === "stats" ? "border-accent/55 bg-glass/12" : "border-glass/10 bg-glass/5"
-                    }`}
-                  >
-                    <span>Field stats</span>
-                    {activeModule === "stats" ? <span className="text-[11px] opacity-80">Active</span> : null}
                   </button>
                 ) : null}
                 {availableModules.includes("settings") ? (

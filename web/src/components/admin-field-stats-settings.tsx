@@ -88,7 +88,7 @@ export function AdminFieldStatsSettings() {
   return (
     <div className="mt-5 space-y-3">
       <p className="text-sm text-ink-4">
-        Field stats (burger menu) chart the &ldquo;Mission planning&rdquo; sheet for everyone with a role. Numbers
+        Field stats (on the workspace home) chart the &ldquo;Mission planning&rdquo; sheet for everyone with a role. Numbers
         refresh at most every 10 minutes.
       </p>
 

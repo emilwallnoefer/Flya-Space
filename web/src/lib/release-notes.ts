@@ -22,11 +22,12 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   {
     version: "2026-10-05-field-stats",
     date: "Oct 5, 2026",
-    title: "Field stats",
+    title: "Field stats, and Fleet on the home screen",
     highlights: [
-      "New in the menu: charts from the mission planning sheet, live.",
+      "New on the workspace home: charts from the mission planning sheet, live.",
       "Regions, POCs and trainings per pilot, and travel days.",
-      "All of 2026 or one month at a time.",
+      "All of 2026 or one month at a time; click a name to see what it counts.",
+      "Fleet moved from the menu to its own card on the workspace home.",
     ],
   },
   {
