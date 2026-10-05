@@ -9,6 +9,14 @@ describe("stripMarkdownLinks", () => {
   });
 });
 
+describe("markdownToHtml image alt (audit run-5)", () => {
+  it("escapes quotes so the alt cannot break out of its attribute", () => {
+    const html = markdownToHtml('![x" onerror="alert(1)](https://a.example/q.png)');
+    expect(html).not.toMatch(/"\s*onerror=/);
+    expect(html).toContain('alt="x&quot; onerror=&quot;alert(1)"');
+  });
+});
+
 describe("escapeHtmlText", () => {
   it("escapes ampersands and angle brackets", () => {
     expect(escapeHtmlText("a & b < c > d")).toBe("a &amp; b &lt; c &gt; d");

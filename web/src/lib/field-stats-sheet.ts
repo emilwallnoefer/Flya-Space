@@ -7,6 +7,7 @@ import { classifyTravelFetchError, type TravelFetchErrorReason } from "@/lib/goo
 import { computeFieldStats, type FieldStats } from "@/lib/field-stats";
 import { todayInZurich } from "@/lib/fleet-queries";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isAdminEmail } from "@/lib/admin";
 
 /**
  * Server side of Field stats: reads the "Mission planning" tab with one admin's
@@ -77,7 +78,7 @@ export async function writeFieldStatsSettings(
   return row;
 }
 
-export type FieldStatsErrorReason = "not_configured" | "token_missing" | TravelFetchErrorReason;
+export type FieldStatsErrorReason = "not_configured" | "token_missing" | "source_not_admin" | TravelFetchErrorReason;
 
 export type FieldStatsResult =
   | { ok: true; stats: FieldStats; fetchedAt: string; stale: boolean }
@@ -93,8 +94,26 @@ type Snapshot = { stats: FieldStats; fetchedAt: number };
 let lastGood: Snapshot | null = null;
 let inFlight: Promise<FieldStatsResult> | null = null;
 
+/** How long a failure is served before the next request tries Google again. */
+const FAILURE_TTL_MS = 60 * 1000;
+// Without this, every page load during an outage (or a script looping on the
+// endpoint) would spend a Sheets call on the source admin's token.
+let lastFailure: { result: FieldStatsResult; at: number } | null = null;
+
 export function invalidateFieldStatsCache() {
   lastGood = null;
+  lastFailure = null;
+}
+
+/**
+ * The sheet is read with one admin's Google access on behalf of every role, so
+ * that access must still belong to an admin. Someone taken off ADMIN_EMAILS
+ * stops lending their connection until another admin picks theirs.
+ */
+async function sourceIsStillAdmin(userId: string): Promise<boolean> {
+  const { data, error } = await createAdminClient().auth.admin.getUserById(userId);
+  if (error || !data.user) return false;
+  return isAdminEmail(data.user.email);
 }
 
 async function readTab(refreshToken: string) {
@@ -139,6 +158,13 @@ async function refresh(): Promise<FieldStatsResult> {
       hint: "An admin needs to connect the planning sheet under Admin → Field stats.",
     };
   }
+  if (!(await sourceIsStillAdmin(settings.token_user_id))) {
+    return {
+      ok: false,
+      reason: "source_not_admin",
+      hint: "The Google connection used for Field stats belongs to someone who is no longer an admin. An admin needs to pick theirs under Admin → Field stats.",
+    };
+  }
   const refreshToken = await readGmailRefreshToken(settings.token_user_id);
   if (!refreshToken) {
     return {
@@ -174,8 +200,15 @@ export async function getFieldStats(): Promise<FieldStatsResult> {
   if (lastGood && Date.now() - lastGood.fetchedAt < CACHE_TTL_MS) {
     return { ok: true, stats: lastGood.stats, fetchedAt: new Date(lastGood.fetchedAt).toISOString(), stale: false };
   }
-  inFlight ??= refresh().finally(() => {
-    inFlight = null;
-  });
+  if (lastFailure && Date.now() - lastFailure.at < FAILURE_TTL_MS) return lastFailure.result;
+  inFlight ??= refresh()
+    .then((result) => {
+      // A stale fallback is a failure too: hold it as long as an outright one.
+      lastFailure = result.ok && !result.stale ? null : { result, at: Date.now() };
+      return result;
+    })
+    .finally(() => {
+      inFlight = null;
+    });
   return inFlight;
 }

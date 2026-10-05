@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { forbidHeldAccount } from "@/lib/app-access";
+import { serverError } from "@/lib/api-errors";
 
 // Persist appearance prefs (theme + accent) to the signed-in user's account so
 // the choice survives refreshes, new sessions, and other devices. Stored in
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
 
   const { error } = await supabase.auth.updateUser({ data: patch });
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return serverError("settings/appearance", error);
   }
   return NextResponse.json({ ok: true });
 }

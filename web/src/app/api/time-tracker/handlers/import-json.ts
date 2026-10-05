@@ -3,6 +3,7 @@ import { sanitizeText } from "@/lib/security/input-sanitize";
 import { sanitizeMins } from "@/lib/time-tracker-queries";
 import { isDateKey, type PostActionContext } from "./shared";
 import type { PostPayload } from "./schemas";
+import { serverError } from "@/lib/api-errors";
 
 type ImportJsonPayload = Extract<PostPayload, { action: "import_json" }>;
 
@@ -34,7 +35,7 @@ export async function handleImportJson(
     const upsertDaysRes = await supabase.from("time_day_logs").upsert(dayRows, {
       onConflict: "user_id,work_date",
     });
-    if (upsertDaysRes.error) return NextResponse.json({ error: upsertDaysRes.error.message }, { status: 500 });
+    if (upsertDaysRes.error) return serverError("time-tracker/import-json", upsertDaysRes.error);
   }
 
   const dayLookupRes = await supabase
@@ -45,13 +46,13 @@ export async function handleImportJson(
       "work_date",
       workEntries.map(([date]) => date),
     );
-  if (dayLookupRes.error) return NextResponse.json({ error: dayLookupRes.error.message }, { status: 500 });
+  if (dayLookupRes.error) return serverError("time-tracker/import-json", dayLookupRes.error);
 
   const dayIdByDate = new Map((dayLookupRes.data ?? []).map((row) => [row.work_date, row.id]));
   const allDayIds = (dayLookupRes.data ?? []).map((row) => row.id);
   if (allDayIds.length > 0) {
     const clearRes = await supabase.from("time_day_breaks").delete().in("day_log_id", allDayIds);
-    if (clearRes.error) return NextResponse.json({ error: clearRes.error.message }, { status: 500 });
+    if (clearRes.error) return serverError("time-tracker/import-json", clearRes.error);
   }
 
   const breakRows = workEntries.flatMap(([date, item]) => {
@@ -68,7 +69,7 @@ export async function handleImportJson(
 
   if (breakRows.length > 0) {
     const addBreaksRes = await supabase.from("time_day_breaks").insert(breakRows);
-    if (addBreaksRes.error) return NextResponse.json({ error: addBreaksRes.error.message }, { status: 500 });
+    if (addBreaksRes.error) return serverError("time-tracker/import-json", addBreaksRes.error);
   }
 
   const compRows = compEntries.map(([date, item]) => ({
@@ -83,7 +84,7 @@ export async function handleImportJson(
     const upsertCompRes = await supabase.from("time_comp_adjustments").upsert(compRows, {
       onConflict: "user_id,work_date",
     });
-    if (upsertCompRes.error) return NextResponse.json({ error: upsertCompRes.error.message }, { status: 500 });
+    if (upsertCompRes.error) return serverError("time-tracker/import-json", upsertCompRes.error);
   }
 
   return NextResponse.json({

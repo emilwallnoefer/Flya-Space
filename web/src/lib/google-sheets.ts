@@ -1,3 +1,5 @@
+import "server-only";
+
 import { sheets as sheetsApi } from "@googleapis/sheets";
 import { getOAuthClient } from "@/lib/gmail";
 

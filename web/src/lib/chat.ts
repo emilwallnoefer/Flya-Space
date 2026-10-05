@@ -29,8 +29,9 @@ export const CHAT_HISTORY_LIMIT = 50;
 /** Page size when the user clicks "Load older". */
 export const CHAT_PAGE_SIZE = 50;
 
-/** Max upload size for chat attachments (10 MiB). Enforced client-side; the
- *  bucket itself does not impose a limit. */
+/** Max upload size for chat attachments (10 MiB). Checked client-side for a
+ *  friendly error; the bucket enforces the same limit server-side
+ *  (`2026-07-04-tier1-hardening.sql`). */
 export const CHAT_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
 /**

@@ -20,7 +20,10 @@ export async function GET() {
 
   const result = await getFieldStats();
   if (!result.ok) {
-    const status = result.reason === "not_configured" || result.reason === "token_missing" ? 409 : 502;
+    const status =
+      result.reason === "not_configured" || result.reason === "token_missing" || result.reason === "source_not_admin"
+        ? 409
+        : 502;
     return NextResponse.json({ error: result.hint, reason: result.reason }, { status });
   }
   return NextResponse.json(

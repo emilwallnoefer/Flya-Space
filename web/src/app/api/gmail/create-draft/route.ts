@@ -37,7 +37,9 @@ type RequestPayload = {
 
 const inlineAttachmentSchema = z.object({
   contentId: z.string().min(1).max(120).regex(/^[a-zA-Z0-9._-]+$/),
-  mimeType: z.string().min(1).max(80),
+  // Goes verbatim into a MIME part header, so only the image types the mail
+  // renderer actually inlines (QR codes, logos) — no room for CRLF.
+  mimeType: z.enum(["image/png", "image/jpeg", "image/gif"]),
   base64: z.string().min(1).max(800_000),
 });
 

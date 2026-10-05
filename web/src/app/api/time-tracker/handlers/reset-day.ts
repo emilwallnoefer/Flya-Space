@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isDateKey, type PostActionContext } from "./shared";
 import type { PostPayload } from "./schemas";
+import { serverError } from "@/lib/api-errors";
 
 type ResetDayPayload = Extract<PostPayload, { action: "reset_day" }>;
 
@@ -20,14 +21,14 @@ export async function handleResetDay(
     .delete()
     .eq("user_id", userId)
     .eq("work_date", date);
-  if (deleteLogRes.error) return NextResponse.json({ error: deleteLogRes.error.message }, { status: 500 });
+  if (deleteLogRes.error) return serverError("time-tracker/reset-day", deleteLogRes.error);
 
   const deleteCompRes = await supabase
     .from("time_comp_adjustments")
     .delete()
     .eq("user_id", userId)
     .eq("work_date", date);
-  if (deleteCompRes.error) return NextResponse.json({ error: deleteCompRes.error.message }, { status: 500 });
+  if (deleteCompRes.error) return serverError("time-tracker/reset-day", deleteCompRes.error);
 
   return NextResponse.json({ ok: true });
 }

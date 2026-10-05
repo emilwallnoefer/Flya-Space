@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sanitizeMins } from "@/lib/time-tracker-queries";
 import type { PostActionContext } from "./shared";
 import type { ImportPayload } from "./schemas";
+import { serverError } from "@/lib/api-errors";
 
 export async function handleExportJson(ctx: PostActionContext): Promise<NextResponse> {
   const { supabase, userId } = ctx;
@@ -17,8 +18,8 @@ export async function handleExportJson(ctx: PostActionContext): Promise<NextResp
       .eq("user_id", userId)
       .order("work_date", { ascending: true }),
   ]);
-  if (dayLogsRes.error) return NextResponse.json({ error: dayLogsRes.error.message }, { status: 500 });
-  if (compRes.error) return NextResponse.json({ error: compRes.error.message }, { status: 500 });
+  if (dayLogsRes.error) return serverError("time-tracker/export-json", dayLogsRes.error);
+  if (compRes.error) return serverError("time-tracker/export-json", compRes.error);
 
   const dayLogs = dayLogsRes.data ?? [];
   const dayLogIds = dayLogs.map((row) => row.id);
@@ -30,7 +31,7 @@ export async function handleExportJson(ctx: PostActionContext): Promise<NextResp
           .in("day_log_id", dayLogIds)
           .order("position", { ascending: true })
       : { data: [], error: null };
-  if (breaksRes.error) return NextResponse.json({ error: breaksRes.error.message }, { status: 500 });
+  if (breaksRes.error) return serverError("time-tracker/export-json", breaksRes.error);
 
   const breaksByLogId = new Map<number, Array<{ name: string; mins: number }>>();
   for (const row of breaksRes.data ?? []) {

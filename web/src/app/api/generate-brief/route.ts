@@ -26,10 +26,11 @@ const briefSchema = z.object({
 
 export async function POST(request: Request) {
   const clientIp = getClientIp(request);
-  // Brief mode calls a paid LLM, so keep the window tighter than the deterministic generator.
+  // Pre-auth flood guard per IP. It is looser than the per-user budget below
+  // because the whole office shares one IP.
   const limitResult = await checkRateLimit(`generate-brief:${clientIp}`, {
     windowMs: 60 * 60 * 1000,
-    max: 40,
+    max: 120,
   });
   if (!limitResult.allowed) {
     return NextResponse.json(
@@ -48,6 +49,19 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const held = forbidHeldAccount(user);
   if (held) return held;
+
+  // Brief mode calls a paid LLM, so each person gets a budget of their own,
+  // tighter than the deterministic generator.
+  const userLimit = await checkRateLimit(`generate-brief-user:${user.id}`, {
+    windowMs: 60 * 60 * 1000,
+    max: 40,
+  });
+  if (!userLimit.allowed) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded. Please retry later." },
+      { status: 429, headers: createRateLimitHeaders(userLimit) },
+    );
+  }
 
   try {
     const rawPayload = await request.json();

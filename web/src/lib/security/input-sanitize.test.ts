@@ -56,3 +56,28 @@ describe("sanitizeMailHtml", () => {
     expect(sanitizeMailHtml("<script>alert(1)</script>")).toBeUndefined();
   });
 });
+
+// Security audit run-5: handlers after `/` or a quote, svg, encoded schemes.
+describe("sanitizeMailHtml — separators and encoded schemes", () => {
+  const cases: Array<[string, RegExp]> = [
+    ["<img/onerror=alert(1) src=x>", /onerror/i],
+    ['<img src="x"/onerror="alert(1)">', /onerror/i],
+    ["<img src='x'onerror='alert(1)'>", /onerror/i],
+    ["<svg/onload=alert(1)>", /svg|onload/i],
+    ['<svg><animate attributeName="href" values="javascript:alert(1)"/></svg>', /javascript|animate/i],
+    ['<a href="java&#115;cript:alert(1)">x</a>', /&#115;|javascript/i],
+    ['<a href="java&#x73;cript:alert(1)">x</a>', /&#x73;|javascript/i],
+    ["<a href=javascript&colon;alert(1)>x</a>", /colon|javascript/i],
+    ['<a href=" &#9;javascript:alert(1)">x</a>', /javascript/i],
+  ];
+  for (const [input, forbidden] of cases) {
+    it(`neutralises ${input}`, () => {
+      expect(sanitizeMailHtml(input) ?? "").not.toMatch(forbidden);
+    });
+  }
+
+  it("keeps ordinary links with query strings", () => {
+    const html = '<p style="margin:0"><a href="https://flyability.com/x?a=1&amp;b=2">Link</a></p>';
+    expect(sanitizeMailHtml(html)).toBe(html);
+  });
+});
