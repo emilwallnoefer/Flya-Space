@@ -146,7 +146,7 @@ const MONTHS: Record<string, number> = {
  * month/year + day column pair. Slash formats are deliberately not supported
  * (M/D vs D/M is ambiguous).
  */
-function parseFullDate(value: string) {
+export function parseFullDate(value: string) {
   const text = value.trim();
   let year: number, month: number, day: number;
   let match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
@@ -165,7 +165,7 @@ function parseFullDate(value: string) {
   return `${year}-${pad2(month)}-${pad2(day)}`;
 }
 
-function parseDateFromMonthYearDay(monthYearRaw: string, dayRaw: string) {
+export function parseDateFromMonthYearDay(monthYearRaw: string, dayRaw: string) {
   const monthYear = monthYearRaw.trim().replace(/\s+/g, " ");
   const day = Number.parseInt(dayRaw.trim(), 10);
   if (!monthYear || !Number.isFinite(day) || day < 1 || day > 31) return null;

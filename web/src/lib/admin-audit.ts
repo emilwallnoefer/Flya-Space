@@ -17,6 +17,9 @@ export type AdminAuditAction =
   // moved somebody else's material, and where to.
   | "fleet_holder_reassign"
   | "fleet_holder_release"
+  // Field stats: whose Google connection reads the planning sheet, and the
+  // salesperson → region map behind the regions chart.
+  | "field_stats_settings_change"
   // Read, not a write. Viewing one employee's day-level time record exposes
   // sick leave, break names and free-text comp notes, so who looked at whose
   // record is worth an accountable trail even though nothing changed.

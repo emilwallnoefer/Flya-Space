@@ -24,6 +24,7 @@ const ACTION_LABELS: Record<string, string> = {
   employee_record_view: "Employee record viewed",
   fleet_holder_reassign: "Holder name reassigned",
   fleet_holder_release: "Holder name released",
+  field_stats_settings_change: "Field stats settings change",
 };
 
 function roleText(value: unknown): string {

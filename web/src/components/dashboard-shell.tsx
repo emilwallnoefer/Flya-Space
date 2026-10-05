@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuthNavbar } from "@/components/auth-navbar";
 import { OfflineGameCard } from "@/components/offline-game-card";
+import { ChatBubbleIcon } from "@/components/chat/icons";
 import { MailComposerPanel } from "@/components/mail-composer/mail-composer-panel";
 import { useMailComposer } from "@/components/mail-composer/use-mail-composer";
 import { TimeTrackerPanel, type WeekResponse } from "@/components/time-tracker-panel";
@@ -31,12 +32,14 @@ const AdminPanel = dynamic(
   () => import("@/components/admin-panel").then((m) => m.AdminPanel),
   { ssr: false, loading: PanelLoading },
 );
-// Team chat lives in the burger menu and is mounted only while it is open. It
-// is what pulls supabase-js (realtime included) into the browser, and while
+// Team chat opens from the floating pill and is mounted only while it is open.
+// It is what pulls supabase-js (realtime included) into the browser, and while
 // mounted it holds a postgres_changes subscription — a standing cost on the
 // database for every open dashboard tab, which the 0.5 GB instance cannot
 // spare (it swaps, and the first queries after a quiet spell stall for
-// seconds). Nothing chat-related loads or connects until someone clicks it.
+// seconds). So the pill itself is plain markup in the shell: nothing
+// chat-related loads or connects until someone clicks it, which is also why it
+// shows no unread count.
 const ChatWidget = dynamic(() => import("@/components/chat-widget").then((m) => m.ChatWidget), {
   ssr: false,
 });
@@ -45,10 +48,40 @@ const FleetPanel = dynamic(
   () => import("@/components/fleet/fleet-panel").then((m) => m.FleetPanel),
   { ssr: false, loading: PanelLoading },
 );
+// Field stats sit open at the bottom of the workspace home, below the fold. The
+// chunk loads and the panel fetches (a sheet read) only once someone scrolls
+// near it — see FieldStatsOnScroll.
+const FieldStatsPanel = dynamic(
+  () => import("@/components/field-stats/field-stats-panel").then((m) => m.FieldStatsPanel),
+  { ssr: false, loading: PanelLoading },
+);
 
 // Fleet and Admin sit behind a click, so the server does not hold the first
 // paint for their data: it streams in as a promise after the shell is already
 // on screen. The panel suspends only if it is opened before the data arrives.
+/**
+ * Mounts Field stats once the bottom of the workspace home comes within a
+ * screen of the viewport, so a visit that never scrolls loads no chart code and
+ * reads no sheet.
+ */
+function FieldStatsOnScroll() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || visible) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setVisible(true);
+      },
+      { rootMargin: "0px 0px 100% 0px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [visible]);
+  return <div ref={ref}>{visible ? <FieldStatsPanel /> : <div className="h-64" aria-hidden />}</div>;
+}
+
 function StreamedFleetPanel({ board }: { board: Promise<FleetBoardResponse | null> }) {
   return <FleetPanel initialBoard={use(board)} />;
 }
@@ -131,15 +164,18 @@ function IconClock({ className }: { className?: string }) {
   );
 }
 
-function IconCog({ className }: { className?: string }) {
+function IconDrone({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
-        d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.37.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"
+        d="M9.5 9.5h5v5h-5zM9.5 9.5 7 7m7.5 2.5L17 7m-2.5 7.5L17 17m-7.5-2.5L7 17"
       />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      <circle cx="5.5" cy="5.5" r="2.5" />
+      <circle cx="18.5" cy="5.5" r="2.5" />
+      <circle cx="5.5" cy="18.5" r="2.5" />
+      <circle cx="18.5" cy="18.5" r="2.5" />
     </svg>
   );
 }
@@ -187,6 +223,10 @@ export function DashboardShell({
     if (isAdmin || userRole === "hr") base.push("admin");
     return base;
   }, [userRole, isAdmin]);
+
+  // Cards on the workspace home: Time Tracker always, Mail and Fleet when
+  // available. Settings and Admin live in the burger menu, not here.
+  const homeCardCount = 1 + (["mail", "fleet"] as const).filter((key) => availableModules.includes(key)).length;
 
   const [showComposer, setShowComposer] = useState(initialModule != null);
   const [beginAnimating, setBeginAnimating] = useState(false);
@@ -269,8 +309,8 @@ export function DashboardShell({
     };
   }, [availableModules, initialWeek]);
 
-  // Warm the Gmail connection status for the navbar pill. Skipped when the SSR
-  // already seeded it (pilots), so the pill is correct on first paint without a
+  // Warm the Gmail connection status for the mail composer. Skipped when the SSR
+  // already seeded it (pilots), so it is correct on first paint without a
   // client round-trip; still runs as a fallback when props were absent.
   const gmailStatusSeeded = initialSettings?.gmail != null;
   useEffect(() => {
@@ -388,23 +428,14 @@ export function DashboardShell({
       <div className="absolute inset-0 aurora-bg" />
       <section className="page-shell">
         <AuthNavbar
-          email={email}
-          gmailConnected={gmailStatus.connected}
-          gmailEmail={gmailStatus.gmail_email}
           activeModule={activeModule}
           availableModules={availableModules}
-          showGmailStatus={userRole !== "sales" && userRole !== "hr"}
-          userRole={userRole}
           adminModuleLabel={adminModuleLabel}
           onSelectModule={(module) => {
             if (!availableModules.includes(module)) return;
             if (module !== activeModule) playUiSound("switchWhoosh");
             switchModule(module);
             setShowComposer(true);
-          }}
-          onOpenChat={() => {
-            playUiSound("switchWhoosh");
-            setChatOpen(true);
           }}
         />
 
@@ -445,7 +476,7 @@ export function DashboardShell({
             initial={false}
             animate={beginAnimating ? { opacity: 0 } : { opacity: 1 }}
             transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-            className="relative flex min-h-[min(72vh,640px)] flex-col justify-center"
+            className="relative flex min-h-[calc(100svh-7rem)] flex-col justify-center"
           >
             <div className="dashboard-mesh" aria-hidden />
             <div className="dashboard-mesh-fade" aria-hidden />
@@ -466,35 +497,10 @@ export function DashboardShell({
               </div>
 
               <div
-                className={`grid gap-4 ${availableModules.filter((m) => m !== "admin").length >= 3 ? "md:grid-cols-3" : "sm:mx-auto sm:max-w-2xl sm:grid-cols-2"}`}
+                className={`grid gap-4 ${
+                  homeCardCount >= 3 ? "md:grid-cols-3" : "sm:mx-auto sm:max-w-2xl sm:grid-cols-2"
+                }`}
               >
-                {availableModules.includes("settings") ? (
-                  <m.button
-                    type="button"
-                    initial={false}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => openModuleCard("settings")}
-                    className={`${MODULE_CARD_CLASS} hover:border-violet-400/35 hover:shadow-[0_28px_56px_-12px_rgba(167,139,250,0.12)] focus-visible:outline-violet-400/80`}
-                  >
-                    <span className={MODULE_CARD_CORE_CLASS}>
-                      <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-violet-400/12 blur-2xl transition group-hover:bg-violet-400/22" aria-hidden />
-                      <span className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-violet-400/25 bg-violet-400/10 text-violet-200">
-                        <IconCog className="h-5 w-5" />
-                      </span>
-                      <span className="text-lg font-semibold text-ink">Settings</span>
-                      <span className="mt-2 text-sm leading-relaxed text-ink-4">
-                        Gmail, signatures, travel mapping, sounds, and account tools.
-                      </span>
-                      <span className="mt-6 inline-flex items-center gap-2 text-xs font-semibold text-violet-200/90">
-                        Continue
-                        <span className="grid h-6 w-6 place-items-center rounded-full border border-glass/15 bg-glass/10 transition ease-fluid group-hover:-translate-y-[1px] group-hover:translate-x-1">
-                          <IconArrow className="h-3.5 w-3.5" />
-                        </span>
-                      </span>
-                    </span>
-                  </m.button>
-                ) : null}
-
                 {availableModules.includes("mail") ? (
                   <m.button
                     type="button"
@@ -547,10 +553,47 @@ export function DashboardShell({
                   </span>
                 </m.button>
 
+                {availableModules.includes("fleet") ? (
+                  <m.button
+                    type="button"
+                    initial={false}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => openModuleCard("fleet")}
+                    className={`${MODULE_CARD_CLASS} hover:border-sky-400/35 hover:shadow-[0_28px_56px_-12px_rgba(56,189,248,0.1)] focus-visible:outline-sky-400/80`}
+                  >
+                    <span className={MODULE_CARD_CORE_CLASS}>
+                      <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-sky-400/12 blur-2xl transition group-hover:bg-sky-400/22" aria-hidden />
+                      <span className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-sky-400/25 bg-sky-400/10 text-sky-200">
+                        <IconDrone className="h-5 w-5" />
+                      </span>
+                      <span className="inline-flex items-center gap-2 text-lg font-semibold text-ink">
+                        Fleet
+                        <span className="rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-normal uppercase tracking-wider text-warn">
+                          Beta
+                        </span>
+                      </span>
+                      <span className="mt-2 text-sm leading-relaxed text-ink-4">
+                        Book drones and material by the day, and see who has what.
+                      </span>
+                      <span className="mt-6 inline-flex items-center gap-2 text-xs font-semibold text-sky-200/90">
+                        Continue
+                        <span className="grid h-6 w-6 place-items-center rounded-full border border-glass/15 bg-glass/10 transition ease-fluid group-hover:-translate-y-[1px] group-hover:translate-x-1">
+                          <IconArrow className="h-3.5 w-3.5" />
+                        </span>
+                      </span>
+                    </span>
+                  </m.button>
+                ) : null}
               </div>
             </div>
           </m.div>
         )}
+
+        {!showComposer && !beginAnimating ? (
+          <div className="relative z-[1] mx-auto w-full max-w-5xl pb-10">
+            <FieldStatsOnScroll />
+          </div>
+        ) : null}
 
         <AnimatePresence initial={false}>
           {showComposer ? (
@@ -585,7 +628,7 @@ export function DashboardShell({
                       />
                     </Suspense>
                   ) : activeModule === "settings" ? (
-                    // SSR-prefetched settings seed both the navbar Gmail pill above
+                    // SSR-prefetched settings seed both the Gmail status above
                     // and the panel itself, so opening Settings fires none of its
                     // three mount fetches.
                     <SettingsPanel
@@ -609,6 +652,30 @@ export function DashboardShell({
 
       </section>
       {chatOpen ? <ChatWidget isAdmin={isAdmin} onClose={() => setChatOpen(false)} /> : null}
+      <AnimatePresence>
+        {/* Hidden while the panel is open, and while a bottom-right popup
+            (program readme, what's new) holds that corner. */}
+        {!chatOpen && !showProgramReadmePrompt && !showWhatsNew ? (
+          <m.button
+            key="chat-trigger"
+            type="button"
+            aria-label="Open team chat"
+            initial={{ opacity: 0, scale: 0.85, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.85, y: 12 }}
+            transition={{ type: "spring", stiffness: 360, damping: 30 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              playUiSound("switchWhoosh");
+              setChatOpen(true);
+            }}
+            className="fixed bottom-4 right-4 z-[125] inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/95 px-4 py-3 text-sm font-semibold text-slate-900 shadow-[0_18px_36px_-12px_rgba(34,211,238,0.55)] backdrop-blur transition hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <ChatBubbleIcon className="h-5 w-5" />
+            <span className="hidden sm:inline">Team chat</span>
+          </m.button>
+        ) : null}
+      </AnimatePresence>
       <OfflineGameCard />
       {showProgramReadmePrompt ? (
         <div

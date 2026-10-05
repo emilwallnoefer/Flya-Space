@@ -12,6 +12,7 @@ import { TimeTrackerPanel } from "@/components/time-tracker-panel";
 import { AdminOverviewStats } from "@/components/admin-overview-stats";
 import { AdminReminderControls } from "@/components/admin-reminder-controls";
 import { AdminMailSettings } from "@/components/admin-mail-settings";
+import { AdminFieldStatsSettings } from "@/components/admin-field-stats-settings";
 import { AdminAuditLog } from "@/components/admin-audit-log";
 import { AdminSecurityEvents } from "@/components/admin-security-events";
 import dynamic from "next/dynamic";
@@ -70,6 +71,7 @@ type AdminSection =
   | "users"
   | "reminders"
   | "mail_ai"
+  | "field_stats"
   | "holder_claims"
   | "audit"
   | "security";
@@ -99,6 +101,7 @@ const ADMIN_SECTIONS: Array<{ id: AdminSection; label: string; adminOnly: boolea
   { id: "users", label: "Users & roles", adminOnly: true },
   { id: "reminders", label: "Reminders", adminOnly: true },
   { id: "mail_ai", label: "Mail & AI", adminOnly: true },
+  { id: "field_stats", label: "Field stats", adminOnly: true },
   { id: "holder_claims", label: "Holder claims", adminOnly: true },
   { id: "audit", label: "Audit log", adminOnly: true },
   { id: "security", label: "Security", adminOnly: true },
@@ -354,6 +357,8 @@ export function AdminPanel({ canManageUsers = true, initialUsers = null, initial
               {section === "reminders" && canManageUsers ? <AdminReminderControls /> : null}
 
               {section === "mail_ai" && canManageUsers ? <AdminMailSettings /> : null}
+
+              {section === "field_stats" && canManageUsers ? <AdminFieldStatsSettings /> : null}
 
               {section === "holder_claims" && canManageUsers ? <AdminHolderClaims /> : null}
 

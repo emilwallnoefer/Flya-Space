@@ -20,6 +20,18 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-05-field-stats",
+    date: "Oct 5, 2026",
+    title: "Field stats, and Fleet on the home screen",
+    highlights: [
+      "Scroll down on the workspace home: live charts from the mission planning sheet.",
+      "Regions, POCs and trainings per pilot, and travel days.",
+      "All of 2026 or one month at a time; click a name to see what it counts.",
+      "Fleet also gets its own card on the workspace home.",
+      "Team chat is back as the pill in the bottom-right corner; Settings stays in the menu.",
+    ],
+  },
+  {
     version: "2026-10-02-elios-flight-modes",
     date: "Oct 2, 2026",
     title: "The drone game, reworked — fresh leaderboard",

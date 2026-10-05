@@ -2,35 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 import { playUiSound } from "@/lib/ui-sounds";
-import { userRoleLabel, type UserRole } from "@/lib/user-role";
 
 type ModuleKey = "mail" | "time" | "fleet" | "settings" | "admin";
 
 type AuthNavbarProps = {
-  email: string;
-  gmailConnected: boolean;
-  gmailEmail?: string | null;
   activeModule: ModuleKey;
   availableModules?: ModuleKey[];
-  showGmailStatus?: boolean;
-  userRole?: UserRole | null;
   adminModuleLabel?: string;
   onSelectModule: (module: ModuleKey) => void;
-  /** Opens Team chat. Omitted = no chat entry in the menu. */
-  onOpenChat?: () => void;
 };
 
 export function AuthNavbar({
-  email,
-  gmailConnected,
-  gmailEmail,
   activeModule,
   availableModules = ["mail", "time", "fleet", "settings"],
-  showGmailStatus = true,
-  userRole = null,
   adminModuleLabel = "Admin",
   onSelectModule,
-  onOpenChat,
 }: AuthNavbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -45,8 +31,6 @@ export function AuthNavbar({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  const initials = email.slice(0, 2).toUpperCase();
-  const statusLabel = gmailConnected ? "Gmail connected" : "Gmail disconnected";
 
   return (
     <nav className="glass-card sticky top-3 z-[90] !overflow-visible p-2.5 md:p-3">
@@ -158,24 +142,6 @@ export function AuthNavbar({
                     {activeModule === "fleet" ? <span className="text-[11px] opacity-80">Active</span> : null}
                   </button>
                 ) : null}
-                {availableModules.includes("settings") ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (activeModule !== "settings") playUiSound("switchWhoosh");
-                      onSelectModule("settings");
-                      setMenuOpen(false);
-                    }}
-                    role="tab"
-                    aria-selected={activeModule === "settings"}
-                    className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/70 hover:bg-accent/95 hover:text-slate-900 ${
-                      activeModule === "settings" ? "border-accent/55 bg-glass/12" : "border-glass/10 bg-glass/5"
-                    }`}
-                  >
-                    <span>Settings</span>
-                    {activeModule === "settings" ? <span className="text-[11px] opacity-80">Active</span> : null}
-                  </button>
-                ) : null}
                 {availableModules.includes("admin") ? (
                   <button
                     type="button"
@@ -196,57 +162,27 @@ export function AuthNavbar({
                 ) : null}
               </div>
 
-              {onOpenChat ? (
-                <div className="mt-2">
+              {/* Settings and sign-out: set apart from the tools above. */}
+              <hr className="my-2.5 border-glass/15" />
+
+              <div className="grid gap-1.5">
+                {availableModules.includes("settings") ? (
                   <button
                     type="button"
                     onClick={() => {
-                      onOpenChat();
+                      if (activeModule !== "settings") playUiSound("switchWhoosh");
+                      onSelectModule("settings");
                       setMenuOpen(false);
                     }}
-                    className="flex w-full items-center justify-between rounded-lg border border-glass/10 bg-glass/5 px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/70 hover:bg-accent/95 hover:text-slate-900"
+                    aria-current={activeModule === "settings" ? "page" : undefined}
+                    className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/70 hover:bg-accent/95 hover:text-slate-900 ${
+                      activeModule === "settings" ? "border-accent/55 bg-glass/12" : "border-glass/10 bg-glass/5"
+                    }`}
                   >
-                    <span>Team chat</span>
-                    <span className="text-[11px] opacity-80">Open</span>
+                    <span>Settings</span>
+                    {activeModule === "settings" ? <span className="text-[11px] opacity-80">Active</span> : null}
                   </button>
-                </div>
-              ) : null}
-
-              {showGmailStatus ? (
-                <div className="mt-2 rounded-lg border border-glass/10 bg-glass/5 px-2.5 py-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`h-2 w-2 rounded-full ${gmailConnected ? "bg-emerald-300" : "bg-rose-300"}`}
-                      aria-hidden="true"
-                    />
-                    <p className="text-xs text-ink/90">{statusLabel}</p>
-                  </div>
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <span className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-accent-from to-accent-to text-[11px] font-semibold text-slate-950">
-                      {initials}
-                    </span>
-                    <p className="truncate text-xs text-ink-2/85">{gmailEmail ?? email}</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-2 rounded-lg border border-glass/10 bg-glass/5 px-2.5 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-accent-from to-accent-to text-[11px] font-semibold text-slate-950">
-                      {initials}
-                    </span>
-                    <p className="truncate text-xs text-ink-2/85">{email}</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="mt-2 rounded-lg border border-glass/10 bg-glass/5 px-2.5 py-2">
-                <p className="text-[11px] uppercase tracking-[0.15em] text-ink-3/75">Logged in as</p>
-                <p className="mt-1 text-xs font-medium text-ink">
-                  {userRoleLabel(userRole ?? null)}
-                </p>
-              </div>
-
-              <div className="mt-2 grid gap-1.5">
+                ) : null}
                 <form action="/logout" method="post">
                   <button
                     type="submit"
