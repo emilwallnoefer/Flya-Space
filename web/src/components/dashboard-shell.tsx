@@ -121,18 +121,20 @@ function ScrollHint({ active }: { active: boolean }) {
   }, [done]);
   if (!active || done) return null;
   return (
-    <m.div
-      aria-hidden
-      className="pointer-events-none fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 text-ink-3"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: [0, 0.55, 0.2, 0.55, 0.2, 0.55, 0] }}
-      transition={{ duration: 4.2, delay: 0.8, ease: "easeInOut" }}
-      onAnimationComplete={() => setDone(true)}
-    >
-      <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-      </svg>
-    </m.div>
+    // Centred by the wrapper, not a translate: Framer Motion owns the inner
+    // element's transform for the bob.
+    <div aria-hidden className="pointer-events-none fixed inset-x-0 bottom-16 z-[60] flex justify-center text-ink-3">
+      <m.div
+        initial={{ opacity: 0, y: 0 }}
+        animate={{ opacity: [0, 0.55, 0.25, 0.55, 0.25, 0.55, 0], y: [0, 5, 0, 5, 0, 5, 0] }}
+        transition={{ duration: 4.2, delay: 0.8, ease: "easeInOut" }}
+        onAnimationComplete={() => setDone(true)}
+      >
+        <svg className="h-5 w-12" viewBox="0 0 48 20" fill="none" stroke="currentColor" strokeWidth="1.75">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 5l18 10L42 5" />
+        </svg>
+      </m.div>
+    </div>
   );
 }
 
