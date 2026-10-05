@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { playUiSound } from "@/lib/ui-sounds";
 import { userRoleLabel, type UserRole } from "@/lib/user-role";
 
-type ModuleKey = "mail" | "time" | "fleet" | "stats" | "settings" | "admin";
+type ModuleKey = "mail" | "time" | "fleet" | "settings" | "admin";
 
 type AuthNavbarProps = {
   email: string;
