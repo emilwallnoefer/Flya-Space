@@ -15,18 +15,6 @@ Two distinct subsystems live side-by-side:
 
 All `npm` commands run from `web/`.
 
-```bash
-# Dev server
-cd web && npm run dev            # Next.js on http://localhost:3000
-
-# Build / typecheck / lint
-cd web && npm run build
-cd web && npm run lint           # eslint (extends eslint-config-next)
-
-# One-off data import
-cd web && npm run import:hourlogger   # node scripts/import-hourlogger.mjs
-```
-
 Tests (run from `web/`): `npm run test` — Vitest unit suite (`src/**/*.test.ts`, colocated with sources); `npm run test:e2e` — Playwright smoke (`e2e/`, needs `.env.local` with the public Supabase vars and a one-time `npx playwright install chromium`); `npm run test:rls` — RLS smoke script. New pure-logic modules should get a colocated `*.test.ts`.
 
 ## Dependencies & CI
@@ -65,19 +53,9 @@ Vulnerabilities that live *inside* `next` (it vendors a pinned `postcss` and an 
 
 ### Modules & where to look
 
-- **Time Tracker** — UI in `components/time-tracker-panel.tsx`, week stepper in `week-stepper.tsx`. Server queries in `lib/time-tracker-queries.ts`, business rules in `lib/time-tracker-rules.ts`. API routes under `app/api/time-tracker/`. Schema lives in `supabase/time-tracker-schema.sql` + the dated migrations alongside it. Initial week is SSR'd (`dashboard/page.tsx`) to skip a first-paint fetch.
 - **Mail Tracking** — admin-only; module in `components/mail-tracking/` (panel + `tabs/` + `charts/`), with `components/mail-tracking-panel.tsx` as a re-export shim. Mounted lazily by `admin-panel.tsx` under the "Mail tracking" section. Server engine in `lib/mail-engine.ts`. Public redirector at `app/r/[id]/` records clicks. Migrations: `supabase/2026-05-06-mail-link-tracking*.sql`, `2026-05-12-mail-click-timeline.sql`. All read paths **exclude `mail_sends.mail_type = 'pre'`**: pre-training mails render no link blocks, so they can never be clicked and would only dilute the click rates. The filter lives in the RPCs (`supabase/2026-07-26-mail-tracking-exclude-pre.sql`) — carry it forward when re-creating any of them.
-- **Gmail integration** — OAuth flow under `app/api/gmail/{connect,callback,disconnect,status}/`, draft creation at `app/api/gmail/create-draft/`. Token storage/refresh logic in `lib/gmail.ts`. AI draft generation: `app/api/generate/route.ts`.
-- **Admin** — `components/admin-panel.tsx` owns the section switcher (Overview, Time, Onboarding, Mail tracking, Users & roles, Reminders, Mail & AI, Holder claims, Audit log, Security) and delegates to one component per section: `admin-overview-stats.tsx` (usage insights), `admin-onboarding-panel.tsx`, `admin-reminder-controls.tsx`, `admin-mail-settings.tsx` (Brief-mode model), `admin-holder-claims.tsx` (fleet name claims + corrections), `admin-audit-log.tsx`, `admin-security-events.tsx`. Endpoints in `app/api/admin/`.
 - **Team Chat** — `components/chat-widget.tsx`, server logic in `lib/chat.ts`, `app/api/chat/`. Uses Supabase Realtime (`postgres_changes` on `chat_messages` + `chat_message_votes`) and the private `chat-attachments` Storage bucket. Migrations: `supabase/2026-04-19-team-chat*.sql`, `2026-08-07-chat-certificate-request.sql`. The composer's "Certificate" slot opens a structured form (`components/chat/certificate-request-modal.tsx`) posted to `app/api/chat/certificate-request/`; that route is the **only** writer of `certificate_request` rows — it derives the trainer from the session, renders the summary via `lib/certificate-request.ts`, and mails `ADMIN_EMAILS` through Resend. The `change_request` kind is retired but deliberately still accepted by the DB constraint and still rendered, so old rows survive; don't remove it.
-- **Fleet (beta)** — material tracking + day-level booking (inclusive `start_date`/`end_date`; `end_date` is the due date), in `components/fleet/` (`fleet-panel.tsx` + `day-grid.tsx` + `manage-material.tsx` + `asset-icon.tsx` + `reliability-badge.tsx`), mounted lazily from `dashboard-shell.tsx` and reachable from the burger menu. Pure rules in `lib/fleet-rules.ts` (day math, conflict checks, reliability score, reminder schedule — all `Date.now()`-free and covered by `fleet-rules.test.ts`); server reads in `lib/fleet-queries.ts`; all writes through `app/api/fleet/route.ts` on the service-role client, since the booking horizon and queue order cannot be expressed as RLS. Reminders: `app/api/cron/fleet-return-reminder/`. Migrations: `supabase/2026-09-01-fleet-management.sql` (needs `btree_gist`), then `2026-09-01-fleet-holder-claims.sql` (lets a booking be filed under a NAME with a null `user_id`, adds the claim flow + `fleet_settings`), then `2026-09-01-fleet-assigned-pool.sql` (`fleet_assets.pooled` splits the bookable pool from fixed assignments; only pooled units render in the calendar), then `2026-09-15-fleet-claim-oversight.sql` (`self_match` + `claimed_label` on `fleet_holder_aliases`, and withdraws the unused `authenticated` select grant). Claiming a holder label is **deliberately permissive** — the sheet spelled people inconsistently, so a strict name match would strand the people the flow exists to onboard; a mismatch is recorded, mailed to `ADMIN_EMAILS`, and fixable from Admin → Holder claims (`app/api/admin/fleet-holder-claims/`). All of them are **structure only** — the material list is entered through the app (Fleet → Manage, admin only), never seeded. The reliability score is **derived, never stored** — keep it that way, or it will drift from the history it summarises. Two invariants that protect trust in it: rows with `source = 'sheet_import'` never affect anyone's score, and an unclaimed booking (`user_id` null) can never trigger a reminder.
-- **"Fly where people can't" (the Elios game)** — the drone game on the waiting-for-a-role screen (`components/role-gate.tsx`) and in the mail composer's preview slot, where it holds the space a draft will fill and `paused` stops the loop as the mail types in. Rules in `lib/elios-flight.ts` (flight, obstacles, pick-ups, cables) and `lib/elios-events.ts` (what goes wrong mid-run): pure, `Math.random()`-free and unit-tested, covering five spaces (boiler, ballast tank, mine stope, sewer, storage tank), 25 obstacle kinds built from seeded draws, and the bulkhead with a manhole that separates one space from the next. Everything visual is in `components/elios/` (`renderer.ts`, `event-fx.ts`, `obstacle-art.ts`, `lighting.ts`, `drone-art.ts`, `scenery.ts`, `paint.ts`, `look.ts`), mounted by `components/elios-game.tsx`. Leaderboard: `lib/elios-leaderboard.ts` + `app/api/elios-score/`, migration `supabase/2026-09-15-elios-leaderboard.sql`. In development `/offline?event=DRAFT` (any `EVENT_KINDS` name) makes that event come first.
-  - **Offline, like the browser's dino.** `public/sw.js` is a service worker that does one thing: when a navigation fails for lack of a network, it serves `/offline` (`app/offline/page.tsx` → `components/offline-screen.tsx`) in its place. Online it is a pass-through; it reads its cache only after a fetch has already failed, and it caches nothing but that public page, the `/_next/static/` files its HTML references, and `public/elios/`. **Never widen it to dashboard pages or API responses** — those hold people's data. It is registered in production only by `components/service-worker-registrar.tsx` as `/sw.js?v=<NEXT_PUBLIC_APP_BUILD>` (set in `next.config.ts`), so each deploy is a new script URL that re-caches against its own chunks. If you add or rename a file in `public/elios/`, update `ELIOS_ASSETS` in `sw.js`. For a dashboard that is already open (a single page, so no navigation ever fails), `components/offline-game-card.tsx` pops the game up on the `offline` event.
-  - **Scores flown offline are queued, not lost.** `lib/elios-score-sync.ts` posts a finished run; if there is no network, or the answer is 401/429/5xx, the score waits in localStorage (only the highest one — the board keeps a best, not a log) and is posted on the next `online` event or dashboard load. Rules in `lib/elios-pending-score.ts`. A 400 drops it; anything that can come right later keeps it. The queue belongs to the browser, not the account: it is posted under whoever is signed in next.
-  - **Collision runs against exactly the shapes that are drawn.** Every painter works inside a clip of its obstacle's own solids, and ragged edges are cut by the seeded generator in the rules module, never invented by the renderer. New art belongs inside the solids; a new obstacle's geometry belongs in `elios-flight.ts`, where the test suite sweeps every kind and placement to prove a passage survives.
-  - **The space picks the mode; the pilot only steers.** One control everywhere: hold up to climb, down to descend. `ZONE_MODE` flies the boiler, ballast tank and sewer in Assist (holds still, leans into drafts) and the stope and storage tank in ATTI (momentum, a wander of its own, drafts carry it); dust forces ATTI in an Assist space. There is no gearbox and no throttle — `speedFor()` sets the pace from obstacles cleared (1.5 m/s, +0.03/obstacle, cap 4.5 m/s; the cap is bounded by the DOUBLE_FRAME slalom test). Contact with steel, the roof or the floor ends the run; the one survivable contact is a swinging cable (a pendulum pulled in by the downwash), which drops the drone and kills the sticks for `KNOCK_TIME` while it sheds the rope. Events (draft, weak signal → instant Return-to-Signal, dust, darkness, cables, radiation band, gas layer) warn for `WARNING_TIME` first; pick-ups are Repeat Flight (collision-immune autopilot steering each obstacle's `lane`) and the dust-proof light. Touching any of this, `OBSTACLE_GAP` or `MIN_PASSAGE` changes what a score means — see the next point.
-  - **Changing what a score means is a versioned reset.** Bump `ELIOS_RULES_VERSION` (`lib/elios-leaderboard.ts`) and the `-vN` suffix on `BEST_SCORE_KEY` and `PENDING_SCORE_KEY`, and ship a dated migration that empties `elios_scores`. The client posts `{ score, rules }`; the route answers anything else with a 400, which the client treats as "drop", so tabs on the previous build and scores queued offline under old rules can never land on the new board. Apply the reset migration only **after** the release is live, or an old tab can post into the gap. Version 2 (2026-10-02): `supabase/2026-10-02-elios-leaderboard-reset.sql`; version 3 (2026-10-02, the flight-modes rework): `supabase/2026-10-02-elios-leaderboard-reset-v3.sql`.
-  - The photographs and material textures in `public/elios/` come from flyability.com and are built by `scripts/build-elios-assets.mjs`, which holds the source URLs and crops — re-run it rather than editing the webp files, and keep every crop clear of the drone itself (a second Elios in the background reads as a bug). The whole set is ~180 KB and loads after the game is already playable.
+- **Fleet (beta)** and **the Elios game** ("Fly where people can't", incl. the offline service worker) — their invariants live in `.claude/rules/fleet.md` and `.claude/rules/elios-game.md`, which load automatically when you touch those files. Read them before changing either module.
 - **Weekly reminder cron** — `app/api/cron/time-log-reminder/route.ts`. Triggered by Vercel Cron (see `web/vercel.json`) at 07:00 + 08:00 UTC every Monday; the route gates internally to "Monday 09:00 Europe/Zurich" so exactly one of the two runs work year-round across DST. Sends via Resend; audit rows in `time_log_reminder_sends`. Auth: `Authorization: Bearer ${CRON_SECRET}` from Vercel, or an admin session for manual invocations. Useful query params: `?preview=html|text`, `?send_test=<email>`, `?dry=1&force=1`, `?force=1`.
 
 ### Supabase migrations
@@ -109,33 +87,7 @@ The `web/README.md` has the most detailed env-var reference and the cron/team-ch
 
 ### Function region — do not remove
 
-`web/vercel.json` pins `"regions": ["dub1"]` (Dublin). This is not a preference,
-and `vercel.json` is strict JSON with nowhere to say so, which is why it is
-written down here.
-
-The Supabase project lives in **eu-west-1 (Ireland)**. Vercel's default function
-region is `iad1` (Washington DC), and the project ran there until 2026-09-14 —
-so every database round trip crossed the Atlantic twice, because the compute sat
-between the European user and the European database. It was measurable from
-anywhere: `/api/fleet` returning a bare 401, doing nothing but one
-`auth.getUser()`, took **575 ms**. After pinning the region to Dublin the same
-request takes **~153 ms**, and every request in the app improved by roughly the
-same factor.
-
-Rules that follow from this:
-
-- **Keep the function region in the same AWS region as Supabase.** If the
-  database is ever moved, move this at the same time, and check the mapping —
-  Supabase `eu-west-1` is Vercel `dub1`, `eu-central-1` is `fra1`.
-- The Hobby plan allows exactly one region, which is all this needs.
-- `regions` in `vercel.json` overrides the dashboard, so the dashboard's
-  Functions → Region setting becomes read-only for this project. That is the
-  point: the region is infrastructure and belongs in the repo, not in a UI
-  someone has to remember.
-- To check what is actually serving traffic, read the `x-vercel-id` response
-  header: `fra1::dub1::...` is `edge::function::id`. The **second** code is the
-  one that matters. The first is only the edge nearest the visitor, which is why
-  this was easy to miss — the app looked EU-hosted right up until it needed data.
+`web/vercel.json` pins `"regions": ["dub1"]` so functions run in the same AWS region as the Supabase project (eu-west-1). Never remove it, and if the database ever moves, move this with it. Rationale, measurements and the region mapping: `.claude/rules/vercel-region.md`.
 
 ## Conventions worth knowing
 
