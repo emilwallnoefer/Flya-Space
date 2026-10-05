@@ -6,6 +6,27 @@ import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from
 import { AuthNavbar } from "@/components/auth-navbar";
 import { OfflineGameCard } from "@/components/offline-game-card";
 import { ChatBubbleIcon } from "@/components/chat/icons";
+import {
+  BETA_BADGE_CLASS,
+  CHAT_PILL_CLASS,
+  HOME_CARDS,
+  HOME_CONTENT_CLASS,
+  HOME_EYEBROW_CLASS,
+  HOME_GREETING_CLASS,
+  HOME_HERO_CLASS,
+  HOME_INTRO_CLASS,
+  HOME_ROLE_PILL_CLASS,
+  HOME_SUBTITLE,
+  HOME_SUBTITLE_CLASS,
+  homeGridClass,
+  MODULE_CARD_ARROW_CLASS,
+  MODULE_CARD_CLASS,
+  MODULE_CARD_CORE_CLASS,
+  MODULE_CARD_CTA_CLASS,
+  MODULE_CARD_DESCRIPTION_CLASS,
+  MODULE_CARD_ICON_CLASS,
+  MODULE_CARD_TITLE_CLASS,
+} from "@/components/workspace-home-layout";
 import { MailComposerPanel } from "@/components/mail-composer/mail-composer-panel";
 import { useMailComposer } from "@/components/mail-composer/use-mail-composer";
 import { TimeTrackerPanel, type WeekResponse } from "@/components/time-tracker-panel";
@@ -80,6 +101,39 @@ function FieldStatsOnScroll() {
     return () => observer.disconnect();
   }, [visible]);
   return <div ref={ref}>{visible ? <FieldStatsPanel /> : <div className="h-64" aria-hidden />}</div>;
+}
+
+/**
+ * A faint chevron that points at Field stats below the fold: it blinks softly
+ * a few times after the home loads, then fades out for good. Finite on
+ * purpose (nothing on screen may animate forever), gone the moment the page is
+ * scrolled, and played once per page load.
+ */
+function ScrollHint({ active }: { active: boolean }) {
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    if (done) return;
+    const onScroll = () => {
+      if (window.scrollY > 24) setDone(true);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [done]);
+  if (!active || done) return null;
+  return (
+    <m.div
+      aria-hidden
+      className="pointer-events-none fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 text-ink-3"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: [0, 0.55, 0.2, 0.55, 0.2, 0.55, 0] }}
+      transition={{ duration: 4.2, delay: 0.8, ease: "easeInOut" }}
+      onAnimationComplete={() => setDone(true)}
+    >
+      <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+      </svg>
+    </m.div>
+  );
 }
 
 function StreamedFleetPanel({ board }: { board: Promise<FleetBoardResponse | null> }) {
@@ -190,12 +244,6 @@ function IconArrow({ className }: { className?: string }) {
 
 /* Module cards use a nested "bezel" enclosure (outer tray + inner core with a
  * concentric radius), matching the chat widget's frame/screen construction. */
-const MODULE_CARD_CLASS =
-  "group relative flex flex-col overflow-hidden rounded-[1.4rem] border border-glass/[0.09] bg-glass/[0.04] p-1.5 text-left shadow-[0_24px_48px_-12px_rgba(0,0,0,0.55)] transition duration-150 ease-fluid hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2";
-
-const MODULE_CARD_CORE_CLASS =
-  "relative flex flex-1 flex-col overflow-hidden rounded-[calc(1.4rem-0.375rem)] bg-gradient-to-br from-panel/95 via-surface/90 to-surface/80 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
-
 export function DashboardShell({
   email,
   initialRole,
@@ -476,31 +524,21 @@ export function DashboardShell({
             initial={false}
             animate={beginAnimating ? { opacity: 0 } : { opacity: 1 }}
             transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-            className="relative flex min-h-[calc(100svh-7rem)] flex-col justify-center"
+            className={HOME_HERO_CLASS}
           >
             <div className="dashboard-mesh" aria-hidden />
             <div className="dashboard-mesh-fade" aria-hidden />
-            <div className="relative z-[1] mx-auto w-full max-w-5xl">
-              <div className="mb-10 md:mb-14">
-                <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-accent-soft/65">Workspace</p>
-                <h1 className="mt-3 max-w-2xl text-balance text-3xl font-semibold tracking-tight text-ink md:text-4xl lg:text-[2.65rem] lg:leading-[1.12]">
+            <div className={HOME_CONTENT_CLASS}>
+              <div className={HOME_INTRO_CLASS}>
+                <p className={HOME_EYEBROW_CLASS}>Workspace</p>
+                <h1 className={HOME_GREETING_CLASS}>
                   {timeGreeting()}, {greetingFromEmail(email)}
                 </h1>
-                <p className="mt-4 max-w-lg text-pretty text-sm leading-relaxed text-ink-4 md:text-base">
-                  Open a module below and pick up right where you left off.
-                </p>
-                {userRole ? (
-                  <span className="mt-5 inline-flex items-center rounded-full border border-glass/10 bg-glass/[0.06] px-3 py-1 text-[11px] font-medium tracking-wide text-ink-3">
-                    {userRoleLabel(userRole)}
-                  </span>
-                ) : null}
+                <p className={HOME_SUBTITLE_CLASS}>{HOME_SUBTITLE}</p>
+                {userRole ? <span className={HOME_ROLE_PILL_CLASS}>{userRoleLabel(userRole)}</span> : null}
               </div>
 
-              <div
-                className={`grid gap-4 ${
-                  homeCardCount >= 3 ? "md:grid-cols-3" : "sm:mx-auto sm:max-w-2xl sm:grid-cols-2"
-                }`}
-              >
+              <div className={homeGridClass(homeCardCount)}>
                 {availableModules.includes("mail") ? (
                   <m.button
                     type="button"
@@ -511,16 +549,14 @@ export function DashboardShell({
                   >
                     <span className={MODULE_CARD_CORE_CLASS}>
                       <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-accent/15 blur-2xl transition group-hover:bg-accent/25" aria-hidden />
-                      <span className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-accent/25 bg-accent/10 text-accent-soft">
+                      <span className={`${MODULE_CARD_ICON_CLASS} border-accent/25 bg-accent/10 text-accent-soft`}>
                         <IconMail className="h-5 w-5" />
                       </span>
-                      <span className="text-lg font-semibold text-ink">Mail Composer</span>
-                      <span className="mt-2 text-sm leading-relaxed text-ink-4">
-                        Training email drafts and Gmail handoff in one flow.
-                      </span>
-                      <span className="mt-6 inline-flex items-center gap-2 text-xs font-semibold text-accent-soft/90">
+                      <span className={MODULE_CARD_TITLE_CLASS}>{HOME_CARDS[0].title}</span>
+                      <span className={MODULE_CARD_DESCRIPTION_CLASS}>{HOME_CARDS[0].description}</span>
+                      <span className={`${MODULE_CARD_CTA_CLASS} text-accent-soft/90`}>
                         Continue
-                        <span className="grid h-6 w-6 place-items-center rounded-full border border-glass/15 bg-glass/10 transition ease-fluid group-hover:-translate-y-[1px] group-hover:translate-x-1">
+                        <span className={MODULE_CARD_ARROW_CLASS}>
                           <IconArrow className="h-3.5 w-3.5" />
                         </span>
                       </span>
@@ -537,16 +573,14 @@ export function DashboardShell({
                 >
                   <span className={MODULE_CARD_CORE_CLASS}>
                     <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-emerald-400/12 blur-2xl transition group-hover:bg-emerald-400/22" aria-hidden />
-                    <span className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-400/10 text-positive">
+                    <span className={`${MODULE_CARD_ICON_CLASS} border-emerald-400/25 bg-emerald-400/10 text-positive`}>
                       <IconClock className="h-5 w-5" />
                     </span>
-                    <span className="text-lg font-semibold text-ink">Time Tracker</span>
-                    <span className="mt-2 text-sm leading-relaxed text-ink-4">
-                      Workdays, breaks, compensation time, and overtime in one place.
-                    </span>
-                    <span className="mt-6 inline-flex items-center gap-2 text-xs font-semibold text-positive/90">
+                    <span className={MODULE_CARD_TITLE_CLASS}>{HOME_CARDS[1].title}</span>
+                    <span className={MODULE_CARD_DESCRIPTION_CLASS}>{HOME_CARDS[1].description}</span>
+                    <span className={`${MODULE_CARD_CTA_CLASS} text-positive/90`}>
                       Continue
-                      <span className="grid h-6 w-6 place-items-center rounded-full border border-glass/15 bg-glass/10 transition ease-fluid group-hover:-translate-y-[1px] group-hover:translate-x-1">
+                      <span className={MODULE_CARD_ARROW_CLASS}>
                         <IconArrow className="h-3.5 w-3.5" />
                       </span>
                     </span>
@@ -563,21 +597,17 @@ export function DashboardShell({
                   >
                     <span className={MODULE_CARD_CORE_CLASS}>
                       <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-sky-400/12 blur-2xl transition group-hover:bg-sky-400/22" aria-hidden />
-                      <span className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-sky-400/25 bg-sky-400/10 text-sky-200">
+                      <span className={`${MODULE_CARD_ICON_CLASS} border-sky-400/25 bg-sky-400/10 text-sky-200`}>
                         <IconDrone className="h-5 w-5" />
                       </span>
-                      <span className="inline-flex items-center gap-2 text-lg font-semibold text-ink">
-                        Fleet
-                        <span className="rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-normal uppercase tracking-wider text-warn">
-                          Beta
-                        </span>
+                      <span className={MODULE_CARD_TITLE_CLASS}>
+                        {HOME_CARDS[2].title}
+                        <span className={BETA_BADGE_CLASS}>Beta</span>
                       </span>
-                      <span className="mt-2 text-sm leading-relaxed text-ink-4">
-                        Book drones and material by the day, and see who has what.
-                      </span>
-                      <span className="mt-6 inline-flex items-center gap-2 text-xs font-semibold text-sky-200/90">
+                      <span className={MODULE_CARD_DESCRIPTION_CLASS}>{HOME_CARDS[2].description}</span>
+                      <span className={`${MODULE_CARD_CTA_CLASS} text-sky-200/90`}>
                         Continue
-                        <span className="grid h-6 w-6 place-items-center rounded-full border border-glass/15 bg-glass/10 transition ease-fluid group-hover:-translate-y-[1px] group-hover:translate-x-1">
+                        <span className={MODULE_CARD_ARROW_CLASS}>
                           <IconArrow className="h-3.5 w-3.5" />
                         </span>
                       </span>
@@ -594,6 +624,7 @@ export function DashboardShell({
             <FieldStatsOnScroll />
           </div>
         ) : null}
+        <ScrollHint active={!showComposer && !beginAnimating} />
 
         <AnimatePresence initial={false}>
           {showComposer ? (
@@ -669,7 +700,7 @@ export function DashboardShell({
               playUiSound("switchWhoosh");
               setChatOpen(true);
             }}
-            className="fixed bottom-4 right-4 z-[125] inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/95 px-4 py-3 text-sm font-semibold text-slate-900 shadow-[0_18px_36px_-12px_rgba(34,211,238,0.55)] backdrop-blur transition hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            className={CHAT_PILL_CLASS}
           >
             <ChatBubbleIcon className="h-5 w-5" />
             <span className="hidden sm:inline">Team chat</span>
