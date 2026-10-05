@@ -26,7 +26,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     highlights: [
       "Pilots and admins: new Mission planning, Fleet management and Road Days cards on the workspace home.",
       "The live Google Sheets and the Road Days form, full screen — saved to Google under your name.",
-      "Blank? Sign in to Google, then reload. On Safari, open it in Google Sheets.",
+      "Blank? Tap \"Not loading?\" at the top right to sign in to Google or open it in a new tab.",
     ],
   },
   {

@@ -666,7 +666,7 @@ export function DashboardShell({
                   >
                     <span className={MODULE_CARD_CORE_CLASS}>
                       <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-sky-400/12 blur-2xl transition group-hover:bg-sky-400/22" aria-hidden />
-                      <span className={`${MODULE_CARD_ICON_CLASS} border-sky-400/25 bg-sky-400/10 text-sky-200`}>
+                      <span className={`${MODULE_CARD_ICON_CLASS} border-sky-400/25 bg-sky-400/10 text-card-sky`}>
                         <IconDrone className="h-5 w-5" />
                       </span>
                       <span className={MODULE_CARD_TITLE_CLASS}>
@@ -674,7 +674,7 @@ export function DashboardShell({
                         <span className={BETA_BADGE_CLASS}>Beta</span>
                       </span>
                       <span className={MODULE_CARD_DESCRIPTION_CLASS}>{HOME_CARDS[2].description}</span>
-                      <span className={`${MODULE_CARD_CTA_CLASS} text-sky-200/90`}>
+                      <span className={`${MODULE_CARD_CTA_CLASS} text-card-sky/90`}>
                         Continue
                         <span className={MODULE_CARD_ARROW_CLASS}>
                           <IconArrow className="h-3.5 w-3.5" />
@@ -694,12 +694,12 @@ export function DashboardShell({
                   >
                     <span className={MODULE_CARD_CORE_CLASS}>
                       <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-violet-400/12 blur-2xl transition group-hover:bg-violet-400/22" aria-hidden />
-                      <span className={`${MODULE_CARD_ICON_CLASS} border-violet-400/25 bg-violet-400/10 text-violet-200`}>
+                      <span className={`${MODULE_CARD_ICON_CLASS} border-violet-400/25 bg-violet-400/10 text-card-violet`}>
                         <IconCalendar className="h-5 w-5" />
                       </span>
                       <span className={MODULE_CARD_TITLE_CLASS}>{HOME_CARDS[3].title}</span>
                       <span className={MODULE_CARD_DESCRIPTION_CLASS}>{HOME_CARDS[3].description}</span>
-                      <span className={`${MODULE_CARD_CTA_CLASS} text-violet-200/90`}>
+                      <span className={`${MODULE_CARD_CTA_CLASS} text-card-violet/90`}>
                         Continue
                         <span className={MODULE_CARD_ARROW_CLASS}>
                           <IconArrow className="h-3.5 w-3.5" />
@@ -719,12 +719,12 @@ export function DashboardShell({
                   >
                     <span className={MODULE_CARD_CORE_CLASS}>
                       <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-amber-400/12 blur-2xl transition group-hover:bg-amber-400/22" aria-hidden />
-                      <span className={`${MODULE_CARD_ICON_CLASS} border-amber-400/25 bg-amber-400/10 text-amber-200`}>
+                      <span className={`${MODULE_CARD_ICON_CLASS} border-amber-400/25 bg-amber-400/10 text-card-amber`}>
                         <IconTable className="h-5 w-5" />
                       </span>
                       <span className={MODULE_CARD_TITLE_CLASS}>{HOME_CARDS[4].title}</span>
                       <span className={MODULE_CARD_DESCRIPTION_CLASS}>{HOME_CARDS[4].description}</span>
-                      <span className={`${MODULE_CARD_CTA_CLASS} text-amber-200/90`}>
+                      <span className={`${MODULE_CARD_CTA_CLASS} text-card-amber/90`}>
                         Continue
                         <span className={MODULE_CARD_ARROW_CLASS}>
                           <IconArrow className="h-3.5 w-3.5" />
@@ -744,12 +744,12 @@ export function DashboardShell({
                   >
                     <span className={MODULE_CARD_CORE_CLASS}>
                       <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-rose-400/12 blur-2xl transition group-hover:bg-rose-400/22" aria-hidden />
-                      <span className={`${MODULE_CARD_ICON_CLASS} border-rose-400/25 bg-rose-400/10 text-rose-200`}>
+                      <span className={`${MODULE_CARD_ICON_CLASS} border-rose-400/25 bg-rose-400/10 text-card-rose`}>
                         <IconTruck className="h-5 w-5" />
                       </span>
                       <span className={MODULE_CARD_TITLE_CLASS}>{HOME_CARDS[5].title}</span>
                       <span className={MODULE_CARD_DESCRIPTION_CLASS}>{HOME_CARDS[5].description}</span>
-                      <span className={`${MODULE_CARD_CTA_CLASS} text-rose-200/90`}>
+                      <span className={`${MODULE_CARD_CTA_CLASS} text-card-rose/90`}>
                         Continue
                         <span className={MODULE_CARD_ARROW_CLASS}>
                           <IconArrow className="h-3.5 w-3.5" />
