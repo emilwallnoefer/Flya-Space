@@ -392,15 +392,21 @@ export async function uploadChatAttachment(file: File): Promise<{
 const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour
 const _signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
 
-export async function getAttachmentSignedUrl(path: string): Promise<string> {
-  const cached = _signedUrlCache.get(path);
+export async function getAttachmentSignedUrl(path: string, downloadName?: string | null): Promise<string> {
+  const cacheKey = `${path}\n${downloadName ?? ""}`;
+  const cached = _signedUrlCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now() + 60_000) return cached.url;
   const supabase = client();
+  // `download` makes Storage serve `Content-Disposition: attachment`, so a file
+  // opened from its link is saved, never rendered on the Supabase origin. The
+  // Content-Type is whatever the uploader claimed, and some allowed types
+  // (XML) run script when rendered (audit run-5). <img> still displays an
+  // attachment-disposition image, so inline previews are unaffected.
   const { data, error } = await supabase.storage
     .from(CHAT_BUCKET)
-    .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+    .createSignedUrl(path, SIGNED_URL_TTL_SECONDS, { download: downloadName || true });
   if (error || !data?.signedUrl) throw error ?? new Error("Failed to sign URL");
-  _signedUrlCache.set(path, {
+  _signedUrlCache.set(cacheKey, {
     url: data.signedUrl,
     expiresAt: Date.now() + SIGNED_URL_TTL_SECONDS * 1000,
   });
@@ -443,8 +449,12 @@ export async function subscribeToChat(handlers: ChatChannelHandlers): Promise<{
   if (userErr || !userData.user) throw userErr ?? new Error("Not signed in");
   const user = userData.user;
 
+  // Private: joining, presence and typing broadcasts are authorised by the
+  // realtime.messages policies (supabase/2026-10-06-chat-realtime-private.sql),
+  // so only role holders can see who is online or send "typing". A public
+  // channel answered to the bare anon key (audit run-5).
   const channel = supabase.channel(CHAT_REALTIME_TOPIC, {
-    config: { presence: { key: user.id } },
+    config: { private: true, presence: { key: user.id } },
   });
 
   channel.on(

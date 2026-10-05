@@ -123,6 +123,19 @@ Each item: **what** · **impact** · **fix** · **effort**.
 - **Verified:** 11 checks on a local Postgres. **Applied by hand?** ⚠️ yes, required.
 - **Effort:** XS.
 
+**T0.17 — Chat presence and typing on a public Realtime channel** _(LOW, run-5 F1)_
+- **What:** `subscribeToChat` joined `team-chat:global` without `private: true`, and no policy existed on `realtime.messages`. Table RLS covers postgres_changes only, so with just the anon key (shipped in every page) anyone could join the channel, see each online employee's email and user id live, and broadcast fake "is typing" or presence. Message content was never exposed. Verified live: an anon client reached `SUBSCRIBED`.
+- **Fix:** the channel is private, and `supabase/2026-10-06-chat-realtime-private.sql` authorises presence/broadcast on that topic for `has_app_role()` holders only. "Allow public access" is switched off under Realtime → Settings.
+- **Applied by hand?** ⚠️ yes: the SQL, then the deploy, then the dashboard switch.
+- **Effort:** XS.
+
+**T0.18 — XML chat attachments ran script on the Supabase origin** _(LOW, run-5 F2)_
+- **What:** the chat-attachment MIME allowlist (`2026-07-26-chat-attachment-mime-allowlist.sql`) kept `application/xml` and `text/xml`, assuming nosniff renders them as text. Browsers render XML, and an XHTML-namespaced document runs `<script>`. Storage serves the uploader's Content-Type with no Content-Disposition, and the chat opens the signed URL in a new tab, so a role holder could post a file that runs script on `<ref>.supabase.co` for whoever opens it. No app cookies or tokens live on that origin, so the impact is a convincing phishing page on a trusted domain. Supabase also skips the MIME check for keys ending in `.emptyFolderPlaceholder`.
+- **Fix:** every attachment link is signed with `download` (Content-Disposition: attachment, under the original file name), which covers any type the chat links to; `<img>` previews are unaffected. The same migration removes the two XML types from the allowlist. PDFs and other files now download instead of opening in a tab.
+- **Residual:** `download` is a URL parameter outside the signature, so a role holder can still sign their own object without it and paste that raw link as text. With XML gone that only matters via the `.emptyFolderPlaceholder` MIME-check skip (e.g. an SVG) — same insider-plus-click bar, same no-session origin.
+- **Applied by hand?** ⚠️ yes (the allowlist part; the code part works without it).
+- **Effort:** XS.
+
 ### Tier 1 — Hardening (defense-in-depth)
 
 **T1.1 — Security headers.** `next.config.ts` sets none. Add a `headers()` block: `Content-Security-Policy` (the mitigating layer for T0.2), `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`. Effort: S (CSP tuning is the only real work).

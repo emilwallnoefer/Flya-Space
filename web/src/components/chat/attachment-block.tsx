@@ -24,7 +24,7 @@ export function AttachmentBlock({
     let cancelled = false;
     (async () => {
       try {
-        const signed = await getAttachmentSignedUrl(path);
+        const signed = await getAttachmentSignedUrl(path, message.attachment_name);
         if (!cancelled) setUrl(signed);
       } catch (e) {
         if (!cancelled) setErr((e as Error).message || "Could not load attachment");
@@ -33,7 +33,7 @@ export function AttachmentBlock({
     return () => {
       cancelled = true;
     };
-  }, [path]);
+  }, [path, message.attachment_name]);
 
   const sizeLabel = message.attachment_size ? formatBytes(message.attachment_size) : "";
 
