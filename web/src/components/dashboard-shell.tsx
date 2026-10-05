@@ -37,6 +37,7 @@ import type { ModuleKey } from "@/lib/dashboard-modules";
 import { writeViewParams } from "@/lib/view-params";
 import { LATEST_RELEASE } from "@/lib/release-notes";
 import { userRoleLabel, type UserRole } from "@/lib/user-role";
+import type { MissionPlanningUrls } from "@/lib/mission-planning";
 
 function PanelLoading() {
   return <div className="min-h-[40vh] animate-pulse rounded-2xl border border-glass/10 bg-glass/5" aria-hidden />;
@@ -67,6 +68,12 @@ const ChatWidget = dynamic(() => import("@/components/chat-widget").then((m) => 
 // Fleet is beta and behind a click for everyone, so it stays out of the first bundle.
 const FleetPanel = dynamic(
   () => import("@/components/fleet/fleet-panel").then((m) => m.FleetPanel),
+  { ssr: false, loading: PanelLoading },
+);
+// Mission planning is a card for pilots and admins only; its chunk is tiny,
+// but the iframe should not exist until someone opens it.
+const MissionPlanningPanel = dynamic(
+  () => import("@/components/mission-planning-panel").then((m) => m.MissionPlanningPanel),
   { ssr: false, loading: PanelLoading },
 );
 // Field stats sit open at the bottom of the workspace home, below the fold. The
@@ -175,6 +182,12 @@ type DashboardShellProps = {
    * instead of flashing the workspace home. `null` = the workspace home.
    */
   initialModule?: ModuleKey | null;
+  /**
+   * Links to the planning sheet, built server-side only for the roles allowed
+   * to see it (`canSeeMissionPlanning`). `null` hides the module entirely, so
+   * other roles never receive the sheet URL.
+   */
+  missionPlanning?: MissionPlanningUrls | null;
 };
 
 import type { FleetBoardResponse } from "@/components/fleet/types";
@@ -236,6 +249,18 @@ function IconDrone({ className }: { className?: string }) {
   );
 }
 
+function IconCalendar({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"
+      />
+    </svg>
+  );
+}
+
 function IconArrow({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
@@ -256,6 +281,7 @@ export function DashboardShell({
   initialAdminOverview = RESOLVED_NULL,
   initialFleet = RESOLVED_NULL,
   initialModule = null,
+  missionPlanning = null,
 }: DashboardShellProps) {
   // The role is decided entirely on the server: it lives in `app_metadata`,
   // only PATCH /api/admin/users writes it, and an account without one never
@@ -270,13 +296,15 @@ export function DashboardShell({
       userRole === "sales" || userRole === "hr"
         ? ["time", "fleet", "settings"]
         : ["mail", "time", "fleet", "settings"];
+    if (missionPlanning) base.push("planning");
     if (isAdmin || userRole === "hr") base.push("admin");
     return base;
-  }, [userRole, isAdmin]);
+  }, [userRole, isAdmin, missionPlanning]);
 
-  // Cards on the workspace home: Time Tracker always, Mail and Fleet when
-  // available. Settings and Admin live in the burger menu, not here.
-  const homeCardCount = 1 + (["mail", "fleet"] as const).filter((key) => availableModules.includes(key)).length;
+  // Cards on the workspace home: Time Tracker always, Mail, Fleet and Mission
+  // planning when available. Settings and Admin live in the burger menu, not here.
+  const homeCardCount =
+    1 + (["mail", "fleet", "planning"] as const).filter((key) => availableModules.includes(key)).length;
 
   const [showComposer, setShowComposer] = useState(initialModule != null);
   const [beginAnimating, setBeginAnimating] = useState(false);
@@ -511,6 +539,8 @@ export function DashboardShell({
                   ? "Time Tracker"
                   : activeModule === "fleet"
                     ? "Fleet (beta)"
+                    : activeModule === "planning"
+                      ? HOME_CARDS[3].title
                     : activeModule === "admin"
                       ? adminModuleLabel
                       : "Settings"}
@@ -616,6 +646,31 @@ export function DashboardShell({
                     </span>
                   </m.button>
                 ) : null}
+
+                {availableModules.includes("planning") ? (
+                  <m.button
+                    type="button"
+                    initial={false}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => openModuleCard("planning")}
+                    className={`${MODULE_CARD_CLASS} hover:border-violet-400/35 hover:shadow-[0_28px_56px_-12px_rgba(167,139,250,0.1)] focus-visible:outline-violet-400/80`}
+                  >
+                    <span className={MODULE_CARD_CORE_CLASS}>
+                      <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-violet-400/12 blur-2xl transition group-hover:bg-violet-400/22" aria-hidden />
+                      <span className={`${MODULE_CARD_ICON_CLASS} border-violet-400/25 bg-violet-400/10 text-violet-200`}>
+                        <IconCalendar className="h-5 w-5" />
+                      </span>
+                      <span className={MODULE_CARD_TITLE_CLASS}>{HOME_CARDS[3].title}</span>
+                      <span className={MODULE_CARD_DESCRIPTION_CLASS}>{HOME_CARDS[3].description}</span>
+                      <span className={`${MODULE_CARD_CTA_CLASS} text-violet-200/90`}>
+                        Continue
+                        <span className={MODULE_CARD_ARROW_CLASS}>
+                          <IconArrow className="h-3.5 w-3.5" />
+                        </span>
+                      </span>
+                    </span>
+                  </m.button>
+                ) : null}
               </div>
             </div>
           </m.div>
@@ -652,6 +707,8 @@ export function DashboardShell({
                     <Suspense fallback={<PanelLoading />}>
                       <StreamedFleetPanel board={initialFleet} />
                     </Suspense>
+                  ) : activeModule === "planning" && missionPlanning ? (
+                    <MissionPlanningPanel urls={missionPlanning} />
                   ) : activeModule === "admin" ? (
                     <Suspense fallback={<PanelLoading />}>
                       <StreamedAdminPanel

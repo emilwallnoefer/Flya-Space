@@ -20,6 +20,7 @@ import {
 } from "@/lib/admin-queries";
 import { buildFleetBoard, type FleetBoardPayload } from "@/lib/fleet-board";
 import { DEFAULT_WINDOW_DAYS, displayNameFor } from "@/lib/fleet-queries";
+import { canSeeMissionPlanning, missionPlanningUrls } from "@/lib/mission-planning";
 import { redirect } from "next/navigation";
 
 export default async function DashboardPage({
@@ -180,6 +181,12 @@ export default async function DashboardPage({
   // admin API) — and stream in after the page is already on screen.
   const [initialWeek, initialSettings] = await Promise.all([initialWeekPromise, initialSettingsPromise]);
 
+  // Pilots and admins only. The URL is built here and handed down only to them,
+  // so no other role's page ever carries the sheet link.
+  const missionPlanning = canSeeMissionPlanning(initialRole, isAdmin)
+    ? missionPlanningUrls(process.env.GOOGLE_SHEETS_SPREADSHEET_ID, process.env.GOOGLE_SHEETS_GID)
+    : null;
+
   return (
     <DashboardShell
       email={email ?? "Signed in"}
@@ -191,6 +198,7 @@ export default async function DashboardPage({
       initialAdminOverview={adminOverviewPromise}
       initialFleet={initialFleetPromise}
       initialModule={requestedModule}
+      missionPlanning={missionPlanning}
     />
   );
 }

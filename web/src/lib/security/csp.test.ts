@@ -60,6 +60,10 @@ describe("buildCsp", () => {
     expect(directive(buildCsp("n"), "connect-src")).toBe("connect-src 'self'");
   });
 
+  it("frames only ourselves and Google's sheet editor — not Google sign-in", () => {
+    expect(directive(buildCsp("n"), "frame-src")).toBe("frame-src 'self' https://docs.google.com");
+  });
+
   it("keeps style-src 'unsafe-inline' — Tailwind and framer-motion need it", () => {
     expect(directive(buildCsp("n"), "style-src")).toContain("'unsafe-inline'");
   });

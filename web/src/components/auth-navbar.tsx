@@ -10,7 +10,8 @@ import {
   NAVBAR_TITLE_CLASS,
 } from "@/components/workspace-home-layout";
 
-type ModuleKey = "mail" | "time" | "fleet" | "settings" | "admin";
+// "planning" opens from its home card only; the menu deliberately lists no item for it.
+type ModuleKey = "mail" | "time" | "fleet" | "planning" | "settings" | "admin";
 
 type AuthNavbarProps = {
   activeModule: ModuleKey;

@@ -30,7 +30,8 @@ export const HOME_ROLE_PILL_CLASS =
   "mt-5 inline-flex items-center rounded-full border border-glass/10 bg-glass/[0.06] px-3 py-1 text-[11px] font-medium tracking-wide text-ink-3";
 
 export function homeGridClass(cardCount: number): string {
-  return `grid gap-4 ${cardCount >= 3 ? "md:grid-cols-3" : "sm:mx-auto sm:max-w-2xl sm:grid-cols-2"}`;
+  if (cardCount >= 4) return "grid gap-4 sm:grid-cols-2 lg:grid-cols-4";
+  return `grid gap-4 ${cardCount === 3 ? "md:grid-cols-3" : "sm:mx-auto sm:max-w-2xl sm:grid-cols-2"}`;
 }
 
 export const MODULE_CARD_CLASS =
@@ -45,7 +46,10 @@ export const MODULE_CARD_ARROW_CLASS =
   "grid h-6 w-6 place-items-center rounded-full border border-glass/15 bg-glass/10 transition ease-fluid group-hover:-translate-y-[1px] group-hover:translate-x-1";
 export const BETA_BADGE_CLASS = "rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-normal uppercase tracking-wider text-warn";
 
-/** The home's cards, in order. Mail and Fleet depend on the role; Time Tracker is always there. */
+/**
+ * The home's cards, in order. Time Tracker is always there; Mail, Fleet and
+ * Mission planning depend on the role (planning: pilots and admins only).
+ */
 export const HOME_CARDS = [
   { key: "mail", title: "Mail Composer", description: "Training email drafts and Gmail handoff in one flow.", beta: false },
   {
@@ -59,6 +63,12 @@ export const HOME_CARDS = [
     title: "Fleet",
     description: "Book drones and material by the day, and see who has what.",
     beta: true,
+  },
+  {
+    key: "planning",
+    title: "Mission planning",
+    description: "The team planning sheet, live and editable, right here.",
+    beta: false,
   },
 ] as const;
 
