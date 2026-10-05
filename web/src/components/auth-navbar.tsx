@@ -6,7 +6,6 @@ import { playUiSound } from "@/lib/ui-sounds";
 type ModuleKey = "mail" | "time" | "fleet" | "settings" | "admin";
 
 type AuthNavbarProps = {
-  email: string;
   activeModule: ModuleKey;
   availableModules?: ModuleKey[];
   adminModuleLabel?: string;
@@ -14,7 +13,6 @@ type AuthNavbarProps = {
 };
 
 export function AuthNavbar({
-  email,
   activeModule,
   availableModules = ["mail", "time", "fleet", "settings"],
   adminModuleLabel = "Admin",
@@ -33,7 +31,6 @@ export function AuthNavbar({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  const initials = email.slice(0, 2).toUpperCase();
 
   return (
     <nav className="glass-card sticky top-3 z-[90] !overflow-visible p-2.5 md:p-3">
@@ -165,19 +162,10 @@ export function AuthNavbar({
                 ) : null}
               </div>
 
-              {/* Account: set apart from the tools above. */}
+              {/* Settings and sign-out: set apart from the tools above. */}
               <hr className="my-2.5 border-glass/15" />
 
-              <div className="rounded-lg border border-glass/10 bg-glass/5 px-2.5 py-2">
-                <div className="flex items-center gap-2">
-                  <span className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-accent-from to-accent-to text-[11px] font-semibold text-slate-950">
-                    {initials}
-                  </span>
-                  <p className="truncate text-xs text-ink-2/85">{email}</p>
-                </div>
-              </div>
-
-              <div className="mt-2 grid gap-1.5">
+              <div className="grid gap-1.5">
                 {availableModules.includes("settings") ? (
                   <button
                     type="button"

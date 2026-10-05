@@ -428,7 +428,6 @@ export function DashboardShell({
       <div className="absolute inset-0 aurora-bg" />
       <section className="page-shell">
         <AuthNavbar
-          email={email}
           activeModule={activeModule}
           availableModules={availableModules}
           adminModuleLabel={adminModuleLabel}
