@@ -45,6 +45,12 @@ const FleetPanel = dynamic(
   () => import("@/components/fleet/fleet-panel").then((m) => m.FleetPanel),
   { ssr: false, loading: PanelLoading },
 );
+// Field stats is behind a click too, and fetches its own data when opened: it is
+// a sheet read, not a database query worth streaming with the first paint.
+const FieldStatsPanel = dynamic(
+  () => import("@/components/field-stats/field-stats-panel").then((m) => m.FieldStatsPanel),
+  { ssr: false, loading: PanelLoading },
+);
 
 // Fleet and Admin sit behind a click, so the server does not hold the first
 // paint for their data: it streams in as a promise after the shell is already
@@ -182,8 +188,8 @@ export function DashboardShell({
   const availableModules = useMemo<ModuleKey[]>(() => {
     const base: ModuleKey[] =
       userRole === "sales" || userRole === "hr"
-        ? ["time", "fleet", "settings"]
-        : ["mail", "time", "fleet", "settings"];
+        ? ["time", "fleet", "stats", "settings"]
+        : ["mail", "time", "fleet", "stats", "settings"];
     if (isAdmin || userRole === "hr") base.push("admin");
     return base;
   }, [userRole, isAdmin]);
@@ -430,9 +436,11 @@ export function DashboardShell({
                   ? "Time Tracker"
                   : activeModule === "fleet"
                     ? "Fleet (beta)"
-                    : activeModule === "admin"
-                      ? adminModuleLabel
-                      : "Settings"}
+                    : activeModule === "stats"
+                      ? "Field stats"
+                      : activeModule === "admin"
+                        ? adminModuleLabel
+                        : "Settings"}
             </p>
           </div>
         ) : null}
@@ -576,6 +584,8 @@ export function DashboardShell({
                     <Suspense fallback={<PanelLoading />}>
                       <StreamedFleetPanel board={initialFleet} />
                     </Suspense>
+                  ) : activeModule === "stats" ? (
+                    <FieldStatsPanel />
                   ) : activeModule === "admin" ? (
                     <Suspense fallback={<PanelLoading />}>
                       <StreamedAdminPanel

@@ -20,6 +20,16 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-05-field-stats",
+    date: "Oct 5, 2026",
+    title: "Field stats",
+    highlights: [
+      "New in the menu: charts from the mission planning sheet, live.",
+      "Regions, POCs and trainings per pilot, and travel days.",
+      "All of 2026 or one month at a time.",
+    ],
+  },
+  {
     version: "2026-10-02-elios-flight-modes",
     date: "Oct 2, 2026",
     title: "The drone game, reworked — fresh leaderboard",
