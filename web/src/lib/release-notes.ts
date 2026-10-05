@@ -27,7 +27,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       "Scroll down on the workspace home: live charts from the mission planning sheet.",
       "Regions, POCs and trainings per pilot, and travel days.",
       "All of 2026 or one month at a time; click a name to see what it counts.",
-      "Fleet moved from the menu to its own card on the workspace home.",
+      "Fleet also gets its own card on the workspace home.",
       "Team chat is back as the pill in the bottom-right corner; Settings stays in the menu.",
     ],
   },

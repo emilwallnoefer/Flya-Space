@@ -309,8 +309,8 @@ export function DashboardShell({
     };
   }, [availableModules, initialWeek]);
 
-  // Warm the Gmail connection status for the navbar pill. Skipped when the SSR
-  // already seeded it (pilots), so the pill is correct on first paint without a
+  // Warm the Gmail connection status for the mail composer. Skipped when the SSR
+  // already seeded it (pilots), so it is correct on first paint without a
   // client round-trip; still runs as a fallback when props were absent.
   const gmailStatusSeeded = initialSettings?.gmail != null;
   useEffect(() => {
@@ -429,12 +429,8 @@ export function DashboardShell({
       <section className="page-shell">
         <AuthNavbar
           email={email}
-          gmailConnected={gmailStatus.connected}
-          gmailEmail={gmailStatus.gmail_email}
           activeModule={activeModule}
           availableModules={availableModules}
-          showGmailStatus={userRole !== "sales" && userRole !== "hr"}
-          userRole={userRole}
           adminModuleLabel={adminModuleLabel}
           onSelectModule={(module) => {
             if (!availableModules.includes(module)) return;
@@ -633,7 +629,7 @@ export function DashboardShell({
                       />
                     </Suspense>
                   ) : activeModule === "settings" ? (
-                    // SSR-prefetched settings seed both the navbar Gmail pill above
+                    // SSR-prefetched settings seed both the Gmail status above
                     // and the panel itself, so opening Settings fires none of its
                     // three mount fetches.
                     <SettingsPanel
