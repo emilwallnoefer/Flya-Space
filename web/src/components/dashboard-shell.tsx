@@ -708,7 +708,13 @@ export function DashboardShell({
                       <StreamedFleetPanel board={initialFleet} />
                     </Suspense>
                   ) : activeModule === "planning" && missionPlanning ? (
-                    <MissionPlanningPanel urls={missionPlanning} />
+                    <MissionPlanningPanel
+                      urls={missionPlanning}
+                      onBack={() => {
+                        playUiSound("switchWhoosh");
+                        setShowComposer(false);
+                      }}
+                    />
                   ) : activeModule === "admin" ? (
                     <Suspense fallback={<PanelLoading />}>
                       <StreamedAdminPanel
@@ -745,7 +751,8 @@ export function DashboardShell({
       <AnimatePresence>
         {/* Hidden while the panel is open, and while a bottom-right popup
             (program readme, what's new) holds that corner. */}
-        {!chatOpen && !showProgramReadmePrompt && !showWhatsNew ? (
+        {/* Also hidden over the full-screen planning sheet, where it would cover the sheet's corner. */}
+        {!chatOpen && !showProgramReadmePrompt && !showWhatsNew && !(showComposer && activeModule === "planning") ? (
           <m.button
             key="chat-trigger"
             type="button"
