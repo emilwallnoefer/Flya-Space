@@ -268,7 +268,8 @@ function finishTally(tally: Tally): FieldStatsBucket {
 /**
  * Computes the stats from the raw tab: `header` is row 1, `rows` every row
  * after it (in sheet order — the month/year cell is carried down because the
- * sheet merges it). Counts days from `from` through `today`, both inclusive.
+ * sheet merges it). Counts days from `from` (inclusive) up to `today`
+ * (exclusive): only what has already happened — today and later are plans.
  */
 export function computeFieldStats({
   header,
@@ -302,7 +303,7 @@ export function computeFieldStats({
     const fullDate = parseFullDate(monthYear);
     if (!fullDate && monthYear) activeMonthYear = monthYear;
     const date = fullDate ?? parseDateFromMonthYearDay(activeMonthYear, cell(row, 2));
-    if (!date || date < from || date > today) continue;
+    if (!date || date < from || date >= today) continue;
     const month = byMonth.get(date.slice(0, 7));
     if (!month) continue;
 

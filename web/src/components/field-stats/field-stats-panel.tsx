@@ -88,7 +88,7 @@ export function FieldStatsPanel() {
           <h2 className="text-lg font-semibold text-ink">Field stats</h2>
           <InfoTooltip label="Where these numbers come from">
             Counted from the &ldquo;Mission planning&rdquo; tab of the planning sheet, from 1 January 2026 up to
-            today. Back-to-back days for the same customer count as one POC or training, in the month it starts. Unconfirmed entries (TBC,
+            yesterday — today and anything planned later are not counted. Back-to-back days for the same customer count as one POC or training, in the month it starts. Unconfirmed entries (TBC,
             pre-booked) and days off are not counted. Regions follow the salesperson in &ldquo;Reporting to&rdquo;.
             Click a name in a chart to see exactly what it counts.
           </InfoTooltip>
