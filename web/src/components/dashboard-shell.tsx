@@ -37,7 +37,7 @@ import type { ModuleKey } from "@/lib/dashboard-modules";
 import { writeViewParams } from "@/lib/view-params";
 import { LATEST_RELEASE } from "@/lib/release-notes";
 import { userRoleLabel, type UserRole } from "@/lib/user-role";
-import type { SheetEmbedUrls } from "@/lib/embedded-sheets";
+import type { GoogleEmbed } from "@/lib/google-embeds";
 
 function PanelLoading() {
   return <div className="min-h-[40vh] animate-pulse rounded-2xl border border-glass/10 bg-glass/5" aria-hidden />;
@@ -70,10 +70,10 @@ const FleetPanel = dynamic(
   () => import("@/components/fleet/fleet-panel").then((m) => m.FleetPanel),
   { ssr: false, loading: PanelLoading },
 );
-// The embedded sheets are cards for pilots and admins only; the chunk is tiny,
-// but no iframe should exist until someone opens one.
-const SheetEmbedPanel = dynamic(
-  () => import("@/components/sheet-embed-panel").then((m) => m.SheetEmbedPanel),
+// The Google sheets and form are cards for pilots and admins only; the chunk is
+// tiny, but no iframe should exist until someone opens one.
+const GoogleEmbedPanel = dynamic(
+  () => import("@/components/google-embed-panel").then((m) => m.GoogleEmbedPanel),
   { ssr: false, loading: PanelLoading },
 );
 // Field stats sit open at the bottom of the workspace home, below the fold. The
@@ -183,12 +183,13 @@ type DashboardShellProps = {
    */
   initialModule?: ModuleKey | null;
   /**
-   * Links to the embedded sheets, built server-side only for the roles allowed
-   * to see them (`canSeeEmbeddedSheets`) and only when the sheet id is set.
-   * `null` hides that module entirely, so other roles never receive the URL.
+   * Links to the embedded Google sheets and form, built server-side only for
+   * the roles allowed to see them (`canSeeGoogleEmbeds`) and only when the id
+   * is set. `null` hides that module entirely, so other roles never receive it.
    */
-  missionPlanning?: SheetEmbedUrls | null;
-  fleetSheet?: SheetEmbedUrls | null;
+  missionPlanning?: GoogleEmbed | null;
+  fleetSheet?: GoogleEmbed | null;
+  roadDays?: GoogleEmbed | null;
 };
 
 import type { FleetBoardResponse } from "@/components/fleet/types";
@@ -274,6 +275,18 @@ function IconTable({ className }: { className?: string }) {
   );
 }
 
+function IconTruck({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12"
+      />
+    </svg>
+  );
+}
+
 function IconArrow({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
@@ -296,6 +309,7 @@ export function DashboardShell({
   initialModule = null,
   missionPlanning = null,
   fleetSheet = null,
+  roadDays = null,
 }: DashboardShellProps) {
   // The role is decided entirely on the server: it lives in `app_metadata`,
   // only PATCH /api/admin/users writes it, and an account without one never
@@ -312,15 +326,17 @@ export function DashboardShell({
         : ["mail", "time", "fleet", "settings"];
     if (missionPlanning) base.push("planning");
     if (fleetSheet) base.push("fleetsheet");
+    if (roadDays) base.push("roaddays");
     if (isAdmin || userRole === "hr") base.push("admin");
     return base;
-  }, [userRole, isAdmin, missionPlanning, fleetSheet]);
+  }, [userRole, isAdmin, missionPlanning, fleetSheet, roadDays]);
 
   // Cards on the workspace home: Time Tracker always, the rest when available.
   // Settings and Admin live in the burger menu, not here.
   const homeCardCount =
     1 +
-    (["mail", "fleet", "planning", "fleetsheet"] as const).filter((key) => availableModules.includes(key)).length;
+    (["mail", "fleet", "planning", "fleetsheet", "roaddays"] as const).filter((key) => availableModules.includes(key))
+      .length;
 
   const [showComposer, setShowComposer] = useState(initialModule != null);
   const [beginAnimating, setBeginAnimating] = useState(false);
@@ -333,8 +349,9 @@ export function DashboardShell({
     const preferred = initialModule ?? (userRole === "sales" || userRole === "hr" ? "time" : "mail");
     return availableModules.includes(preferred) ? preferred : availableModules[0];
   });
-  // An embedded sheet covers the whole window while it is open.
-  const sheetOpen = showComposer && (activeModule === "planning" || activeModule === "fleetsheet");
+  // A Google embed covers the whole window while it is open.
+  const embedOpen =
+    showComposer && (activeModule === "planning" || activeModule === "fleetsheet" || activeModule === "roaddays");
   const [showProgramReadmePrompt, setShowProgramReadmePrompt] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   // The floating chat pill shares the bottom-right corner with the first-launch
@@ -513,7 +530,7 @@ export function DashboardShell({
     }, 180);
   }
 
-  function leaveSheet() {
+  function leaveEmbed() {
     playUiSound("switchWhoosh");
     setShowComposer(false);
   }
@@ -566,6 +583,8 @@ export function DashboardShell({
                       ? HOME_CARDS[3].title
                     : activeModule === "fleetsheet"
                       ? HOME_CARDS[4].title
+                    : activeModule === "roaddays"
+                      ? HOME_CARDS[5].title
                     : activeModule === "admin"
                       ? adminModuleLabel
                       : "Settings"}
@@ -721,6 +740,31 @@ export function DashboardShell({
                     </span>
                   </m.button>
                 ) : null}
+
+                {availableModules.includes("roaddays") ? (
+                  <m.button
+                    type="button"
+                    initial={false}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => openModuleCard("roaddays")}
+                    className={`${MODULE_CARD_CLASS} hover:border-rose-400/35 hover:shadow-[0_28px_56px_-12px_rgba(251,113,133,0.1)] focus-visible:outline-rose-400/80`}
+                  >
+                    <span className={MODULE_CARD_CORE_CLASS}>
+                      <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-rose-400/12 blur-2xl transition group-hover:bg-rose-400/22" aria-hidden />
+                      <span className={`${MODULE_CARD_ICON_CLASS} border-rose-400/25 bg-rose-400/10 text-rose-200`}>
+                        <IconTruck className="h-5 w-5" />
+                      </span>
+                      <span className={MODULE_CARD_TITLE_CLASS}>{HOME_CARDS[5].title}</span>
+                      <span className={MODULE_CARD_DESCRIPTION_CLASS}>{HOME_CARDS[5].description}</span>
+                      <span className={`${MODULE_CARD_CTA_CLASS} text-rose-200/90`}>
+                        Continue
+                        <span className={MODULE_CARD_ARROW_CLASS}>
+                          <IconArrow className="h-3.5 w-3.5" />
+                        </span>
+                      </span>
+                    </span>
+                  </m.button>
+                ) : null}
               </div>
             </div>
           </m.div>
@@ -758,9 +802,11 @@ export function DashboardShell({
                       <StreamedFleetPanel board={initialFleet} />
                     </Suspense>
                   ) : activeModule === "planning" && missionPlanning ? (
-                    <SheetEmbedPanel title={HOME_CARDS[3].title} urls={missionPlanning} onBack={leaveSheet} />
+                    <GoogleEmbedPanel title={HOME_CARDS[3].title} urls={missionPlanning} onBack={leaveEmbed} />
                   ) : activeModule === "fleetsheet" && fleetSheet ? (
-                    <SheetEmbedPanel title={HOME_CARDS[4].title} urls={fleetSheet} onBack={leaveSheet} />
+                    <GoogleEmbedPanel title={HOME_CARDS[4].title} urls={fleetSheet} onBack={leaveEmbed} />
+                  ) : activeModule === "roaddays" && roadDays ? (
+                    <GoogleEmbedPanel title={HOME_CARDS[5].title} urls={roadDays} onBack={leaveEmbed} />
                   ) : activeModule === "admin" ? (
                     <Suspense fallback={<PanelLoading />}>
                       <StreamedAdminPanel
@@ -798,7 +844,7 @@ export function DashboardShell({
         {/* Hidden while the panel is open, and while a bottom-right popup
             (program readme, what's new) holds that corner. */}
         {/* Also hidden over the full-screen planning sheet, where it would cover the sheet's corner. */}
-        {!chatOpen && !showProgramReadmePrompt && !showWhatsNew && !sheetOpen ? (
+        {!chatOpen && !showProgramReadmePrompt && !showWhatsNew && !embedOpen ? (
           <m.button
             key="chat-trigger"
             type="button"

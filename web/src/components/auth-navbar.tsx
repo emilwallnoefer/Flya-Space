@@ -10,9 +10,9 @@ import {
   NAVBAR_TITLE_CLASS,
 } from "@/components/workspace-home-layout";
 
-// The embedded sheets ("planning", "fleetsheet") open from their home cards only;
-// the menu deliberately lists no item for them.
-type ModuleKey = "mail" | "time" | "fleet" | "planning" | "fleetsheet" | "settings" | "admin";
+// The Google embeds ("planning", "fleetsheet", "roaddays") open from their home
+// cards only; the menu deliberately lists no item for them.
+type ModuleKey = "mail" | "time" | "fleet" | "planning" | "fleetsheet" | "roaddays" | "settings" | "admin";
 
 type AuthNavbarProps = {
   activeModule: ModuleKey;

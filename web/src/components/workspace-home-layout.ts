@@ -29,7 +29,7 @@ export const HOME_SUBTITLE = "Open a module below and pick up right where you le
 export const HOME_ROLE_PILL_CLASS =
   "mt-5 inline-flex items-center rounded-full border border-glass/10 bg-glass/[0.06] px-3 py-1 text-[11px] font-medium tracking-wide text-ink-3";
 
-/** At most three cards a row; the embedded sheets wrap underneath. */
+/** At most three cards a row; the Google sheets and form wrap underneath. */
 export function homeGridClass(cardCount: number): string {
   return `grid gap-4 ${cardCount >= 3 ? "md:grid-cols-3" : "sm:mx-auto sm:max-w-2xl sm:grid-cols-2"}`;
 }
@@ -48,8 +48,8 @@ export const BETA_BADGE_CLASS = "rounded bg-amber-500/20 px-1 py-0.5 text-[9px] 
 
 /**
  * The home's cards, in order. Time Tracker is always there; the rest depend on
- * the role (the two embedded sheets: pilots and admins only, and only once
- * their sheet id is configured).
+ * the role (the Google sheets and form: pilots and admins only, and only once
+ * their id is configured).
  */
 export const HOME_CARDS = [
   { key: "mail", title: "Mail Composer", description: "Training email drafts and Gmail handoff in one flow.", beta: false },
@@ -75,6 +75,12 @@ export const HOME_CARDS = [
     key: "fleetsheet",
     title: "Fleet management",
     description: "The fleet management sheet, live and editable, right here.",
+    beta: false,
+  },
+  {
+    key: "roaddays",
+    title: "Road Days",
+    description: "Log your road days in the team form, right here.",
     beta: false,
   },
 ] as const;
