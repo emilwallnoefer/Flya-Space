@@ -139,6 +139,29 @@ describe("computeFieldStats", () => {
     expect(stats.all.pilots.find((p) => p.pilot === "Sam")).toEqual({ pilot: "Sam", poc: 0, training: 0, travelDays: 0 });
   });
 
+  it("lists the events and travel days behind every count", () => {
+    expect(stats.events).toEqual([
+      {
+        pilot: "Emil", kind: "poc", start: "2026-01-06", end: "2026-01-07", days: 2,
+        title: "Tronder Energie POC", salesName: "Camilla", region: "Nordics",
+      },
+      {
+        pilot: "Emil", kind: "training", start: "2026-01-16", end: "2026-01-19", days: 2,
+        title: "Apave Training", salesName: "Igor", region: "Igor",
+      },
+      {
+        pilot: "Emil", kind: "poc", start: "2026-02-02", end: "2026-02-02", days: 1,
+        title: "Kiwa POC", salesName: "", region: UNASSIGNED_REGION,
+      },
+    ]);
+    expect(stats.travel.map((d) => d.date)).toEqual([
+      "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-16", "2026-01-19", "2026-02-02",
+    ]);
+    expect(stats.travel[0]).toEqual({
+      pilot: "Emil", date: "2026-01-05", activity: "travel to Tronder Energie", status: "travel time",
+    });
+  });
+
   it("starts a new event when the same text recurs after a long gap", () => {
     const again = computeFieldStats({
       header: HEADER,

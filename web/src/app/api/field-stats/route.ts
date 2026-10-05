@@ -6,8 +6,9 @@ import { getFieldStats } from "@/lib/field-stats-sheet";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Field stats for everyone with a role. Only aggregated counts leave the
-// server — never the sheet's cells.
+// Field stats for everyone with a role. Returns the counts plus the entries
+// behind them (the activity text of each counted POC/training/travel day) —
+// never the rest of the sheet: off days, holds and other cells stay on the server.
 export async function GET() {
   const supabase = await createClient();
   const {

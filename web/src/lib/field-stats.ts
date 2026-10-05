@@ -47,6 +47,24 @@ export type RegionStats = {
 
 export type FieldStatsBucket = { pilots: PilotStats[]; regions: RegionStats[] };
 
+/** One POC or training, as counted: the rows behind a bar in the POC/training/region charts. */
+export type FieldEvent = {
+  pilot: string;
+  kind: "poc" | "training";
+  /** First and last counted day (YYYY-MM-DD); the event counts in `start`'s month. */
+  start: string;
+  end: string;
+  /** Counted days, not the calendar span (a weekend in between is not a day). */
+  days: number;
+  /** The activity cell of the first day, as written in the sheet. */
+  title: string;
+  salesName: string;
+  region: string;
+};
+
+/** One counted travel day: the rows behind a bar in the travel-days chart. */
+export type FieldTravelDay = { pilot: string; date: string; activity: string; status: string };
+
 export type FieldStats = {
   from: string;
   to: string;
@@ -54,6 +72,10 @@ export type FieldStats = {
   months: string[];
   all: FieldStatsBucket;
   byMonth: Record<string, FieldStatsBucket>;
+  /** Every counted POC/training, oldest first. Filter by `start` month for a month view. */
+  events: FieldEvent[];
+  /** Every counted travel day, oldest first. */
+  travel: FieldTravelDay[];
   /** Every salesperson name seen, so admins can map each one to a region. */
   salesNames: string[];
 };
@@ -230,8 +252,11 @@ export function computeFieldStats({
   const byMonth = new Map(months.map((m) => [m, newTally(pilotNames)]));
   const salesNames = new Set<string>();
 
+  const events: FieldEvent[] = [];
+  const travelDays: FieldTravelDay[] = [];
+
   // Open event per pilot: the last POC/training day seen, to merge multi-day events.
-  const open = new Map<string, { kind: DayKind; key: string; lastDate: string }>();
+  const open = new Map<string, { kind: DayKind; key: string; lastDate: string; event: FieldEvent }>();
 
   let activeMonthYear = "";
   for (const row of rows) {
@@ -245,12 +270,14 @@ export function computeFieldStats({
 
     for (const pilot of pilots) {
       const activity = cell(row, pilot.activity);
-      const { kind, travel } = classifyDay(activity, cell(row, pilot.status));
+      const status = cell(row, pilot.status);
+      const { kind, travel } = classifyDay(activity, status);
       if (!kind) continue;
 
       if (travel) {
         all.pilots.get(pilot.name)!.travelDays += 1;
         month.pilots.get(pilot.name)!.travelDays += 1;
+        travelDays.push({ pilot: pilot.name, date, activity, status });
       }
       if (kind === "other") continue;
 
@@ -261,13 +288,20 @@ export function computeFieldStats({
         previous.kind === kind &&
         previous.key === key &&
         daysBetween(previous.lastDate, date) <= MAX_EVENT_GAP_DAYS;
-      open.set(pilot.name, { kind, key, lastDate: date });
-      if (continues) continue;
+      if (previous && continues) {
+        previous.lastDate = date;
+        previous.event.end = date;
+        previous.event.days += 1;
+        continue;
+      }
 
       // A new event, counted in the month it starts.
       const salesName = salesNameFrom(cell(row, pilot.reporting));
       if (salesName) salesNames.add(salesName);
       const region = regionFor(salesName, salesRegions);
+      const event: FieldEvent = { pilot: pilot.name, kind, start: date, end: date, days: 1, title: activity, salesName, region };
+      events.push(event);
+      open.set(pilot.name, { kind, key, lastDate: date, event });
       for (const tally of [all, month]) {
         tally.pilots.get(pilot.name)![kind] += 1;
         const entry = tally.regions.get(region) ?? { region, events: 0, poc: 0, training: 0 };
@@ -284,6 +318,8 @@ export function computeFieldStats({
     months,
     all: finishTally(all),
     byMonth: Object.fromEntries([...byMonth].map(([m, tally]) => [m, finishTally(tally)])),
+    events,
+    travel: travelDays,
     salesNames: [...salesNames].sort((a, b) => a.localeCompare(b)),
   };
 }

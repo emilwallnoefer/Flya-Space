@@ -5,15 +5,43 @@ import { Button, Card, Notice, Select } from "@/components/ui";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { HoverTooltip, type HoverPos } from "@/components/mail-tracking/stat-tile";
 import { fmtRelative } from "@/lib/admin-format";
-import type { FieldStats, FieldStatsBucket } from "@/lib/field-stats";
+import type { FieldEvent, FieldStats, FieldStatsBucket, FieldTravelDay } from "@/lib/field-stats";
 
 type Loaded = { stats: FieldStats; fetchedAt: string; stale: boolean };
 
 const MONTH_FORMAT = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
 const MONTH_SHORT = new Intl.DateTimeFormat("en-GB", { month: "short", timeZone: "UTC" });
 
+const DAY_FORMAT = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+
 function monthLabel(month: string, format = MONTH_FORMAT) {
   return format.format(new Date(`${month}-01T00:00:00Z`));
+}
+
+function dayLabel(date: string) {
+  return DAY_FORMAT.format(new Date(`${date}T00:00:00Z`));
+}
+
+function spanLabel(start: string, end: string) {
+  return start === end ? dayLabel(start) : `${dayLabel(start)} – ${dayLabel(end)}`;
+}
+
+const KIND_LABEL = { poc: "POC", training: "Training" } as const;
+
+function eventItem(event: FieldEvent, context: string): DetailItem {
+  return {
+    key: `${event.pilot}-${event.start}-${event.kind}`,
+    title: event.title,
+    meta: `${spanLabel(event.start, event.end)}${event.days > 1 ? ` · ${event.days} days` : ""} · ${context}`,
+  };
+}
+
+function travelItem(day: FieldTravelDay): DetailItem {
+  return {
+    key: `${day.pilot}-${day.date}`,
+    title: day.activity || day.status,
+    meta: `${dayLabel(day.date)}${day.activity && day.status ? ` · ${day.status}` : ""}`,
+  };
 }
 
 /**
@@ -48,6 +76,9 @@ export function FieldStatsPanel() {
 
   const stats = data?.stats ?? null;
   const bucket: FieldStatsBucket | null = stats ? (month === "all" ? stats.all : stats.byMonth[month] ?? null) : null;
+  const inPeriod = (date: string) => month === "all" || date.startsWith(month);
+  const events = stats ? stats.events.filter((e) => inPeriod(e.start)) : [];
+  const travel = stats ? stats.travel.filter((d) => inPeriod(d.date)) : [];
   const periodLabel = month === "all" ? `since ${stats ? monthLabel(stats.months[0] ?? "2026-01") : "January 2026"}` : monthLabel(month);
 
   return (
@@ -59,6 +90,7 @@ export function FieldStatsPanel() {
             Counted from the &ldquo;Mission planning&rdquo; tab of the planning sheet, from 1 January 2026 up to
             today. Multi-day POCs and trainings count once, in the month they start. Unconfirmed entries (TBC,
             pre-booked) and days off are not counted. Regions follow the salesperson in &ldquo;Reporting to&rdquo;.
+            Click a name in a chart to see exactly what it counts.
           </InfoTooltip>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -105,6 +137,9 @@ export function FieldStatsPanel() {
                 label: r.region,
                 value: r.events,
                 detail: `${r.poc} POC${r.poc === 1 ? "" : "s"} · ${r.training} training${r.training === 1 ? "" : "s"}`,
+                items: events
+                  .filter((e) => e.region === r.region)
+                  .map((e) => eventItem(e, `${e.pilot} · ${KIND_LABEL[e.kind]}`)),
               }))}
               empty="No POCs or trainings in this period."
             />
@@ -113,7 +148,9 @@ export function FieldStatsPanel() {
               info="Days spent travelling or away: “travel to …”, “travel time”, “out of the office”, and POC/training days not marked as in the office."
               period={periodLabel}
               unit="day"
-              rows={pilotRows(bucket, "travelDays")}
+              rows={pilotRows(bucket, "travelDays", (pilot) =>
+                travel.filter((d) => d.pilot === pilot).map(travelItem),
+              )}
               empty="No travel days in this period."
             />
             <BarCard
@@ -121,7 +158,9 @@ export function FieldStatsPanel() {
               info="Entries naming a POC or demo. A POC spread over several days counts once."
               period={periodLabel}
               unit="POC"
-              rows={pilotRows(bucket, "poc")}
+              rows={pilotRows(bucket, "poc", (pilot) =>
+                events.filter((e) => e.pilot === pilot && e.kind === "poc").map((e) => eventItem(e, e.region)),
+              )}
               empty="No POCs in this period."
             />
             <BarCard
@@ -129,7 +168,9 @@ export function FieldStatsPanel() {
               info="Entries naming a training. A training spread over several days counts once."
               period={periodLabel}
               unit="training"
-              rows={pilotRows(bucket, "training")}
+              rows={pilotRows(bucket, "training", (pilot) =>
+                events.filter((e) => e.pilot === pilot && e.kind === "training").map((e) => eventItem(e, e.region)),
+              )}
               empty="No trainings in this period."
             />
           </div>
@@ -140,11 +181,24 @@ export function FieldStatsPanel() {
   );
 }
 
-type BarRow = { key: string; label: string; value: number; detail?: string };
+type DetailItem = { key: string; title: string; meta: string };
 
-function pilotRows(bucket: FieldStatsBucket, field: "poc" | "training" | "travelDays"): BarRow[] {
+type BarRow = {
+  key: string;
+  label: string;
+  value: number;
+  detail?: string;
+  /** What this bar counts; listed when the row is clicked. */
+  items: DetailItem[];
+};
+
+function pilotRows(
+  bucket: FieldStatsBucket,
+  field: "poc" | "training" | "travelDays",
+  itemsFor: (pilot: string) => DetailItem[],
+): BarRow[] {
   return bucket.pilots
-    .map((p) => ({ key: p.pilot, label: p.pilot, value: p[field] }))
+    .map((p) => ({ key: p.pilot, label: p.pilot, value: p[field], items: p[field] > 0 ? itemsFor(p.pilot) : [] }))
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
 }
 
@@ -169,6 +223,8 @@ function BarCard({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<HoverPos>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const selected = rows.find((row) => row.key === selectedKey && row.value > 0) ?? null;
   const max = useMemo(() => rows.reduce((acc, row) => Math.max(acc, row.value), 0), [rows]);
   const total = useMemo(() => rows.reduce((acc, row) => acc + row.value, 0), [rows]);
 
@@ -195,43 +251,79 @@ function BarCard({
           {rows.map((row) => {
             const widthPct = max > 0 ? Math.max(row.value > 0 ? 2 : 0, (row.value / max) * 100) : 0;
             return (
-              <li
-                key={row.key}
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2"
-                onMouseEnter={(event) => {
-                  const parent = containerRef.current;
-                  if (!parent) return;
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  const parentRect = parent.getBoundingClientRect();
-                  setHover({
-                    x: rect.left - parentRect.left + rect.width / 2,
-                    y: rect.top - parentRect.top,
-                    width: parentRect.width,
-                    content: (
-                      <div className="min-w-[140px]">
-                        <div className="font-semibold text-ink">{row.label}</div>
-                        <div className="text-ink-2">{plural(row.value, unit)}</div>
-                        {row.detail ? <div className="text-ink-4">{row.detail}</div> : null}
-                        {total > 0 ? (
-                          <div className="text-ink-4">{Math.round((row.value / total) * 100)}% of {period}</div>
-                        ) : null}
-                      </div>
-                    ),
-                  });
-                }}
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-xs text-ink">{row.label}</div>
-                  <div className="relative mt-0.5 h-2 overflow-hidden rounded bg-glass/5">
-                    <div className="absolute inset-y-0 left-0 rounded bg-accent/80" style={{ width: `${widthPct}%` }} />
-                  </div>
-                </div>
-                <span className="shrink-0 text-xs tabular-nums text-ink-2">{row.value}</span>
+              <li key={row.key}>
+                <button
+                  type="button"
+                  disabled={row.value === 0}
+                  aria-expanded={selected?.key === row.key}
+                  onClick={() => setSelectedKey((current) => (current === row.key ? null : row.key))}
+                  className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1 py-0.5 text-left transition enabled:hover:bg-glass/8 ${
+                    selected?.key === row.key ? "bg-glass/10" : ""
+                  }`}
+                  onMouseEnter={(event) => {
+                    const parent = containerRef.current;
+                    if (!parent) return;
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const parentRect = parent.getBoundingClientRect();
+                    setHover({
+                      x: rect.left - parentRect.left + rect.width / 2,
+                      y: rect.top - parentRect.top,
+                      width: parentRect.width,
+                      content: (
+                        <div className="min-w-[140px]">
+                          <div className="font-semibold text-ink">{row.label}</div>
+                          <div className="text-ink-2">{plural(row.value, unit)}</div>
+                          {row.detail ? <div className="text-ink-4">{row.detail}</div> : null}
+                          {total > 0 ? (
+                            <div className="text-ink-4">{Math.round((row.value / total) * 100)}% of {period}</div>
+                          ) : null}
+                        </div>
+                      ),
+                    });
+                  }}
+                >
+                  <span className="block min-w-0">
+                    <span className="block truncate text-xs text-ink">{row.label}</span>
+                    <span className="relative mt-0.5 block h-2 overflow-hidden rounded bg-glass/5">
+                      <span
+                        className="absolute inset-y-0 left-0 rounded bg-accent/80"
+                        style={{ width: `${widthPct}%` }}
+                      />
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs tabular-nums text-ink-2">{row.value}</span>
+                </button>
               </li>
             );
           })}
         </ul>
       )}
+      {selected ? (
+        <div className="mt-3 border-t border-glass/10 pt-2">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-ink">
+              {selected.label} · {plural(selected.value, unit)}
+            </p>
+            <button
+              type="button"
+              onClick={() => setSelectedKey(null)}
+              className="text-[11px] text-ink-4 transition hover:text-ink"
+            >
+              Close
+            </button>
+          </div>
+          <ul className="max-h-64 space-y-1 overflow-y-auto pr-1">
+            {selected.items.map((item) => (
+              <li key={item.key} className="rounded-md bg-glass/5 px-2 py-1">
+                <div className="truncate text-xs text-ink" title={item.title}>
+                  {item.title}
+                </div>
+                <div className="text-[11px] text-ink-4">{item.meta}</div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <HoverTooltip hover={hover} />
     </div>
   );
