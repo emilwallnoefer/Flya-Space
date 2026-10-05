@@ -19,7 +19,7 @@
     "@googleapis/gmail": "^22.0.1",
     "@googleapis/sheets": "^18.0.1",
     "@supabase/ssr": "^0.12.7",
-    "@supabase/supabase-js": "^2.117.1",
+    "@supabase/supabase-js": "^2.117.2",
     "framer-motion": "^13.4.4",
     "google-auth-library": "^11.1.0",
     "html-to-image": "^1.11.13",
