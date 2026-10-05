@@ -104,10 +104,9 @@ function FieldStatsOnScroll() {
 }
 
 /**
- * A faint chevron that points at Field stats below the fold: it blinks softly
- * a few times after the home loads, then fades out for good. Finite on
- * purpose (nothing on screen may animate forever), gone the moment the page is
- * scrolled, and played once per page load.
+ * A faint double chevron that points at Field stats below the fold: it fades
+ * in once after the home loads and then holds still (nothing on screen may
+ * animate forever), and is gone the moment the page is scrolled.
  */
 function ScrollHint({ active }: { active: boolean }) {
   const [done, setDone] = useState(false);
@@ -121,17 +120,11 @@ function ScrollHint({ active }: { active: boolean }) {
   }, [done]);
   if (!active || done) return null;
   return (
-    // Centred by the wrapper, not a translate: Framer Motion owns the inner
-    // element's transform for the bob.
     <div aria-hidden className="pointer-events-none fixed inset-x-0 bottom-16 z-[60] flex justify-center text-ink-3">
-      <m.div
-        initial={{ opacity: 0, y: 0 }}
-        animate={{ opacity: [0, 0.55, 0.25, 0.55, 0.25, 0.55, 0], y: [0, 5, 0, 5, 0, 5, 0] }}
-        transition={{ duration: 4.2, delay: 0.8, ease: "easeInOut" }}
-        onAnimationComplete={() => setDone(true)}
-      >
-        <svg className="h-5 w-12" viewBox="0 0 48 20" fill="none" stroke="currentColor" strokeWidth="1.75">
+      <m.div initial={{ opacity: 0 }} animate={{ opacity: 0.55 }} transition={{ duration: 0.6, delay: 0.8, ease: "easeOut" }}>
+        <svg className="h-8 w-12" viewBox="0 0 48 32" fill="none" stroke="currentColor" strokeWidth="1.75">
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 5l18 10L42 5" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 17l18 10L42 17" />
         </svg>
       </m.div>
     </div>
