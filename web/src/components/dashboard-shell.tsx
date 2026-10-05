@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuthNavbar } from "@/components/auth-navbar";
 import { OfflineGameCard } from "@/components/offline-game-card";
+import { ChatBubbleIcon } from "@/components/chat/icons";
 import { MailComposerPanel } from "@/components/mail-composer/mail-composer-panel";
 import { useMailComposer } from "@/components/mail-composer/use-mail-composer";
 import { TimeTrackerPanel, type WeekResponse } from "@/components/time-tracker-panel";
@@ -31,12 +32,14 @@ const AdminPanel = dynamic(
   () => import("@/components/admin-panel").then((m) => m.AdminPanel),
   { ssr: false, loading: PanelLoading },
 );
-// Team chat lives in the burger menu and is mounted only while it is open. It
-// is what pulls supabase-js (realtime included) into the browser, and while
+// Team chat opens from the floating pill and is mounted only while it is open.
+// It is what pulls supabase-js (realtime included) into the browser, and while
 // mounted it holds a postgres_changes subscription — a standing cost on the
 // database for every open dashboard tab, which the 0.5 GB instance cannot
 // spare (it swaps, and the first queries after a quiet spell stall for
-// seconds). Nothing chat-related loads or connects until someone clicks it.
+// seconds). So the pill itself is plain markup in the shell: nothing
+// chat-related loads or connects until someone clicks it, which is also why it
+// shows no unread count.
 const ChatWidget = dynamic(() => import("@/components/chat-widget").then((m) => m.ChatWidget), {
   ssr: false,
 });
@@ -441,10 +444,6 @@ export function DashboardShell({
             switchModule(module);
             setShowComposer(true);
           }}
-          onOpenChat={() => {
-            playUiSound("switchWhoosh");
-            setChatOpen(true);
-          }}
         />
 
         {showComposer ? (
@@ -719,6 +718,30 @@ export function DashboardShell({
 
       </section>
       {chatOpen ? <ChatWidget isAdmin={isAdmin} onClose={() => setChatOpen(false)} /> : null}
+      <AnimatePresence>
+        {/* Hidden while the panel is open, and while a bottom-right popup
+            (program readme, what's new) holds that corner. */}
+        {!chatOpen && !showProgramReadmePrompt && !showWhatsNew ? (
+          <m.button
+            key="chat-trigger"
+            type="button"
+            aria-label="Open team chat"
+            initial={{ opacity: 0, scale: 0.85, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.85, y: 12 }}
+            transition={{ type: "spring", stiffness: 360, damping: 30 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              playUiSound("switchWhoosh");
+              setChatOpen(true);
+            }}
+            className="fixed bottom-4 right-4 z-[125] inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/95 px-4 py-3 text-sm font-semibold text-slate-900 shadow-[0_18px_36px_-12px_rgba(34,211,238,0.55)] backdrop-blur transition hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <ChatBubbleIcon className="h-5 w-5" />
+            <span className="hidden sm:inline">Team chat</span>
+          </m.button>
+        ) : null}
+      </AnimatePresence>
       <OfflineGameCard />
       {showProgramReadmePrompt ? (
         <div

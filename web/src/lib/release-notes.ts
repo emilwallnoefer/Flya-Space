@@ -28,6 +28,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       "Regions, POCs and trainings per pilot, and travel days.",
       "All of 2026 or one month at a time; click a name to see what it counts.",
       "Fleet moved from the menu to its own card on the workspace home.",
+      "Team chat is back as the pill in the bottom-right corner.",
     ],
   },
   {

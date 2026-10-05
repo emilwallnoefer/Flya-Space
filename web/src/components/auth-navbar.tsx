@@ -16,8 +16,6 @@ type AuthNavbarProps = {
   userRole?: UserRole | null;
   adminModuleLabel?: string;
   onSelectModule: (module: ModuleKey) => void;
-  /** Opens Team chat. Omitted = no chat entry in the menu. */
-  onOpenChat?: () => void;
 };
 
 export function AuthNavbar({
@@ -30,7 +28,6 @@ export function AuthNavbar({
   userRole = null,
   adminModuleLabel = "Admin",
   onSelectModule,
-  onOpenChat,
 }: AuthNavbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -172,22 +169,6 @@ export function AuthNavbar({
                   </button>
                 ) : null}
               </div>
-
-              {onOpenChat ? (
-                <div className="mt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onOpenChat();
-                      setMenuOpen(false);
-                    }}
-                    className="flex w-full items-center justify-between rounded-lg border border-glass/10 bg-glass/5 px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/70 hover:bg-accent/95 hover:text-slate-900"
-                  >
-                    <span>Team chat</span>
-                    <span className="text-[11px] opacity-80">Open</span>
-                  </button>
-                </div>
-              ) : null}
 
               {showGmailStatus ? (
                 <div className="mt-2 rounded-lg border border-glass/10 bg-glass/5 px-2.5 py-2">
