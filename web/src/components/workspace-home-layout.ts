@@ -29,9 +29,9 @@ export const HOME_SUBTITLE = "Open a module below and pick up right where you le
 export const HOME_ROLE_PILL_CLASS =
   "mt-5 inline-flex items-center rounded-full border border-glass/10 bg-glass/[0.06] px-3 py-1 text-[11px] font-medium tracking-wide text-ink-3";
 
+/** At most three cards a row; a fourth (Mission planning) wraps underneath. */
 export function homeGridClass(cardCount: number): string {
-  if (cardCount >= 4) return "grid gap-4 sm:grid-cols-2 lg:grid-cols-4";
-  return `grid gap-4 ${cardCount === 3 ? "md:grid-cols-3" : "sm:mx-auto sm:max-w-2xl sm:grid-cols-2"}`;
+  return `grid gap-4 ${cardCount >= 3 ? "md:grid-cols-3" : "sm:mx-auto sm:max-w-2xl sm:grid-cols-2"}`;
 }
 
 export const MODULE_CARD_CLASS =
