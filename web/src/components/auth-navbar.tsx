@@ -2,6 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { playUiSound } from "@/lib/ui-sounds";
+import {
+  NAVBAR_CLASS,
+  NAVBAR_EYEBROW_CLASS,
+  NAVBAR_LOGO_CLASS,
+  NAVBAR_MENU_BUTTON_CLASS,
+  NAVBAR_TITLE_CLASS,
+} from "@/components/workspace-home-layout";
 
 type ModuleKey = "mail" | "time" | "fleet" | "settings" | "admin";
 
@@ -33,15 +40,15 @@ export function AuthNavbar({
 
 
   return (
-    <nav className="glass-card sticky top-3 z-[90] !overflow-visible p-2.5 md:p-3">
+    <nav className={NAVBAR_CLASS}>
       <div className="flex items-center justify-between gap-2 sm:gap-3">
         <div className="min-w-0 flex items-center gap-2.5">
-          <div className="grid h-7 w-7 place-items-center rounded-md bg-gradient-to-br from-accent-from to-accent-to text-[11px] font-semibold text-slate-950">
+          <div className={NAVBAR_LOGO_CLASS}>
             FA
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-[0.15em] text-accent-soft/70">Flyability Internal</p>
-            <p className="truncate text-xs font-medium md:text-sm">Flya Allrounder</p>
+            <p className={NAVBAR_EYEBROW_CLASS}>Flyability Internal</p>
+            <p className={NAVBAR_TITLE_CLASS}>Flya Allrounder</p>
           </div>
         </div>
 
@@ -51,7 +58,7 @@ export function AuthNavbar({
             onClick={() => {
               setMenuOpen((prev) => !prev);
             }}
-            className="inline-flex items-center gap-2 rounded-lg border border-glass/15 bg-glass/8 px-2.5 py-1.5 text-xs transition ease-fluid hover:bg-glass/12"
+            className={NAVBAR_MENU_BUTTON_CLASS}
             aria-label="Toggle navigation menu"
             aria-expanded={menuOpen}
           >
