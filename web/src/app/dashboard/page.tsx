@@ -20,6 +20,7 @@ import {
 } from "@/lib/admin-queries";
 import { buildFleetBoard, type FleetBoardPayload } from "@/lib/fleet-board";
 import { DEFAULT_WINDOW_DAYS, displayNameFor } from "@/lib/fleet-queries";
+import { canSeeGoogleEmbeds, formEmbed, sheetEmbed } from "@/lib/google-embeds";
 import { redirect } from "next/navigation";
 
 export default async function DashboardPage({
@@ -180,6 +181,16 @@ export default async function DashboardPage({
   // admin API) — and stream in after the page is already on screen.
   const [initialWeek, initialSettings] = await Promise.all([initialWeekPromise, initialSettingsPromise]);
 
+  // Embedded Google Sheets / Forms: pilots and admins only. The URLs are built
+  // here and handed down only to them, so no other role's page ever carries
+  // one. An unset id yields null, which hides that card.
+  const seesEmbeds = canSeeGoogleEmbeds(initialRole, isAdmin);
+  const missionPlanning = seesEmbeds
+    ? sheetEmbed(process.env.GOOGLE_SHEETS_SPREADSHEET_ID, process.env.GOOGLE_SHEETS_GID)
+    : null;
+  const fleetSheet = seesEmbeds ? sheetEmbed(process.env.FLEET_SHEET_ID, process.env.FLEET_SHEET_GID) : null;
+  const roadDays = seesEmbeds ? formEmbed(process.env.ROAD_DAYS_FORM_ID) : null;
+
   return (
     <DashboardShell
       email={email ?? "Signed in"}
@@ -191,6 +202,9 @@ export default async function DashboardPage({
       initialAdminOverview={adminOverviewPromise}
       initialFleet={initialFleetPromise}
       initialModule={requestedModule}
+      missionPlanning={missionPlanning}
+      fleetSheet={fleetSheet}
+      roadDays={roadDays}
     />
   );
 }

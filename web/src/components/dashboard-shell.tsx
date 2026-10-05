@@ -37,6 +37,7 @@ import type { ModuleKey } from "@/lib/dashboard-modules";
 import { writeViewParams } from "@/lib/view-params";
 import { LATEST_RELEASE } from "@/lib/release-notes";
 import { userRoleLabel, type UserRole } from "@/lib/user-role";
+import type { GoogleEmbed } from "@/lib/google-embeds";
 
 function PanelLoading() {
   return <div className="min-h-[40vh] animate-pulse rounded-2xl border border-glass/10 bg-glass/5" aria-hidden />;
@@ -67,6 +68,12 @@ const ChatWidget = dynamic(() => import("@/components/chat-widget").then((m) => 
 // Fleet is beta and behind a click for everyone, so it stays out of the first bundle.
 const FleetPanel = dynamic(
   () => import("@/components/fleet/fleet-panel").then((m) => m.FleetPanel),
+  { ssr: false, loading: PanelLoading },
+);
+// The Google sheets and form are cards for pilots and admins only; the chunk is
+// tiny, but no iframe should exist until someone opens one.
+const GoogleEmbedPanel = dynamic(
+  () => import("@/components/google-embed-panel").then((m) => m.GoogleEmbedPanel),
   { ssr: false, loading: PanelLoading },
 );
 // Field stats sit open at the bottom of the workspace home, below the fold. The
@@ -168,6 +175,14 @@ type DashboardShellProps = {
    * instead of flashing the workspace home. `null` = the workspace home.
    */
   initialModule?: ModuleKey | null;
+  /**
+   * Links to the embedded Google sheets and form, built server-side only for
+   * the roles allowed to see them (`canSeeGoogleEmbeds`) and only when the id
+   * is set. `null` hides that module entirely, so other roles never receive it.
+   */
+  missionPlanning?: GoogleEmbed | null;
+  fleetSheet?: GoogleEmbed | null;
+  roadDays?: GoogleEmbed | null;
 };
 
 import type { FleetBoardResponse } from "@/components/fleet/types";
@@ -229,6 +244,42 @@ function IconDrone({ className }: { className?: string }) {
   );
 }
 
+function IconCalendar({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"
+      />
+    </svg>
+  );
+}
+
+function IconTable({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0112 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5"
+      />
+    </svg>
+  );
+}
+
+function IconTruck({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12"
+      />
+    </svg>
+  );
+}
+
 function IconArrow({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
@@ -249,6 +300,9 @@ export function DashboardShell({
   initialAdminOverview = RESOLVED_NULL,
   initialFleet = RESOLVED_NULL,
   initialModule = null,
+  missionPlanning = null,
+  fleetSheet = null,
+  roadDays = null,
 }: DashboardShellProps) {
   // The role is decided entirely on the server: it lives in `app_metadata`,
   // only PATCH /api/admin/users writes it, and an account without one never
@@ -263,13 +317,19 @@ export function DashboardShell({
       userRole === "sales" || userRole === "hr"
         ? ["time", "fleet", "settings"]
         : ["mail", "time", "fleet", "settings"];
+    if (missionPlanning) base.push("planning");
+    if (fleetSheet) base.push("fleetsheet");
+    if (roadDays) base.push("roaddays");
     if (isAdmin || userRole === "hr") base.push("admin");
     return base;
-  }, [userRole, isAdmin]);
+  }, [userRole, isAdmin, missionPlanning, fleetSheet, roadDays]);
 
-  // Cards on the workspace home: Time Tracker always, Mail and Fleet when
-  // available. Settings and Admin live in the burger menu, not here.
-  const homeCardCount = 1 + (["mail", "fleet"] as const).filter((key) => availableModules.includes(key)).length;
+  // Cards on the workspace home: Time Tracker always, the rest when available.
+  // Settings and Admin live in the burger menu, not here.
+  const homeCardCount =
+    1 +
+    (["mail", "fleet", "planning", "fleetsheet", "roaddays"] as const).filter((key) => availableModules.includes(key))
+      .length;
 
   const [showComposer, setShowComposer] = useState(initialModule != null);
   const [beginAnimating, setBeginAnimating] = useState(false);
@@ -282,6 +342,9 @@ export function DashboardShell({
     const preferred = initialModule ?? (userRole === "sales" || userRole === "hr" ? "time" : "mail");
     return availableModules.includes(preferred) ? preferred : availableModules[0];
   });
+  // A Google embed covers the whole window while it is open.
+  const embedOpen =
+    showComposer && (activeModule === "planning" || activeModule === "fleetsheet" || activeModule === "roaddays");
   const [showProgramReadmePrompt, setShowProgramReadmePrompt] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   // The floating chat pill shares the bottom-right corner with the first-launch
@@ -460,6 +523,11 @@ export function DashboardShell({
     }, 180);
   }
 
+  function leaveEmbed() {
+    playUiSound("switchWhoosh");
+    setShowComposer(false);
+  }
+
   function openModuleCard(module: ModuleKey) {
     if (activeModule !== module) playUiSound("switchWhoosh");
     switchModule(module);
@@ -504,6 +572,12 @@ export function DashboardShell({
                   ? "Time Tracker"
                   : activeModule === "fleet"
                     ? "Fleet (beta)"
+                    : activeModule === "planning"
+                      ? HOME_CARDS[3].title
+                    : activeModule === "fleetsheet"
+                      ? HOME_CARDS[4].title
+                    : activeModule === "roaddays"
+                      ? HOME_CARDS[5].title
                     : activeModule === "admin"
                       ? adminModuleLabel
                       : "Settings"}
@@ -609,6 +683,81 @@ export function DashboardShell({
                     </span>
                   </m.button>
                 ) : null}
+
+                {availableModules.includes("planning") ? (
+                  <m.button
+                    type="button"
+                    initial={false}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => openModuleCard("planning")}
+                    className={`${MODULE_CARD_CLASS} hover:border-violet-400/35 hover:shadow-[0_28px_56px_-12px_rgba(167,139,250,0.1)] focus-visible:outline-violet-400/80`}
+                  >
+                    <span className={MODULE_CARD_CORE_CLASS}>
+                      <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-violet-400/12 blur-2xl transition group-hover:bg-violet-400/22" aria-hidden />
+                      <span className={`${MODULE_CARD_ICON_CLASS} border-violet-400/25 bg-violet-400/10 text-violet-200`}>
+                        <IconCalendar className="h-5 w-5" />
+                      </span>
+                      <span className={MODULE_CARD_TITLE_CLASS}>{HOME_CARDS[3].title}</span>
+                      <span className={MODULE_CARD_DESCRIPTION_CLASS}>{HOME_CARDS[3].description}</span>
+                      <span className={`${MODULE_CARD_CTA_CLASS} text-violet-200/90`}>
+                        Continue
+                        <span className={MODULE_CARD_ARROW_CLASS}>
+                          <IconArrow className="h-3.5 w-3.5" />
+                        </span>
+                      </span>
+                    </span>
+                  </m.button>
+                ) : null}
+
+                {availableModules.includes("fleetsheet") ? (
+                  <m.button
+                    type="button"
+                    initial={false}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => openModuleCard("fleetsheet")}
+                    className={`${MODULE_CARD_CLASS} hover:border-amber-400/35 hover:shadow-[0_28px_56px_-12px_rgba(251,191,36,0.1)] focus-visible:outline-amber-400/80`}
+                  >
+                    <span className={MODULE_CARD_CORE_CLASS}>
+                      <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-amber-400/12 blur-2xl transition group-hover:bg-amber-400/22" aria-hidden />
+                      <span className={`${MODULE_CARD_ICON_CLASS} border-amber-400/25 bg-amber-400/10 text-amber-200`}>
+                        <IconTable className="h-5 w-5" />
+                      </span>
+                      <span className={MODULE_CARD_TITLE_CLASS}>{HOME_CARDS[4].title}</span>
+                      <span className={MODULE_CARD_DESCRIPTION_CLASS}>{HOME_CARDS[4].description}</span>
+                      <span className={`${MODULE_CARD_CTA_CLASS} text-amber-200/90`}>
+                        Continue
+                        <span className={MODULE_CARD_ARROW_CLASS}>
+                          <IconArrow className="h-3.5 w-3.5" />
+                        </span>
+                      </span>
+                    </span>
+                  </m.button>
+                ) : null}
+
+                {availableModules.includes("roaddays") ? (
+                  <m.button
+                    type="button"
+                    initial={false}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => openModuleCard("roaddays")}
+                    className={`${MODULE_CARD_CLASS} hover:border-rose-400/35 hover:shadow-[0_28px_56px_-12px_rgba(251,113,133,0.1)] focus-visible:outline-rose-400/80`}
+                  >
+                    <span className={MODULE_CARD_CORE_CLASS}>
+                      <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-rose-400/12 blur-2xl transition group-hover:bg-rose-400/22" aria-hidden />
+                      <span className={`${MODULE_CARD_ICON_CLASS} border-rose-400/25 bg-rose-400/10 text-rose-200`}>
+                        <IconTruck className="h-5 w-5" />
+                      </span>
+                      <span className={MODULE_CARD_TITLE_CLASS}>{HOME_CARDS[5].title}</span>
+                      <span className={MODULE_CARD_DESCRIPTION_CLASS}>{HOME_CARDS[5].description}</span>
+                      <span className={`${MODULE_CARD_CTA_CLASS} text-rose-200/90`}>
+                        Continue
+                        <span className={MODULE_CARD_ARROW_CLASS}>
+                          <IconArrow className="h-3.5 w-3.5" />
+                        </span>
+                      </span>
+                    </span>
+                  </m.button>
+                ) : null}
               </div>
             </div>
           </m.div>
@@ -645,6 +794,12 @@ export function DashboardShell({
                     <Suspense fallback={<PanelLoading />}>
                       <StreamedFleetPanel board={initialFleet} />
                     </Suspense>
+                  ) : activeModule === "planning" && missionPlanning ? (
+                    <GoogleEmbedPanel title={HOME_CARDS[3].title} urls={missionPlanning} onBack={leaveEmbed} />
+                  ) : activeModule === "fleetsheet" && fleetSheet ? (
+                    <GoogleEmbedPanel title={HOME_CARDS[4].title} urls={fleetSheet} onBack={leaveEmbed} />
+                  ) : activeModule === "roaddays" && roadDays ? (
+                    <GoogleEmbedPanel title={HOME_CARDS[5].title} urls={roadDays} onBack={leaveEmbed} />
                   ) : activeModule === "admin" ? (
                     <Suspense fallback={<PanelLoading />}>
                       <StreamedAdminPanel
@@ -681,7 +836,8 @@ export function DashboardShell({
       <AnimatePresence>
         {/* Hidden while the panel is open, and while a bottom-right popup
             (program readme, what's new) holds that corner. */}
-        {!chatOpen && !showProgramReadmePrompt && !showWhatsNew ? (
+        {/* Also hidden over the full-screen planning sheet, where it would cover the sheet's corner. */}
+        {!chatOpen && !showProgramReadmePrompt && !showWhatsNew && !embedOpen ? (
           <m.button
             key="chat-trigger"
             type="button"

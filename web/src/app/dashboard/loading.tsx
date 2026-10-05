@@ -31,7 +31,9 @@ import {
  * so every block sits exactly where it will land. Text is the real text made
  * transparent over a placeholder bar, which keeps line heights and wrapping
  * identical. The greeting and role are not known yet, so they use stand-ins
- * of typical length. It assumes the three-card home (Mail, Time, Fleet).
+ * of typical length. It assumes the six-card home that pilots and admins see
+ * (Mail, Time, Fleet, then Mission planning, Fleet management and Road Days
+ * underneath).
  *
  * The pulse is gated behind `motion-safe:` and ends when the page arrives.
  */

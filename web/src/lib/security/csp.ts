@@ -86,7 +86,10 @@ export function buildCsp(nonce: string): string {
     // Supabase REST + Realtime are the only browser-side external endpoints;
     // Gmail, Google Sheets and Resend are all called server-side.
     `connect-src ${["'self'", supabaseHttp, supabaseWss, ...liveConnect].filter(Boolean).join(" ")}`,
-    `frame-src ${["'self'", ...liveFrame].join(" ")}`,
+    // docs.google.com: Mission planning, Fleet management and Road Days frame
+    // Google's own Sheets / Forms UI (lib/google-embeds.ts). accounts.google.com is deliberately
+    // absent — Google's sign-in refuses framing anyway; it opens in a new tab.
+    `frame-src ${["'self'", "https://docs.google.com", ...liveFrame].join(" ")}`,
     `worker-src 'self' blob:`,
     `manifest-src 'self'`,
   ].join("; ");
