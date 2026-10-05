@@ -210,6 +210,20 @@ describe("computeFieldStats", () => {
     expect(sameBooking(a, b)).toBe(expected);
   });
 
+  it("counts up to yesterday: today and later are plans, not done", () => {
+    const boundary = computeFieldStats({
+      header: HEADER,
+      rows: [
+        row("March 2026", 18, "Kiwa POC", "booked out of the office"),
+        row("", 19, "Apave Training", "booked out of the office"),
+        row("", 20, "Vigier POC", "booked out of the office"),
+      ],
+      today: "2026-03-19",
+    });
+    expect(boundary.events.map((e) => e.title)).toEqual(["Kiwa POC"]);
+    expect(boundary.travel.map((d) => d.date)).toEqual(["2026-03-18"]);
+  });
+
   it("starts a new event when the same text recurs after a long gap", () => {
     const again = computeFieldStats({
       header: HEADER,
