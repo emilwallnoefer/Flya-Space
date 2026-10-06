@@ -1,4 +1,5 @@
-import { deleteGmailToken } from "@/lib/gmail-tokens";
+import { deleteGmailToken, readGmailRefreshToken } from "@/lib/gmail-tokens";
+import { revokeGoogleRefreshToken } from "@/lib/gmail";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { forbidHeldAccount } from "@/lib/app-access";
@@ -13,7 +14,10 @@ export async function POST() {
   const held = forbidHeldAccount(user);
   if (held) return held;
 
-  // Remove the server-side refresh token first, then clear display metadata.
+  // Revoke the grant at Google, then remove the server-side refresh token,
+  // then clear display metadata.
+  const refreshToken = await readGmailRefreshToken(user.id);
+  if (refreshToken) await revokeGoogleRefreshToken(refreshToken);
   await deleteGmailToken(user.id);
 
   const { error } = await supabase.auth.updateUser({
@@ -22,7 +26,10 @@ export async function POST() {
       gmail_email: null,
     },
   });
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[gmail/disconnect] metadata clear failed", error.message);
+    return NextResponse.json({ ok: false, error: "Could not finish disconnecting. Try again." }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }

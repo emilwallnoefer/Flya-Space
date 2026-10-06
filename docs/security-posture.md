@@ -31,7 +31,7 @@ time/sick-leave data. Both get the strongest treatment below.
 ## 2. The layers, and what each one is actually good for
 
 **Identity.** Supabase Auth via Google OAuth. The callback enforces `@flyability.com` and signs
-out anyone else. Sessions are HttpOnly + Secure + SameSite=Lax cookies managed by `@supabase/ssr`.
+out anyone else. Sessions are Secure + SameSite=Lax cookies managed by `@supabase/ssr`. They are **not** HttpOnly — the browser Supabase client reads them to talk to Supabase directly — so the nonce-based CSP is what keeps a script injection from reaching the session.
 
 **Two independent gates, deliberately.** `src/proxy.ts` refreshes the session and gates
 `/dashboard`, `/settings`, `/login` — and it fails *closed*, redirecting to `/login` if the auth

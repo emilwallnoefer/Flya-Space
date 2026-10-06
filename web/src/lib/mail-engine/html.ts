@@ -8,6 +8,11 @@ export function escapeHtmlText(s: string) {
   return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
+/** Escape text for use inside a double- or single-quoted HTML attribute value. */
+export function escapeHtmlAttr(s: string) {
+  return escapeHtmlText(s).replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+}
+
 /** Escape a URL for safe use inside an HTML attribute, and only allow http(s)/cid schemes. Returns "" if the scheme is not allowed. */
 export function safeAttrUrl(raw: string, allowCid = false): string {
   const url = String(raw ?? "").trim();
@@ -83,11 +88,13 @@ function markdownBlockToHtml(chunk: string): string {
   let c = trimmed.replaceAll(PLACEHOLDER, "");
 
   c = c.replace(/!\[([^\]]*)\]\(([^)\s"]+)\)/g, (_m, alt, url) => {
-    const safeAlt = escapeHtmlText(String(alt ?? ""));
+    const altText = String(alt ?? "");
     const src = safeAttrUrl(String(url), /*allowCid*/ true);
-    if (!src) return hold(safeAlt);
+    if (!src) return hold(escapeHtmlText(altText));
+    // The alt sits inside a quoted attribute, so quotes must be escaped too —
+    // `![x" onerror="…](…)` would otherwise break out of it (audit run-4/5).
     return hold(
-      `<img src="${src}" alt="${safeAlt}" style="max-width:240px;height:auto;display:block;margin-top:10px;border:0;" />`,
+      `<img src="${src}" alt="${escapeHtmlAttr(altText)}" style="max-width:240px;height:auto;display:block;margin-top:10px;border:0;" />`,
     );
   });
   // Links before bold: resource lines are written as `**[label](url)**`, so

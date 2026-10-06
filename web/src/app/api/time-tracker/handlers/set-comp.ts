@@ -3,6 +3,7 @@ import { sanitizeText } from "@/lib/security/input-sanitize";
 import { sanitizeMins } from "@/lib/time-tracker-queries";
 import { isDateKey, type PostActionContext } from "./shared";
 import type { PostPayload } from "./schemas";
+import { serverError } from "@/lib/api-errors";
 
 type SetCompPayload = Extract<PostPayload, { action: "set_comp" }>;
 
@@ -36,14 +37,14 @@ export async function handleSetComp(
         },
         { onConflict: "user_id,work_date" },
       );
-    if (upsertCompRes.error) return NextResponse.json({ error: upsertCompRes.error.message }, { status: 500 });
+    if (upsertCompRes.error) return serverError("time-tracker/set-comp", upsertCompRes.error);
   } else {
     const deleteCompRes = await supabase
       .from("time_comp_adjustments")
       .delete()
       .eq("user_id", userId)
       .eq("work_date", date);
-    if (deleteCompRes.error) return NextResponse.json({ error: deleteCompRes.error.message }, { status: 500 });
+    if (deleteCompRes.error) return serverError("time-tracker/set-comp", deleteCompRes.error);
   }
 
   return NextResponse.json({ ok: true, comp_mins: mins });

@@ -244,6 +244,11 @@ async function main() {
       ["mail_link_leaderboard", { p_limit: 1 }],
       ["tt_refresh_overtime_bank_stats", { p_user: a.user.id }],
       ["tt_user_week_v1", { p_week_start: "1900-01-01" }],
+      // Not admin RPCs, but anon has no business calling them either (run-5).
+      ["tt_resolve_audit_user_id", { p_table_name: "rls_smoke", p_new_row: {}, p_old_row: {} }],
+      ["create_time_tracker_snapshot", { p_user: a.user.id, p_reason: "rls-smoke" }],
+      ["has_app_role", {}],
+      ["hook_restrict_signup_domain", { event: {} }],
     ];
     for (const [fn, args] of probes) {
       const { error } = await anon.rpc(fn, args);

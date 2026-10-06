@@ -1,3 +1,5 @@
+import "server-only";
+
 import { gmail as gmailApi } from "@googleapis/gmail";
 import { OAuth2Client, type Credentials } from "google-auth-library";
 
@@ -35,6 +37,20 @@ export async function exchangeCodeForTokens(code: string, redirectUri: string) {
   const client = getOAuthClient(redirectUri);
   const { tokens } = await client.getToken(code);
   return tokens;
+}
+
+/**
+ * Revoke a refresh token at Google, so disconnecting really ends the grant
+ * rather than only forgetting our copy. Best-effort: a token Google already
+ * considers revoked or expired is the goal state, so errors are only logged.
+ */
+export async function revokeGoogleRefreshToken(refreshToken: string): Promise<void> {
+  try {
+    const client = new OAuth2Client(requiredEnv("GOOGLE_OAUTH_CLIENT_ID"), requiredEnv("GOOGLE_OAUTH_CLIENT_SECRET"));
+    await client.revokeToken(refreshToken);
+  } catch (error) {
+    console.warn("[gmail] token revoke failed", (error as Error)?.message);
+  }
 }
 
 export async function getConnectedGmailEmail(tokens: Credentials, redirectUri: string) {

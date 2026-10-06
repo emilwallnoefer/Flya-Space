@@ -17,6 +17,7 @@ import {
 } from "@/lib/email/resend";
 import { readWorkspaceSettings } from "@/lib/workspace-settings";
 import { checkRateLimit, createRateLimitHeaders, getClientIp } from "@/lib/security/rate-limit";
+import { serverError } from "@/lib/api-errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -450,7 +451,7 @@ export async function GET(request: Request) {
   for (;;) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return serverError("cron/time-log-reminder", error);
     }
     const pageUsers = data?.users ?? [];
     for (const user of pageUsers) {

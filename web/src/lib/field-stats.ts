@@ -1,4 +1,5 @@
 import { parseDateFromMonthYearDay, parseFullDate } from "@/lib/google-sheets";
+import type { UserRole } from "@/lib/user-role";
 
 /**
  * Field stats: what the pilots did, counted from the "Mission planning" tab of
@@ -64,6 +65,20 @@ export type FieldEvent = {
 
 /** One counted travel day: the rows behind a bar in the travel-days chart. */
 export type FieldTravelDay = { pilot: string; date: string; activity: string; status: string };
+
+/**
+ * Who sees the entries behind the counts (customer names, pilots' activity and
+ * status text, salesperson names): pilots and admins, who also get the planning
+ * sheet itself. Sales and HR get the counts only. Owner decision, audit run-5.
+ */
+export function canSeeFieldStatsDetail(role: UserRole | null, isAdmin: boolean): boolean {
+  return isAdmin || role === "eu_pilot" || role === "us_pilot";
+}
+
+/** The counts without a single sheet cell's text. */
+export function withoutDetail(stats: FieldStats): FieldStats {
+  return { ...stats, events: [], travel: [], salesNames: [] };
+}
 
 export type FieldStats = {
   from: string;

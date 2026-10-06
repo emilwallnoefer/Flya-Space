@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canSeeFieldStatsDetail,
   classifyDay,
   computeFieldStats,
   findPilotColumns,
@@ -7,7 +8,42 @@ import {
   salesNameFrom,
   sameBooking,
   UNASSIGNED_REGION,
+  withoutDetail,
+  type FieldStats,
 } from "./field-stats";
+
+describe("field stats detail by role", () => {
+  it("shows the entries to pilots and admins only", () => {
+    expect(canSeeFieldStatsDetail("eu_pilot", false)).toBe(true);
+    expect(canSeeFieldStatsDetail("us_pilot", false)).toBe(true);
+    expect(canSeeFieldStatsDetail(null, true)).toBe(true);
+    expect(canSeeFieldStatsDetail("sales", false)).toBe(false);
+    expect(canSeeFieldStatsDetail("hr", false)).toBe(false);
+    expect(canSeeFieldStatsDetail(null, false)).toBe(false);
+  });
+
+  it("strips every sheet text but keeps the counts", () => {
+    const bucket = { pilots: [{ pilot: "A", poc: 1, training: 0, travelDays: 1 }], regions: [] };
+    const stats: FieldStats = {
+      from: "2026-01-01",
+      to: "2026-01-31",
+      months: ["2026-01"],
+      all: bucket,
+      byMonth: { "2026-01": bucket },
+      events: [
+        { pilot: "A", kind: "poc", start: "2026-01-05", end: "2026-01-05", days: 1, title: "Acme POC", salesName: "S", region: "R" },
+      ],
+      travel: [{ pilot: "A", date: "2026-01-06", activity: "Doctor appointment", status: "out of office" }],
+      salesNames: ["S"],
+    };
+    const stripped = withoutDetail(stats);
+    expect(stripped.events).toEqual([]);
+    expect(stripped.travel).toEqual([]);
+    expect(stripped.salesNames).toEqual([]);
+    expect(stripped.all).toEqual(bucket);
+    expect(JSON.stringify(stripped)).not.toMatch(/Acme|Doctor/);
+  });
+});
 
 // Row 1 of the real "Mission planning" tab (A…AH), verbatim.
 const HEADER = [

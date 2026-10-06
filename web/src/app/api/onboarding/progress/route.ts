@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { forbidHeldAccount } from "@/lib/app-access";
+import { serverError } from "@/lib/api-errors";
 
 type ProgressRow = {
   progress: Record<string, number> | null;
@@ -25,7 +26,7 @@ export async function GET() {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return serverError("onboarding/progress", error);
 
   const row = data as ProgressRow | null;
   return NextResponse.json({
@@ -72,6 +73,6 @@ export async function PUT(request: Request) {
     { onConflict: "user_id" },
   );
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return serverError("onboarding/progress", error);
   return NextResponse.json({ ok: true, updated_at: nowIso });
 }
