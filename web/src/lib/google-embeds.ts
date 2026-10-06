@@ -18,7 +18,9 @@
  * "Sign in to Google" and "Open in Google …" buttons cover both, in a new tab.
  *
  * Sheets use `rm=embedded` (keeps menus and the format toolbar; `rm=minimal`
- * drops them). Forms use `embedded=true`.
+ * drops them). Forms use `embedded=true`. The two calendar sheets open scrolled
+ * to today: the panel asks `/api/google-embeds/today` for the cell and adds it
+ * as `range=` to the URL (`withRange`), the only way to steer a cross-origin frame.
  */
 
 import type { UserRole } from "@/lib/user-role";
@@ -27,8 +29,13 @@ export function canSeeGoogleEmbeds(role: UserRole | null, isAdmin: boolean): boo
   return isAdmin || role === "eu_pilot" || role === "us_pilot";
 }
 
+/** The calendar sheets whose today cell the server can find (`google-embed-today.ts`). */
+export type EmbedSheet = "planning" | "fleet";
+
 export type GoogleEmbed = {
   kind: "sheet" | "form";
+  /** Set on a calendar sheet: open it scrolled to today. */
+  today?: EmbedSheet;
   /** What the iframe loads. */
   embed: string;
   /** The same page in Google's full UI, for a new tab. */
@@ -49,13 +56,25 @@ function cleanId(id: string | undefined): string | null {
 }
 
 /** `null` when the spreadsheet id is missing or malformed, which hides the card. */
-export function sheetEmbed(spreadsheetId: string | undefined, gid: string | undefined): GoogleEmbed | null {
+export function sheetEmbed(
+  spreadsheetId: string | undefined,
+  gid: string | undefined,
+  today?: EmbedSheet,
+): GoogleEmbed | null {
   const id = cleanId(spreadsheetId);
   if (!id) return null;
   const tab = gid?.trim() && /^\d+$/.test(gid.trim()) ? `#gid=${gid.trim()}` : "";
   const base = `https://docs.google.com/spreadsheets/d/${id}/edit`;
   const open = `${base}${tab}`;
-  return { kind: "sheet", embed: `${base}?rm=embedded${tab}`, open, signIn: signInTo(open) };
+  return { kind: "sheet", today, embed: `${base}?rm=embedded${tab}`, open, signIn: signInTo(open) };
+}
+
+const CELL_PATTERN = /^[A-Z]{1,3}[1-9]\d{0,6}$/;
+
+/** A sheet URL that opens with `cell` selected and in view; unchanged without a valid cell. */
+export function withRange(url: string, cell: string | null | undefined): string {
+  if (!cell || !CELL_PATTERN.test(cell)) return url;
+  return `${url}${url.includes("#") ? "&" : "#"}range=${cell}`;
 }
 
 /**

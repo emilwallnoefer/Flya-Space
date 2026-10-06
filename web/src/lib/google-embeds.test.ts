@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canSeeGoogleEmbeds, formEmbed, sheetEmbed } from "./google-embeds";
+import { canSeeGoogleEmbeds, formEmbed, sheetEmbed, withRange } from "./google-embeds";
 
 // Made up: the real ids live in env, and this repo is public.
 const ID = "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcd";
@@ -60,5 +60,24 @@ describe("formEmbed", () => {
   it("returns null for a missing id or a pasted URL", () => {
     expect(formEmbed(undefined)).toBeNull();
     expect(formEmbed(`https://docs.google.com/forms/d/e/${FORM_ID}/viewform`)).toBeNull();
+  });
+});
+
+describe("withRange", () => {
+  const base = `https://docs.google.com/spreadsheets/d/${ID}/edit`;
+
+  it("adds the cell to an existing hash, or starts one", () => {
+    expect(withRange(`${base}?rm=embedded#gid=42`, "A3204")).toBe(`${base}?rm=embedded#gid=42&range=A3204`);
+    expect(withRange(`${base}?rm=embedded`, "KQ2")).toBe(`${base}?rm=embedded#range=KQ2`);
+  });
+
+  it("leaves the URL alone without a valid cell", () => {
+    expect(withRange(base, null)).toBe(base);
+    expect(withRange(base, "A1&x=1")).toBe(base);
+    expect(withRange(base, "a1")).toBe(base);
+  });
+
+  it("carries the calendar kind on a sheet", () => {
+    expect(sheetEmbed(ID, "42", "planning")?.today).toBe("planning");
   });
 });

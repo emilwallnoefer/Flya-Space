@@ -2,10 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import type { GoogleEmbed } from "@/lib/google-embeds";
+import { withRange, type GoogleEmbed } from "@/lib/google-embeds";
 
 const BUTTON_CLASS =
   "inline-flex items-center gap-1.5 rounded-lg border border-glass/15 bg-glass/8 px-2.5 py-1 text-[11px] font-medium text-ink-2 transition ease-fluid hover:bg-glass/12 hover:text-ink";
+
+/**
+ * Sheets are shown at 80%: more of the grid fits, and Google has no URL switch
+ * for its own zoom. The frame is laid out at 125% and scaled back down, so the
+ * sheet believes its window is that much larger and draws more rows and columns.
+ */
+const SHEET_ZOOM = 0.8;
+
+/** How long to wait for today's cell before opening the sheet at its top. */
+const TODAY_TIMEOUT_MS = 3000;
 
 const COPY: Record<GoogleEmbed["kind"], { hint: string; app: string; frame: string }> = {
   sheet: {
@@ -33,6 +43,10 @@ const COPY: Record<GoogleEmbed["kind"], { hint: string; app: string; frame: stri
  * the frame is what stole the wheel: whatever the sheet did not consume chained
  * up to the page and moved it instead of the grid.
  *
+ * Mission planning and Fleet management open scrolled to today: the server
+ * finds today's cell and it goes into the URL as `range=` (lib/google-embeds.ts).
+ * The frame waits briefly for it; without it, the sheet opens at its top.
+ *
  * The frame is cross-origin, so the page cannot tell whether it shows the
  * content or a sign-in prompt. The hidden buttons cover both escape hatches:
  * sign in on Google in a new tab and reload the frame, or skip the frame entirely.
@@ -48,7 +62,34 @@ export function GoogleEmbedPanel({
 }) {
   const [frameKey, setFrameKey] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
+  // undefined while today's cell is being looked up; null when there is none.
+  const [todayCell, setTodayCell] = useState<string | null | undefined>(urls.today ? undefined : null);
   const copy = COPY[urls.kind];
+  const zoom = urls.kind === "sheet" ? SHEET_ZOOM : 1;
+  const embedUrl = withRange(urls.embed, todayCell);
+  const openUrl = withRange(urls.open, todayCell);
+
+  useEffect(() => {
+    if (!urls.today) return;
+    let cancelled = false;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), TODAY_TIMEOUT_MS);
+    fetch(`/api/google-embeds/today?sheet=${urls.today}`, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then(
+        (body: { cell?: string | null } | null) => body?.cell ?? null,
+        () => null,
+      )
+      .then((cell) => {
+        if (!cancelled) setTodayCell(cell);
+      })
+      .finally(() => window.clearTimeout(timer));
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [urls.today]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -80,7 +121,7 @@ export function GoogleEmbedPanel({
             <button type="button" onClick={() => setFrameKey((key) => key + 1)} className={BUTTON_CLASS}>
               Reload
             </button>
-            <a href={urls.open} target="_blank" rel="noopener noreferrer" className={BUTTON_CLASS}>
+            <a href={openUrl} target="_blank" rel="noopener noreferrer" className={BUTTON_CLASS}>
               Open in {copy.app} ↗
             </a>
           </div>
@@ -94,14 +135,19 @@ export function GoogleEmbedPanel({
           </button>
         )}
       </div>
-      <iframe
-        key={frameKey}
-        src={urls.embed}
-        title={`${title} ${copy.frame}`}
-        allow="clipboard-read; clipboard-write"
-        referrerPolicy="strict-origin-when-cross-origin"
-        className="min-h-0 w-full flex-1 rounded-lg border border-glass/10 bg-white"
-      />
+      <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-glass/10 bg-white">
+        {todayCell === undefined ? null : (
+          <iframe
+            key={frameKey}
+            src={embedUrl}
+            title={`${title} ${copy.frame}`}
+            allow="clipboard-read; clipboard-write"
+            referrerPolicy="strict-origin-when-cross-origin"
+            className="absolute left-0 top-0 origin-top-left"
+            style={{ width: `${100 / zoom}%`, height: `${100 / zoom}%`, transform: `scale(${zoom})` }}
+          />
+        )}
+      </div>
     </div>,
     document.body,
   );

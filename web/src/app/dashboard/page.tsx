@@ -186,9 +186,9 @@ export default async function DashboardPage({
   // one. An unset id yields null, which hides that card.
   const seesEmbeds = canSeeGoogleEmbeds(initialRole, isAdmin);
   const missionPlanning = seesEmbeds
-    ? sheetEmbed(process.env.GOOGLE_SHEETS_SPREADSHEET_ID, process.env.GOOGLE_SHEETS_GID)
+    ? sheetEmbed(process.env.GOOGLE_SHEETS_SPREADSHEET_ID, process.env.GOOGLE_SHEETS_GID, "planning")
     : null;
-  const fleetSheet = seesEmbeds ? sheetEmbed(process.env.FLEET_SHEET_ID, process.env.FLEET_SHEET_GID) : null;
+  const fleetSheet = seesEmbeds ? sheetEmbed(process.env.FLEET_SHEET_ID, process.env.FLEET_SHEET_GID, "fleet") : null;
   const roadDays = seesEmbeds ? formEmbed(process.env.ROAD_DAYS_FORM_ID) : null;
 
   return (

@@ -20,6 +20,15 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-06-sheets-today",
+    date: "Oct 6, 2026",
+    title: "Planning sheets open on today",
+    highlights: [
+      "Mission planning and Fleet management jump straight to today.",
+      "Both sheets are shown at 80%, so more of the grid fits.",
+    ],
+  },
+  {
     version: "2026-10-05-mission-planning",
     date: "Oct 5, 2026",
     title: "Mission planning, Fleet management and Road Days, inside the app",

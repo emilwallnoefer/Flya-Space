@@ -116,6 +116,18 @@ async function sourceIsStillAdmin(userId: string): Promise<boolean> {
   return isAdminEmail(data.user.email);
 }
 
+/**
+ * The refresh token of the Google connection chosen in Admin → Field stats, or
+ * null when none is usable (unset, disconnected, or no longer an admin's).
+ * The embedded sheets borrow it to find today's cell (`google-embed-today.ts`).
+ */
+export async function fieldStatsSourceToken(): Promise<string | null> {
+  const settings = await readFieldStatsSettings();
+  if (!settings.token_user_id) return null;
+  if (!(await sourceIsStillAdmin(settings.token_user_id))) return null;
+  return readGmailRefreshToken(settings.token_user_id);
+}
+
 async function readTab(refreshToken: string) {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
   if (!spreadsheetId) throw new Error("Missing required env var: GOOGLE_SHEETS_SPREADSHEET_ID");
