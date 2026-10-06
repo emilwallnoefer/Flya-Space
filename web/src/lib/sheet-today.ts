@@ -85,6 +85,14 @@ const HEADER_ROWS = 6;
  */
 export function findTodayColumnCell(rows: readonly (readonly unknown[])[], today: string): string | null {
   const last = Math.min(rows.length, HEADER_ROWS);
+  // A row of real dates ("06.10.2026", added to the fleet sheet for this) wins
+  // over the hand-typed month labels.
+  for (let row = 0; row < last; row += 1) {
+    const width = rows[row]?.length ?? 0;
+    for (let col = 0; col < width; col += 1) {
+      if (parseFullDate(text(rows[row], col)) === today) return `${columnLetter(col)}${row + 1}`;
+    }
+  }
   for (let monthRow = 0; monthRow < last; monthRow += 1) {
     for (let dayRow = monthRow + 1; dayRow < last; dayRow += 1) {
       const width = Math.max(rows[monthRow]?.length ?? 0, rows[dayRow]?.length ?? 0);

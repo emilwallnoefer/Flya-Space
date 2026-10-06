@@ -74,6 +74,15 @@ describe("findTodayColumnCell", () => {
     expect(findTodayColumnCell(rows, "2024-03-28")).toBeNull();
   });
 
+  it("prefers a row of real dates over the month labels", () => {
+    const rows = [
+      ["", "05.10.2026", "06.10.2026"],
+      ["", "September 2026", ""],
+      ["", "5", "6"],
+    ];
+    expect(findTodayColumnCell(rows, "2026-10-06")).toBe("C1");
+  });
+
   it("returns null when no column is today", () => {
     expect(findTodayColumnCell([["January 2024"], ["1"]], "2026-10-06")).toBeNull();
   });
