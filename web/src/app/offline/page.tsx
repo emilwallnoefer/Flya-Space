@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { OfflineScreen } from "@/components/offline-screen";
 
-export const metadata: Metadata = { title: "Offline · Flya Allrounder" };
+export const metadata: Metadata = { title: "Offline · Flya Space" };
 
 /**
  * What the service worker (`public/sw.js`) serves when a page cannot load

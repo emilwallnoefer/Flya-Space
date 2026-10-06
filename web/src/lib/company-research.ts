@@ -61,7 +61,7 @@ async function fetchWebContext(query: string) {
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "User-Agent": "Flya-Allrounder/1.0",
+        "User-Agent": "Flya-Space/1.0",
       },
       cache: "no-store",
     });

@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Name
+
+The product is **Flya Space** (served at `flya.space`). It was called "Flya Allrounder" before 2026-10-06 and "Mail Automator" before that; the old name survives only in external identifiers that are not worth breaking — the GitHub repo and local folder `Mail-Automator`, the Vercel project `mail-automator` (and its `mail-automator.vercel.app` alias and preview-URL pattern in the Supabase redirect allowlist), the Supabase project name, the GCP project `mail-automator-drafts`, the `@mail-automator.test` RLS-smoke accounts, and dated history (audit reports, runbooks). Use "Flya Space" in anything new.
+
 ## Repository layout
 
 Two distinct subsystems live side-by-side:

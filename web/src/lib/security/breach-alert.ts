@@ -64,7 +64,7 @@ async function decide(
 function renderEmail(reason: string, event: SecurityEventInput) {
   const when = new Date().toISOString();
   const lines = [
-    `A security alert was triggered in the Mail Automator dashboard.`,
+    `A security alert was triggered in the Flya Space dashboard.`,
     ``,
     `Reason: ${reason}`,
     `Event: ${event.kind} (severity ${event.severity ?? "warning"})`,
@@ -138,7 +138,7 @@ export async function maybeAlertAdmins(
       recipients.map((to) =>
         sendEmailViaResend({
           to,
-          subject: "⚠️ Mail Automator security alert",
+          subject: "⚠️ Flya Space security alert",
           text,
           html,
         }),

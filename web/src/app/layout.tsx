@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Flya Allrounder",
+  title: "Flya Space",
   description: "Flyability internal allround workspace for mail automation and time tracking.",
 };
 

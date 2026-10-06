@@ -20,6 +20,15 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-06-flya-space",
+    date: "Oct 6, 2026",
+    title: "We're now Flya Space",
+    highlights: [
+      "Flya Allrounder is now called Flya Space — same app, same address.",
+      "Nothing to do on your side: your data, links and bookmarks all keep working.",
+    ],
+  },
+  {
     version: "2026-10-06-sheets-today",
     date: "Oct 6, 2026",
     title: "Planning sheets open on today",

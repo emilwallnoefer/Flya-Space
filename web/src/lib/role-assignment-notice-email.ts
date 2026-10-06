@@ -74,19 +74,19 @@ export function renderRoleAssignmentNotice(input: RoleAssignmentNoticeInput): Re
     "",
     `Assign a role here: ${url}`,
     "",
-    "— Flya Allrounder",
+    "— Flya Space",
   ].join("\n");
 
   const html = `<!doctype html>
 <html>
   <body style="margin:0;padding:24px;background:#0b1120;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#e2e8f0;">
     <div style="max-width:520px;margin:0 auto;background:#111827;border:1px solid #1f2937;border-radius:14px;padding:28px;">
-      <p style="margin:0 0 4px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#38bdf8;">Flya Allrounder</p>
+      <p style="margin:0 0 4px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#38bdf8;">Flya Space</p>
       <h1 style="margin:0 0 18px;font-size:19px;font-weight:600;color:#f8fafc;">New sign-up needs a role</h1>
       <p style="margin:0 0 14px;font-size:14px;line-height:1.6;">${escapeHtml(opener)}</p>
       <p style="margin:0 0 22px;font-size:13px;line-height:1.6;color:#94a3b8;">${escapeHtml(consequence)}</p>
       <a href="${escapeHtml(url)}" style="display:inline-block;background:#22d3ee;color:#0b1120;text-decoration:none;font-size:14px;font-weight:600;padding:11px 20px;border-radius:9px;">Assign a role</a>
-      <p style="margin:22px 0 0;font-size:12px;color:#64748b;">— Flya Allrounder</p>
+      <p style="margin:22px 0 0;font-size:12px;color:#64748b;">— Flya Space</p>
     </div>
   </body>
 </html>`;

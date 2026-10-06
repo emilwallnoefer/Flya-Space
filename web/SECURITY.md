@@ -1,4 +1,4 @@
-# Security Masterplan — Mail Automator (`web/`)
+# Security Masterplan — Flya Space (`web/`)
 
 _Last updated: 2026-09-29. Owner: admin. This document is the running plan for hardening the web app; update it as items ship._
 

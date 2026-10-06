@@ -171,7 +171,7 @@ function buildEmail(params: {
     "",
     `Check it in here: ${dashboardUrl}`,
     "",
-    "— Flya Allrounder, Fleet",
+    "— Flya Space, Fleet",
   ]
     .filter((line) => line !== null)
     .join("\n");
@@ -187,7 +187,7 @@ function buildEmail(params: {
       ${whereLine ? `<p style="margin:0 0 14px;font-size:13px;line-height:1.6;color:#94a3b8;">${escapeHtml(whereLine)}</p>` : ""}
       <p style="margin:0 0 22px;font-size:13px;line-height:1.6;color:#94a3b8;">${escapeHtml(consequence)}</p>
       <a href="${escapeHtml(dashboardUrl)}" style="display:inline-block;background:#22d3ee;color:#0b1120;text-decoration:none;font-size:14px;font-weight:600;padding:11px 20px;border-radius:9px;">Check it in</a>
-      <p style="margin:22px 0 0;font-size:12px;color:#64748b;">— Flya Allrounder, Fleet</p>
+      <p style="margin:22px 0 0;font-size:12px;color:#64748b;">— Flya Space, Fleet</p>
     </div>
   </body>
 </html>`;
