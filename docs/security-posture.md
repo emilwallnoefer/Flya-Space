@@ -1,4 +1,4 @@
-# How the Mail Automator app and its data are secured
+# How the Flya Space app and its data are secured
 
 **Date:** 2026-07-26 · **Audience:** engineering · **Status:** post audit run-3, fixes on `worktree-security-audit-run3`
 

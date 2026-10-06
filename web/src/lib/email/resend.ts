@@ -7,7 +7,7 @@ import "server-only";
  *
  * Required env vars:
  *   RESEND_API_KEY   — "re_..." secret from https://resend.com/api-keys
- *   RESEND_FROM      — Verified sender, e.g. "Flya Allrounder <noreply@flya.space>".
+ *   RESEND_FROM      — Verified sender, e.g. "Flya Space <noreply@flya.space>".
  *                      The domain must be verified in Resend first.
  * Optional:
  *   RESEND_REPLY_TO  — Reply-To header (e.g. your HR inbox).

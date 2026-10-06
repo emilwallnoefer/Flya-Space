@@ -50,7 +50,7 @@ export function AuthNavbar({
           </div>
           <div className="min-w-0">
             <p className={NAVBAR_EYEBROW_CLASS}>Flyability Internal</p>
-            <p className={NAVBAR_TITLE_CLASS}>Flya Allrounder</p>
+            <p className={NAVBAR_TITLE_CLASS}>Flya Space</p>
           </div>
         </div>
 

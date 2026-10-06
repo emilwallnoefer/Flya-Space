@@ -20,7 +20,7 @@ This guide configures one-time OAuth so local scripts can create Gmail drafts in
 1. Go to **APIs & Services** -> **OAuth consent screen**.
 2. Choose **External** (recommended for personal use) and continue.
 3. Fill required fields:
-   - App name: `Flya-Allrounder`
+   - App name: `Flya Space`
    - User support email: your email
    - Developer contact email: your email
 4. Save and continue through scopes/test users.
@@ -76,7 +76,7 @@ What happens:
 python3 scripts/gmail_bridge.py create-draft \
   --to "your-test@example.com" \
   --subject "Draft API test" \
-  --body "Hello from Flya-Allrounder."
+  --body "Hello from Flya Space."
 ```
 
 Check Gmail -> **Drafts**.
