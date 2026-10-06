@@ -52,6 +52,28 @@ describe("findTodayColumnCell", () => {
     expect(findTodayColumnCell(rows, "2026-10-06")).toBe("C4");
   });
 
+  it("moves to the next month when the days start over without a label", () => {
+    // The real fleet sheet: "October 2026" was never typed, so October 6 sat
+    // under the September header.
+    const rows = [
+      ["Drone", "September 2026", "", "", "", "", ""],
+      ["", "29", "30", "1", "2", "6", "7"],
+    ];
+    expect(findTodayColumnCell(rows, "2026-10-06")).toBe("F2");
+    expect(findTodayColumnCell(rows, "2026-09-30")).toBe("C2");
+  });
+
+  it("rolls December over into the next year", () => {
+    const rows = [["December 2026", ""], ["31", "1"]];
+    expect(findTodayColumnCell(rows, "2027-01-01")).toBe("B2");
+  });
+
+  it("does not treat a repeated day as a new month", () => {
+    const rows = [["February 2024", "", "", "March 2024"], ["27", "28", "28", "1"]];
+    expect(findTodayColumnCell(rows, "2024-03-01")).toBe("D2");
+    expect(findTodayColumnCell(rows, "2024-03-28")).toBeNull();
+  });
+
   it("returns null when no column is today", () => {
     expect(findTodayColumnCell([["January 2024"], ["1"]], "2026-10-06")).toBeNull();
   });

@@ -58,7 +58,9 @@ async function read(sheet: EmbedSheet, today: string): Promise<string | null> {
   const range = source.layout === "rows" ? `${quoted}!A1:C` : `${quoted}!1:6`;
   const response = await sheets.spreadsheets.values.get({ spreadsheetId, range });
   const rows = (response.data.values ?? []) as unknown[][];
-  return source.layout === "rows" ? findTodayRowCell(rows, today) : findTodayColumnCell(rows, today);
+  const cell = source.layout === "rows" ? findTodayRowCell(rows, today) : findTodayColumnCell(rows, today);
+  if (!cell) console.warn("[google-embed-today] no cell for today", sheet, today, `tab "${tab}"`, `${rows.length} rows`);
+  return cell;
 }
 
 export async function todayCellFor(sheet: EmbedSheet, now: Date = new Date()): Promise<string | null> {
