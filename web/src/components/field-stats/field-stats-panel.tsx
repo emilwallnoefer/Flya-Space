@@ -90,7 +90,9 @@ export function FieldStatsPanel() {
             Counted from the &ldquo;Mission planning&rdquo; tab of the planning sheet, from 1 January 2026 up to
             yesterday — today and anything planned later are not counted. Back-to-back days for the same customer count as one POC or training, in the month it starts. Unconfirmed entries (TBC,
             pre-booked) and days off are not counted. Regions follow the salesperson in &ldquo;Reporting to&rdquo;.
-            Click a name in a chart to see exactly what it counts.
+            {stats && stats.events.length + stats.travel.length > 0
+              ? " Click a name in a chart to see exactly what it counts."
+              : null}
           </InfoTooltip>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -224,7 +226,8 @@ function BarCard({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<HoverPos>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const selected = rows.find((row) => row.key === selectedKey && row.value > 0) ?? null;
+  // No items means nothing to list: an empty bar, or a role that gets counts only.
+  const selected = rows.find((row) => row.key === selectedKey && row.items.length > 0) ?? null;
   const max = useMemo(() => rows.reduce((acc, row) => Math.max(acc, row.value), 0), [rows]);
   const total = useMemo(() => rows.reduce((acc, row) => acc + row.value, 0), [rows]);
 
@@ -254,7 +257,7 @@ function BarCard({
               <li key={row.key}>
                 <button
                   type="button"
-                  disabled={row.value === 0}
+                  disabled={row.items.length === 0}
                   aria-expanded={selected?.key === row.key}
                   onClick={() => setSelectedKey((current) => (current === row.key ? null : row.key))}
                   className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1 py-0.5 text-left transition enabled:hover:bg-glass/8 ${
