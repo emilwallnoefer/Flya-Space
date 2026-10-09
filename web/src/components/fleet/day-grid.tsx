@@ -152,7 +152,7 @@ export function DayGrid({
         style={{ minWidth: `${13 + days.length * 2.1}rem` }}
       >
         <colgroup>
-          <col className="w-52" />
+          <col className="w-32 sm:w-52" />
           {days.map((day) => (
             <col key={day.key} />
           ))}
@@ -162,7 +162,7 @@ export function DayGrid({
             <th
               scope="col"
               rowSpan={2}
-              className="sticky left-0 z-[2] w-52 bg-surface/95 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3/75 backdrop-blur"
+              className="sticky left-0 z-[2] w-32 bg-surface/95 sm:w-52 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3/75 backdrop-blur"
             >
               Material
             </th>
@@ -404,7 +404,7 @@ const AssetRow = memo(function AssetRow({
                 aria-label={`Remove booking: ${asset.name}, ${reservation.holder_name}, ${formatDay(
                   reservation.start_date,
                 )}`}
-                className="absolute right-0 top-0 z-[3] flex h-3.5 w-3.5 items-center justify-center rounded-bl-[3px] rounded-tr-[3px] bg-slate-900/80 text-[11px] leading-none text-rose-200 opacity-0 transition hover:bg-rose-500 hover:text-white focus-visible:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent group-hover/cell:opacity-100"
+                className="fleet-remove absolute right-0 top-0 z-[3] flex h-3.5 w-3.5 items-center justify-center rounded-bl-[3px] rounded-tr-[3px] bg-slate-900/80 text-[11px] leading-none text-rose-200 opacity-0 transition hover:bg-rose-500 hover:text-white focus-visible:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent group-hover/cell:opacity-100"
               >
                 −
               </button>

@@ -302,7 +302,7 @@ export function DayCard({ state, day, index }: { state: TimeTrackerState; day: D
             onClick={() => {
               void handleFillMissing(day.date);
             }}
-            className="flex-1 rounded-lg border border-glass/20 bg-glass/10 px-2 py-1.5 text-xs hover:bg-glass/15"
+            className="flex-1 rounded-lg border border-glass/20 bg-glass/10 px-2 py-2.5 text-xs hover:bg-glass/15 sm:py-1.5"
           >
             Compensate
             <br />
@@ -313,7 +313,7 @@ export function DayCard({ state, day, index }: { state: TimeTrackerState; day: D
             onClick={() => {
               void handleFillDay(day.date);
             }}
-            className="flex-1 rounded-lg border border-glass/20 bg-glass/10 px-2 py-1.5 text-xs hover:bg-glass/15"
+            className="flex-1 rounded-lg border border-glass/20 bg-glass/10 px-2 py-2.5 text-xs hover:bg-glass/15 sm:py-1.5"
           >
             Standard
             <br />

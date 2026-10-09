@@ -27,6 +27,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       "Add it to your iPhone home screen: in Safari, tap Share → Add to Home Screen.",
       "It opens full screen with its own icon, like an app. Sign in once inside it.",
       "On phones, a tab bar along the bottom switches modules, and swiping back returns home.",
+      "Team chat fills the screen on phones and stays above the keyboard.",
       "Typing no longer zooms the page in, and nothing hides behind the home bar.",
     ],
   },

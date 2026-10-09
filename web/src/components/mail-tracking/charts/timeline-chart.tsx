@@ -170,6 +170,10 @@ export function MailClickTimelineChart({
                     className="cursor-pointer fill-transparent"
                     onMouseEnter={(event) => handlePointer(index, event)}
                     onMouseMove={(event) => handlePointer(index, event)}
+                    onTouchStart={(event) => {
+                      const touch = event.touches[0];
+                      if (touch) handlePointer(index, touch);
+                    }}
                   />
                 </g>
               );

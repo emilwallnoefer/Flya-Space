@@ -211,6 +211,16 @@
   padding: 1.25rem max(1rem, var(--safe-right)) calc(1.25rem + var(--safe-bottom) + var(--bottom-nav)) max(1rem, var(--safe-left));
 }
 
+/* Fleet grid: the remove "−" on a booked cell only shows on hover, which a
+ * finger cannot do. On touch devices it is always there, and big enough. */
+@media (hover: none) {
+  .fleet-remove {
+    opacity: 1;
+    height: 1.25rem;
+    width: 1.25rem;
+  }
+}
+
 /* Phones: the dashboard has a tab bar along the bottom edge (MOBILE_TAB_BAR_CLASS
  * in workspace-home-layout.ts). Its height, so the shell and every bottom-safe
  * element sit above it. */

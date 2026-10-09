@@ -45,7 +45,7 @@ export function WeekPickerCalendar({ state }: { state: TimeTrackerState }) {
         aria-modal="true"
         aria-label="Jump to a week"
         style={{ zoom: 0.7 }}
-        className="calendar-card day-logger-dialog flex w-full max-w-[880px] flex-col overflow-hidden rounded-2xl shadow-2xl shadow-shade/60 pointer-events-auto max-h-[min(94vh,920px)]"
+        className="calendar-card day-logger-dialog flex w-full max-w-[880px] flex-col overflow-hidden rounded-2xl shadow-2xl shadow-shade/60 pointer-events-auto max-h-[min(94dvh,920px)]"
       >
         <div className="flex items-center justify-between gap-3 border-b border-glass/10 px-4 py-3">
           <div className="flex items-center gap-2">
@@ -214,7 +214,7 @@ export function WeekPickerCalendar({ state }: { state: TimeTrackerState }) {
                   );
                 })}
               </div>
-              <p className="mt-3 text-center text-xs text-ink-4">Click a week to jump the Hour Logger to it.</p>
+              <p className="mt-3 text-center text-xs text-ink-4">Pick a week to jump the Hour Logger to it.</p>
             </div>
           )}
         </div>

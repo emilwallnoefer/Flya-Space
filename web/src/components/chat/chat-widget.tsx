@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, m } from "framer-motion";
-import { type ReactNode, useRef } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { Toast } from "@/components/ui";
 import { useFocusTrap } from "@/lib/use-focus-trap";
 import {
@@ -30,6 +30,9 @@ import {
 } from "./panel-chrome";
 import type { ChatWidgetProps } from "./types";
 import { useChat } from "./use-chat";
+import { lockPageScroll } from "@/lib/scroll-lock";
+import { useIsMobile } from "@/lib/use-media-query";
+import { useVisualViewport } from "@/lib/use-visual-viewport";
 
 export function ChatWidget(props: ChatWidgetProps) {
   const chat = useChat(props);
@@ -96,6 +99,16 @@ export function ChatWidget(props: ChatWidgetProps) {
   // over, so the two traps don't fight over focus.
   useFocusTrap(panelRef, open && !lightbox && !certificateOpen);
 
+  // Phones: the panel is a full-screen sheet. It slides up rather than
+  // zooming from the corner, follows the visual viewport so the composer
+  // stays above the keyboard, and pins the page behind it.
+  const isMobile = useIsMobile();
+  const viewport = useVisualViewport(open && isMobile);
+  useEffect(() => {
+    if (!open || !isMobile) return;
+    return lockPageScroll();
+  }, [open, isMobile]);
+
   return (
     <>
       {/* Hide the floating trigger pill when the panel is open — it would
@@ -146,7 +159,7 @@ export function ChatWidget(props: ChatWidgetProps) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18 }}
-              className="fixed inset-0 z-[130] bg-overlay/45 backdrop-blur-[2px]"
+              className="fixed inset-0 z-[130] hidden bg-overlay/45 backdrop-blur-[2px] sm:block"
               onClick={() => setOpen(false)}
               aria-hidden
             />
@@ -156,17 +169,21 @@ export function ChatWidget(props: ChatWidgetProps) {
               tabIndex={-1}
               role="dialog"
               aria-label="Team chat"
-              initial={{ opacity: 0, scale: 0.9, y: 24 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.92, y: 18 }}
+              initial={isMobile ? { y: "100%" } : { opacity: 0, scale: 0.9, y: 24 }}
+              animate={isMobile ? { y: 0 } : { opacity: 1, scale: 1, y: 0 }}
+              exit={isMobile ? { y: "100%" } : { opacity: 0, scale: 0.92, y: 18 }}
               transition={{ type: "spring", stiffness: 320, damping: 30 }}
-              style={{ transformOrigin: "bottom right" }}
-              className="fixed bottom-[max(1.25rem,var(--safe-bottom))] right-5 z-[131] flex h-[calc(100dvh-2.5rem-var(--safe-bottom))] max-h-[780px] w-[min(94vw,380px)] flex-col rounded-[2.75rem] bg-gradient-to-b from-neutral/80 via-panel to-surface p-[6px] shadow-[0_40px_80px_-20px_rgba(0,0,0,0.75),0_10px_30px_-10px_rgba(0,0,0,0.6)] ring-1 ring-glass/10"
+              style={{
+                transformOrigin: "bottom right",
+                // Keyboard open on a phone: size the sheet to what is visible.
+                ...(viewport ? { top: viewport.top, height: viewport.height, bottom: "auto" } : {}),
+              }}
+              className="fixed inset-0 z-[131] flex flex-col bg-gradient-to-b from-neutral/80 via-panel to-surface sm:inset-auto sm:bottom-[max(1.25rem,var(--safe-bottom))] sm:right-5 sm:h-[calc(100dvh-2.5rem-var(--safe-bottom))] sm:max-h-[780px] sm:w-[min(94vw,380px)] sm:rounded-[2.75rem] sm:p-[6px] sm:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.75),0_10px_30px_-10px_rgba(0,0,0,0.6)] sm:ring-1 sm:ring-glass/10"
             >
-              {/* Inner "screen" — content lives here; rounded slightly less than the frame so the bezel reads as a thin band. */}
-              <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[2.3rem] bg-surface ring-1 ring-inset ring-glass/5">
+              {/* Inner "screen" — content lives here; rounded slightly less than the frame so the bezel reads as a thin band. On phones it is the whole sheet. */}
+              <div className="relative flex h-full w-full flex-col overflow-hidden bg-surface ring-1 ring-inset ring-glass/5 sm:rounded-[2.3rem]">
                 {/* Compact one-row header: identity on the left, presence + close on the right. */}
-                <header className="flex items-center gap-2 border-b border-glass/10 bg-gradient-to-b from-white/[0.06] to-transparent px-4 py-2.5">
+                <header className="flex items-center gap-2 border-b border-glass/10 bg-gradient-to-b from-white/[0.06] to-transparent px-4 pb-2.5 pt-[max(0.625rem,var(--safe-top))] sm:pt-2.5">
                   <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-accent-from/30 to-accent-to/30 ring-1 ring-inset ring-glass/15">
                     <ChatBubbleIcon className="h-4 w-4 text-accent-soft" />
                   </div>
@@ -192,7 +209,7 @@ export function ChatWidget(props: ChatWidgetProps) {
                     type="button"
                     onClick={() => setOpen(false)}
                     aria-label="Close"
-                    className="group grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-glass/10 bg-glass/5 text-ink-3 transition hover:border-glass/20 hover:bg-glass/10 hover:text-ink"
+                    className="group grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-glass/10 bg-glass/5 text-ink-3 transition hover:border-glass/20 hover:bg-glass/10 hover:text-ink sm:h-8 sm:w-8"
                   >
                     <XMarkIcon className="h-3.5 w-3.5 transition-transform duration-200 group-hover:rotate-90" />
                   </button>
@@ -362,7 +379,7 @@ export function ChatWidget(props: ChatWidgetProps) {
                   ) : null}
                 </AnimatePresence>
 
-                <div className="border-t border-glass/10 bg-overlay/70 px-3 py-3">
+                <div className="border-t border-glass/10 bg-overlay/70 px-3 pt-3 pb-[max(0.75rem,var(--safe-bottom))] sm:pb-3">
                   <KindToggleRow
                     pendingKind={pendingKind}
                     setPendingKind={setPendingKind}
