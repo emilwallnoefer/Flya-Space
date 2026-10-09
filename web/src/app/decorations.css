@@ -2,8 +2,12 @@
  * reduced-motion guards). Order matters: light re-skins override the dark
  * base classes above them, and the Glacier block wins by source order. */
 
+/* No `position` here: every mount is `absolute inset-0 aurora-bg` (a Tailwind
+ * utility, which lives in @layer utilities), and an unlayered `position:
+ * relative` on this class used to beat it — the layer collapsed to 0×0 and
+ * the whole wash went unseen. The pseudo-elements below position against the
+ * absolutely-placed element itself. */
 .aurora-bg {
-  position: relative;
   overflow: hidden;
   background:
     radial-gradient(45rem 45rem at 0% 0%, rgba(34, 211, 238, 0.2), transparent 60%),
@@ -1041,3 +1045,357 @@ html[data-theme="light"] .day-ready-sweep-beam::before {
     radial-gradient(28% 24% at 50% 50%, rgb(var(--ac-strong) / 0.22), rgb(var(--ac-strong) / 0) 72%);
   mix-blend-mode: multiply;
 }
+
+/* =========================================================================
+ * Appearance mode: Neumorphism — html[data-theme="light"][data-mode="neu"]
+ *
+ * Rides on the light re-skins above and replaces their paper glass with soft
+ * extrusion: one page colour everywhere, depth from the --neu-* shadow pair
+ * (tokens.css), no borders, no gradients, no backdrop blur. Raised things
+ * (cards, primary buttons) cast the pair outward; wells (inputs, progress
+ * tanks, settings panels) carry it inset; a pressed button flips to inset.
+ * Kept sparse on purpose — only containers and controls, never text or icons.
+ * ========================================================================= */
+
+/* Page: flat. The beams/ripples would read as dirt on a matte surface. */
+html[data-mode="neu"] .aurora-bg {
+  background: rgb(var(--paper-3));
+  filter: none;
+}
+html[data-mode="neu"] .aurora-bg::before,
+html[data-mode="neu"] .aurora-bg::after,
+html[data-mode="neu"] .dashboard-mesh,
+html[data-mode="neu"] .dashboard-mesh-fade,
+html[data-mode="neu"] .underwater-panel::before,
+html[data-mode="neu"] .underwater-panel::after {
+  display: none;
+}
+
+/* Raised panels. */
+html[data-mode="neu"] .glass-card,
+html[data-mode="neu"] .liquid-day-card {
+  border-color: transparent;
+  background: rgb(var(--paper-3));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: var(--neu-radius);
+  box-shadow: var(--neu-raised);
+}
+html[data-mode="neu"] .glass-card::before,
+html[data-mode="neu"] .glass-card::after,
+html[data-mode="neu"] .liquid-day-card::before,
+html[data-mode="neu"] .liquid-day-card::after {
+  display: none;
+}
+
+/* Module shells (admin, settings, time tracker, mail composer) are not boxes
+ * here: the module sits directly on the page, and only its inner blocks — day
+ * cards, fields, section cards, the chosen nav row — carry depth. The side
+ * nav keeps its hairline divider; the nav/content panes lose their wash. */
+html[data-mode="neu"] .underwater-panel .glass-card {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: visible;
+}
+/* (The extra `[class]` keeps these ahead of the generic wells rule below,
+ * which they would otherwise tie with and lose to by source order.) */
+html[data-mode="neu"] .underwater-panel div[class][class*="bg-overlay/"]:not([class*="rounded"]),
+html[data-mode="neu"] .underwater-panel nav[class][class*="bg-overlay/"] {
+  background: transparent;
+  box-shadow: none;
+  border-color: rgb(var(--paper-1));
+}
+/* Section cards inside a module (Gmail status, Appearance, …) stand on the
+ * flat pane as raised cards rather than sinking into it. */
+html[data-mode="neu"] .underwater-panel div[class][class*="rounded"][class*="bg-overlay/"] {
+  border-color: transparent;
+  background: rgb(var(--paper-3));
+  box-shadow: var(--neu-raised-sm);
+}
+
+/* Modals float above a scrim, so they get a real drop on top of the pair. */
+html[data-mode="neu"] .day-logger-card,
+html[data-mode="neu"] .calendar-card {
+  border-color: transparent;
+  background: rgb(var(--paper-3));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow:
+    var(--neu-raised),
+    0 30px 60px -20px rgba(47, 58, 74, 0.35);
+}
+
+/* Day cards: smaller extrusion; weekends are a shade deeper (no hue) and
+ * the selected day is pressed into the surface. */
+html[data-mode="neu"] .liquid-day-card {
+  border-radius: var(--neu-radius);
+  box-shadow: var(--neu-raised-sm);
+}
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--sat,
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--sun {
+  background: rgb(var(--paper-1) / 0.6);
+}
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--vac,
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--ph,
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--sl {
+  box-shadow: var(--neu-raised-sm);
+}
+html[data-mode="neu"] .liquid-day-card.day-card-selected {
+  box-shadow: var(--neu-inset);
+}
+
+/* Wells: progress tanks and the translucent panel wells (bg-overlay/N) sink
+ * in. Positioned bg-overlay layers are scrims (the login blur, modal
+ * backdrops), not wells — a shadow on those frames the whole viewport. */
+html[data-mode="neu"] .wave-tank,
+html[data-mode="neu"] .day-progress,
+html[data-mode="neu"] :not(nav)[class*="bg-overlay/"]:not([class*="absolute"]):not([class*="fixed"]) {
+  border-color: transparent;
+  background: rgb(var(--paper-1) / 0.35);
+  box-shadow: var(--neu-inset);
+}
+
+/* Form controls are wells too. (Unlayered, so it wins over the Tailwind
+ * utilities' @layer regardless of specificity.) */
+html[data-mode="neu"] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select) {
+  border-color: transparent;
+  background-color: rgb(var(--paper-3));
+  box-shadow: var(--neu-inset);
+}
+html[data-mode="neu"] :is(input, textarea, select):focus-visible {
+  outline: 2px solid rgb(var(--ac-strong) / 0.6);
+  outline-offset: 2px;
+}
+
+/* Buttons: filled ones (accent CTAs, bg-glass secondaries) become raised blocks
+ * of the page colour with dark ink — as in the reference, a button is the
+ * surface pushed out, not a coloured fill — and press in on :active. They keep
+ * their own corner radius. The `[class^=…]` / `[class*=" …"]` pair matches a
+ * *base* bg-glass / bg-accent utility only, not `hover:bg-…` on ghost buttons,
+ * which stay flat so the surface stays calm. Home cards and menu items have
+ * their own treatment below. */
+html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]) {
+  border-color: transparent;
+  background-color: rgb(var(--paper-3));
+  background-image: none;
+  color: var(--ink);
+  box-shadow: var(--neu-raised-sm);
+}
+html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]):hover {
+  background-color: rgb(var(--paper-3));
+  color: var(--ink);
+}
+html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]):active:not(:disabled) {
+  box-shadow: var(--neu-inset);
+  transform: none;
+  filter: none;
+}
+
+/* Home cards: one raised block each, no tint, no hover glow; the icon sits in
+ * an inset well and the arrow is a small raised disc. The per-card colour
+ * classes (emerald / sky / violet …) are neutralised here rather than in the
+ * markup, so the other skins keep them. */
+/* Size, shape and spacing are the shared ones (workspace-home-layout.ts);
+ * only the material changes. */
+html[data-mode="neu"] .home-card {
+  border-color: transparent;
+  background: rgb(var(--paper-3));
+  box-shadow: var(--neu-raised-sm);
+}
+html[data-mode="neu"] .home-card:hover {
+  border-color: transparent;
+  box-shadow: var(--neu-raised);
+}
+html[data-mode="neu"] .home-card-core {
+  background: transparent;
+  box-shadow: none;
+}
+/* The icon glyph and the CTA keep their per-card hue (muted by the tokens);
+ * only the coloured well behind the icon is neutralised. */
+html[data-mode="neu"] .home-card-icon {
+  border-color: transparent;
+  background: rgb(var(--paper-1) / 0.35);
+  box-shadow: var(--neu-inset);
+}
+html[data-mode="neu"] .home-card-arrow {
+  border-color: transparent;
+  background: rgb(var(--paper-3));
+  box-shadow: var(--neu-raised-sm);
+}
+html[data-mode="neu"] .beta-badge {
+  background: rgb(var(--paper-1));
+  color: var(--ink-3);
+}
+html[data-mode="neu"] .navbar-logo {
+  background: var(--ink);
+  color: #ffffff;
+}
+
+/* Menus, tabs and segmented controls — the navbar menu, settings and admin
+ * side navs, fleet tabs, composer toggles, the appearance picker: one rule for
+ * all of them, so they match. Items lie flat on the surface; the chosen one
+ * stands out of it (raised, with its radius) — pressed-in is the convention
+ * for a toggle, but in a list it reads as disabled. Day cards and the fleet
+ * day grid carry aria state too but are not menus, so they are left out. */
+html[data-mode="neu"] :is(button, a):is([role="tab"], [aria-pressed], [aria-current]):not(.liquid-day-card):not(.fleet-day) {
+  border-color: transparent;
+  background-color: transparent;
+  background-image: none;
+  color: var(--ink-3);
+  box-shadow: none;
+}
+html[data-mode="neu"] :is(button, a):is([role="tab"], [aria-pressed], [aria-current]):not(.liquid-day-card):not(.fleet-day):hover {
+  background-color: rgb(var(--paper-1) / 0.5);
+  color: var(--ink);
+}
+/* The chosen item stands out of the surface: the small shadow pair, ink,
+ * semibold. Side-nav rows (aria-current) are full-width, so they are pulled
+ * in from the edges to show the shadow on all sides. */
+html[data-mode="neu"] :is(button, a):is([role="tab"][aria-selected="true"], [aria-pressed="true"], [aria-current]):not(.liquid-day-card):not(.fleet-day) {
+  border-radius: calc(var(--neu-radius) - 0.25rem);
+  background-color: rgb(var(--paper-3));
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: var(--neu-raised-sm);
+}
+html[data-mode="neu"] button[aria-current] {
+  width: calc(100% - 1rem);
+  margin: 0.125rem 0.5rem;
+}
+/* The selected fleet day cell is an accent fill under dark text; the accent is
+ * dark here, so the text goes light. */
+html[data-mode="neu"] .fleet-day[aria-pressed="true"] {
+  color: #f3f5f8;
+}
+/* Their containers (segment groups, the menu card) are plain raised blocks. */
+html[data-mode="neu"] [role="group"][class*="bg-glass"],
+html[data-mode="neu"] [role="tablist"][class*="bg-glass"] {
+  border-color: transparent;
+  background: rgb(var(--paper-3));
+  box-shadow: var(--neu-raised-sm);
+}
+
+/* Floating chat actions and the navbar menu: matte, raised. */
+@media (hover: hover) {
+  html[data-mode="neu"] .chat-actions-row {
+    border-color: transparent;
+    background: rgb(var(--paper-3));
+    box-shadow: var(--neu-raised-sm);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+html[data-mode="neu"] .menu-pop {
+  border-color: transparent;
+  background: rgb(var(--paper-3));
+  box-shadow: var(--neu-raised);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-mode="neu"] .skip-link {
+  border-color: transparent;
+  box-shadow: var(--neu-raised-sm);
+}
+
+/* ---- Neumorphism: the remaining colour ----
+ * The semantic tokens cover most of the UI, but ~200 chips, badges, borders
+ * and outlines use raw Tailwind hues (rose / amber / emerald / violet / sky /
+ * teal / indigo), and a few decoration classes carry raw rgba. Rather than
+ * touch every component, this skin remaps each hue *family* onto its dark
+ * token: text takes the token, fills become a 10 % tint of it, borders a
+ * 30 % tint. Unlayered, so it wins over the utilities' @layer. The `hover:`
+ * variants match too, which is fine — they stay in the same family. */
+html[data-mode="neu"] :is([class*="text-rose-"], [class*="text-red-"], [class*="text-pink-"]) { color: var(--danger); }
+html[data-mode="neu"] :is([class*="text-amber-"], [class*="text-yellow-"], [class*="text-orange-"]) { color: var(--warn); }
+html[data-mode="neu"] :is([class*="text-emerald-"], [class*="text-green-"], [class*="text-lime-"], [class*="text-teal-"]) { color: var(--positive); }
+html[data-mode="neu"] :is([class*="text-sky-"], [class*="text-cyan-"], [class*="text-blue-"]) { color: var(--accent-soft); }
+html[data-mode="neu"] :is([class*="text-violet-"], [class*="text-indigo-"], [class*="text-purple-"]) { color: var(--card-violet); }
+
+html[data-mode="neu"] :is([class*="bg-rose-"], [class*="bg-red-"], [class*="bg-pink-"]) { background-color: color-mix(in srgb, var(--danger) 10%, transparent); }
+html[data-mode="neu"] :is([class*="bg-amber-"], [class*="bg-yellow-"], [class*="bg-orange-"]) { background-color: color-mix(in srgb, var(--warn) 10%, transparent); }
+html[data-mode="neu"] :is([class*="bg-emerald-"], [class*="bg-green-"], [class*="bg-lime-"], [class*="bg-teal-"]) { background-color: color-mix(in srgb, var(--positive) 10%, transparent); }
+html[data-mode="neu"] :is([class*="bg-sky-"], [class*="bg-cyan-"], [class*="bg-blue-"]) { background-color: color-mix(in srgb, var(--accent) 10%, transparent); }
+html[data-mode="neu"] :is([class*="bg-violet-"], [class*="bg-indigo-"], [class*="bg-purple-"]) { background-color: color-mix(in srgb, var(--card-violet) 10%, transparent); }
+
+html[data-mode="neu"] :is([class*="border-rose-"], [class*="border-red-"], [class*="border-pink-"]) { border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+html[data-mode="neu"] :is([class*="border-amber-"], [class*="border-yellow-"], [class*="border-orange-"]) { border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+html[data-mode="neu"] :is([class*="border-emerald-"], [class*="border-green-"], [class*="border-lime-"], [class*="border-teal-"]) { border-color: color-mix(in srgb, var(--positive) 30%, transparent); }
+html[data-mode="neu"] :is([class*="border-sky-"], [class*="border-cyan-"], [class*="border-blue-"]) { border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+html[data-mode="neu"] :is([class*="border-violet-"], [class*="border-indigo-"], [class*="border-purple-"]) { border-color: color-mix(in srgb, var(--card-violet) 30%, transparent); }
+
+html[data-mode="neu"] :is([class*="outline-rose-"], [class*="outline-red-"]) { outline-color: var(--danger); }
+html[data-mode="neu"] :is([class*="outline-amber-"], [class*="outline-yellow-"]) { outline-color: var(--warn); }
+html[data-mode="neu"] :is([class*="outline-emerald-"], [class*="outline-green-"], [class*="outline-teal-"]) { outline-color: var(--positive); }
+html[data-mode="neu"] :is([class*="outline-sky-"], [class*="outline-cyan-"]) { outline-color: var(--accent); }
+html[data-mode="neu"] :is([class*="outline-violet-"], [class*="outline-indigo-"]) { outline-color: var(--card-violet); }
+html[data-mode="neu"] :is([class*="ring-sky-"], [class*="ring-cyan-"]) { --tw-ring-color: var(--accent); }
+html[data-mode="neu"] :is([class*="ring-amber-"]) { --tw-ring-color: var(--warn); }
+html[data-mode="neu"] :is([class*="fill-amber-"]) { fill: var(--warn); }
+
+/* Arbitrary drop shadows (dark smudges and cyan glows) become the small pair. */
+html[data-mode="neu"] [class*="shadow-[0_"]:not(.home-card) { box-shadow: var(--neu-raised-sm); }
+
+/* Decoration classes with raw colour. */
+html[data-mode="neu"] .day-today-badge {
+  border-color: transparent;
+  background: var(--ink);
+  color: #f3f5f8;
+}
+html[data-mode="neu"] .write-glow-live,
+html[data-mode="neu"] .write-glow-fade,
+html[data-mode="neu"] .write-appear-glow,
+html[data-mode="neu"] .write-char-neon {
+  text-shadow: none;
+  animation: none;
+}
+html[data-mode="neu"] .freshness-pill { background: rgb(var(--paper-1)); }
+html[data-mode="neu"] .freshness-pill--loading,
+html[data-mode="neu"] .freshness-pill-particle { background: var(--ink-4); box-shadow: none; }
+html[data-mode="neu"] .freshness-pill-ripple { border-color: var(--ink-4); }
+html[data-mode="neu"] .freshness-flash { background: var(--positive); }
+/* Fleet day cells are coloured per person (information), so they keep their
+ * hue but lose the saturation. */
+html[data-mode="neu"] .fleet-day { filter: saturate(0.5); }
+
+/* ---- Neumorphism: day cards, cleaner and smaller ----
+ * Less padding, a thinner bar, no ghost fill and no sweep beam; the category
+ * badges are plain grey chips (the left/top accent line already says what
+ * the day is), and the bar's segments are grey / dark green / dark red. */
+html[data-mode="neu"] .liquid-day-card {
+  padding: 0.625rem 0.75rem;
+}
+html[data-mode="neu"] .liquid-day-card .day-progress {
+  height: 8px;
+  margin-top: 0.5rem;
+}
+html[data-mode="neu"] .liquid-day-card .day-ready-sweep-beam,
+html[data-mode="neu"] .liquid-day-card .day-progress-topdown {
+  display: none;
+}
+html[data-mode="neu"] .liquid-day-card span[class*="uppercase"]:not(.day-today-badge) {
+  border-color: transparent;
+  background: rgb(var(--paper-1) / 0.7);
+  color: var(--ink-3);
+}
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--sat,
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--sun {
+  border-left: 3px solid rgb(var(--paper-1));
+}
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--vac { border-top-color: var(--warn); }
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--ph { border-top-color: var(--card-violet); }
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--sl { border-top-color: var(--accent); }
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--today {
+  outline-color: var(--ink);
+}
+html[data-mode="neu"] .day-progress-sand { background: var(--ink-4); }
+html[data-mode="neu"] .day-progress-rest { background: rgb(var(--paper-1)); }
+html[data-mode="neu"] .day-progress-algae { background: var(--positive); }
+html[data-mode="neu"] .day-progress-comp { background: var(--danger); }
+html[data-mode="neu"] .day-progress-rest::after,
+html[data-mode="neu"] .day-progress-algae::after { display: none; }
+html[data-mode="neu"] .wave-tank { height: 40px; }
+html[data-mode="neu"] .wave-fill { background: var(--accent); }
+html[data-mode="neu"] .wave-fill::before,
+html[data-mode="neu"] .wave-fill::after { background: rgb(255 255 255 / 0.25); }

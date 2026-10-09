@@ -29,11 +29,7 @@ export function OfflineScreen() {
       id="main-content"
       className="relative grid min-h-dvh grid-rows-[1fr_auto_1fr] overflow-x-hidden bg-surface px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] text-ink"
     >
-      {/* `.aurora-bg` sets `position: relative` itself, so it needs a
-          positioned wrapper to fill the page rather than take a grid row. */}
-      <div aria-hidden className="pointer-events-none fixed inset-0">
-        <div className="aurora-bg size-full" />
-      </div>
+      <div aria-hidden className="pointer-events-none fixed inset-0 aurora-bg" />
       {/* The game holds the optical centre; the status sits just above it. */}
       <div className="relative flex items-end justify-center pb-5">
         <h1 className="inline-flex items-center gap-2 rounded-full border border-glass/20 bg-surface/70 px-3.5 py-1.5 text-sm font-medium backdrop-blur">

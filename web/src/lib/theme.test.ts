@@ -49,9 +49,11 @@ describe("reading the stored theme", () => {
   });
 
   it("returns a stored theme", async () => {
-    window.localStorage.setItem(STORAGE_KEY, "blue");
-    const { getTheme } = await load();
-    expect(getTheme()).toBe("blue");
+    for (const stored of ["blue", "neu"]) {
+      window.localStorage.setItem(STORAGE_KEY, stored);
+      const { getTheme } = await load();
+      expect(getTheme(), stored).toBe(stored);
+    }
   });
 
   it("collapses the retired glacier and sky skins into blue", async () => {
@@ -63,7 +65,7 @@ describe("reading the stored theme", () => {
   });
 
   it("falls back to dark for a value it does not recognise", async () => {
-    for (const junk of ["", "solarized", "BLUE", "null"]) {
+    for (const junk of ["", "solarized", "glass", "BLUE", "null"]) {
       window.localStorage.setItem(STORAGE_KEY, junk);
       const { getTheme } = await load();
       expect(getTheme(), junk).toBe("dark");
@@ -109,6 +111,13 @@ describe("setTheme", () => {
     setTheme("light");
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(document.documentElement.dataset.mode).toBeUndefined();
+  });
+
+  it("renders neumorphism as the light skin plus the neu mode", async () => {
+    const { setTheme } = await load();
+    setTheme("neu");
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(document.documentElement.dataset.mode).toBe("neu");
   });
 
   it("clears both attributes for dark, the attribute-free default", async () => {

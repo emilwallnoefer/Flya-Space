@@ -457,8 +457,10 @@ function cellClass(args: {
   // `relative` so a run's name label can overflow its own day cell.
   // `touch-manipulation`: the grid is tapped repeatedly to build a span, and
   // without it every tap pays the browser's 300ms double-tap-to-zoom wait.
+  // `fleet-day` is a hook for the appearance skins (it carries no styles): the
+  // cell's colour is information, so the skins must not restyle it as a menu item.
   const base =
-    "relative flex h-8 w-full touch-manipulation items-center justify-center overflow-visible rounded-[3px] text-ink transition ease-fluid focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent/80";
+    "fleet-day relative flex h-8 w-full touch-manipulation items-center justify-center overflow-visible rounded-[3px] text-ink transition ease-fluid focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent/80";
   const todayRing = isToday ? " ring-1 ring-inset ring-accent/50" : "";
 
   if (selected) return `${base}${todayRing} bg-accent/85 text-slate-900`;

@@ -2,13 +2,13 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { forbidHeldAccount } from "@/lib/app-access";
 import { serverError } from "@/lib/api-errors";
+import { isThemeValue } from "@/lib/theme-attrs";
 
 // Persist appearance prefs (theme + accent) to the signed-in user's account so
 // the choice survives refreshes, new sessions, and other devices. Stored in
 // Supabase user_metadata under `appearance_theme` / `appearance_accent`; read
 // back during SSR in the root layout to apply before first paint.
 
-const VALID_THEMES = new Set(["dark", "light", "blue"]);
 const VALID_ACCENTS = new Set(["amber", "blue"]);
 
 export async function POST(req: Request) {
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   };
 
   const patch: Record<string, string> = {};
-  if (typeof input.theme === "string" && VALID_THEMES.has(input.theme)) {
+  if (isThemeValue(input.theme)) {
     patch.appearance_theme = input.theme;
   }
   if (typeof input.accent === "string" && VALID_ACCENTS.has(input.accent)) {
