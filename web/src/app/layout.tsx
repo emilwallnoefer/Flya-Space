@@ -39,7 +39,7 @@ export async function generateViewport(): Promise<Viewport> {
 // (data-appearance-source="server"), this instead syncs the localStorage cache to
 // the server truth so the two never drift. The theme → attribute mapping is
 // themeAttributes() from lib/theme-attrs.ts, hand-inlined: keep the two in step.
-const themeBootstrapScript = `try{var d=document.documentElement;if(d.getAttribute("data-appearance-source")==="server"){var m=d.dataset.mode,t=m==="glass"?"glass":d.dataset.theme==="light"?(m==="blue"||m==="neu"?m:"light"):"dark";localStorage.setItem("ma_theme",t);if(d.dataset.accent)localStorage.setItem("ma_accent_light",d.dataset.accent);}else{var s=localStorage.getItem("ma_theme");if(s==="glacier"||s==="sky")s="blue";if(s==="light"){d.dataset.theme="light";}else if(s==="blue"||s==="neu"){d.dataset.theme="light";d.dataset.mode=s;}else if(s==="glass"){d.dataset.mode="glass";}var a=localStorage.getItem("ma_accent_light");d.dataset.accent=(a==="blue")?"blue":"amber";}}catch(e){}`;
+const themeBootstrapScript = `try{var d=document.documentElement;if(d.getAttribute("data-appearance-source")==="server"){var m=d.dataset.mode,t=d.dataset.theme==="light"?(m==="blue"||m==="neu"?m:"light"):"dark";localStorage.setItem("ma_theme",t);if(d.dataset.accent)localStorage.setItem("ma_accent_light",d.dataset.accent);}else{var s=localStorage.getItem("ma_theme");if(s==="glacier"||s==="sky")s="blue";if(s==="light"){d.dataset.theme="light";}else if(s==="blue"||s==="neu"){d.dataset.theme="light";d.dataset.mode=s;}var a=localStorage.getItem("ma_accent_light");d.dataset.accent=(a==="blue")?"blue":"amber";}}catch(e){}`;
 
 type Appearance = { theme: ThemeValue | null; accent: "amber" | "blue" };
 

@@ -7,7 +7,6 @@ describe("themeAttributes", () => {
     expect(themeAttributes("light")).toEqual({ theme: "light" });
     expect(themeAttributes("blue")).toEqual({ theme: "light", mode: "blue" });
     expect(themeAttributes("neu")).toEqual({ theme: "light", mode: "neu" });
-    expect(themeAttributes("glass")).toEqual({ mode: "glass" });
   });
 
   it("gives each appearance a distinct attribute pair", () => {
@@ -23,7 +22,7 @@ describe("themeAttributes", () => {
 describe("isThemeValue", () => {
   it("accepts the catalogue and nothing else", () => {
     for (const t of THEME_VALUES) expect(isThemeValue(t)).toBe(true);
-    for (const junk of ["glacier", "sky", "NEU", "", null, undefined, 1]) {
+    for (const junk of ["glacier", "sky", "glass", "NEU", "", null, undefined, 1]) {
       expect(isThemeValue(junk), String(junk)).toBe(false);
     }
   });

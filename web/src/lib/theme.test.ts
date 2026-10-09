@@ -49,7 +49,7 @@ describe("reading the stored theme", () => {
   });
 
   it("returns a stored theme", async () => {
-    for (const stored of ["blue", "neu", "glass"]) {
+    for (const stored of ["blue", "neu"]) {
       window.localStorage.setItem(STORAGE_KEY, stored);
       const { getTheme } = await load();
       expect(getTheme(), stored).toBe(stored);
@@ -65,7 +65,7 @@ describe("reading the stored theme", () => {
   });
 
   it("falls back to dark for a value it does not recognise", async () => {
-    for (const junk of ["", "solarized", "BLUE", "null"]) {
+    for (const junk of ["", "solarized", "glass", "BLUE", "null"]) {
       window.localStorage.setItem(STORAGE_KEY, junk);
       const { getTheme } = await load();
       expect(getTheme(), junk).toBe("dark");
@@ -118,14 +118,6 @@ describe("setTheme", () => {
     setTheme("neu");
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(document.documentElement.dataset.mode).toBe("neu");
-  });
-
-  it("renders glassmorphism on the dark base with only the glass mode", async () => {
-    const { setTheme } = await load();
-    setTheme("light");
-    setTheme("glass");
-    expect(document.documentElement.dataset.theme).toBeUndefined();
-    expect(document.documentElement.dataset.mode).toBe("glass");
   });
 
   it("clears both attributes for dark, the attribute-free default", async () => {

@@ -6,14 +6,14 @@
 //   data-theme — the base skin whose tokens apply ("light", or absent for dark)
 //   data-mode  — an optional variant layered on top of that base
 // The CSS in app/tokens.css + app/decorations.css keys off exactly these two.
-export const THEME_VALUES = ["dark", "light", "blue", "neu", "glass"] as const;
+export const THEME_VALUES = ["dark", "light", "blue", "neu"] as const;
 export type ThemeValue = (typeof THEME_VALUES)[number];
 
 export function isThemeValue(v: unknown): v is ThemeValue {
   return typeof v === "string" && (THEME_VALUES as readonly string[]).includes(v);
 }
 
-export type ThemeAttributes = { theme?: "light"; mode?: "blue" | "neu" | "glass" };
+export type ThemeAttributes = { theme?: "light"; mode?: "blue" | "neu" };
 
 export function themeAttributes(theme: ThemeValue): ThemeAttributes {
   switch (theme) {
@@ -24,9 +24,6 @@ export function themeAttributes(theme: ThemeValue): ThemeAttributes {
     case "neu":
       // Neumorphism is a light surface, so it rides on the light tokens.
       return { theme: "light", mode: "neu" };
-    case "glass":
-      // Glassmorphism keeps light ink over a vivid dark mesh: dark base.
-      return { mode: "glass" };
     default:
       return {};
   }
@@ -38,5 +35,4 @@ export const THEME_COLORS: Record<ThemeValue, string> = {
   light: "#fcfaf5",
   blue: "#f7fafd",
   neu: "#ebecef",
-  glass: "#141821",
 };

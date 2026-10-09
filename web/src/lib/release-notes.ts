@@ -20,12 +20,12 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: "2026-10-09-neu-glass-appearance",
+    version: "2026-10-09-neumorphism-appearance",
     date: "Oct 9, 2026",
-    title: "Two new looks: Neumorphism and Glassmorphism",
+    title: "New look: Neumorphism",
     highlights: [
-      "Settings → Appearance now offers Neumorphism (soft, extruded light) and Glassmorphism (frosted glass over a vivid mesh).",
-      "Both apply everywhere and follow you across devices like the other skins.",
+      "Settings → Appearance now offers Neumorphism: a clean, monochrome light skin where panels and buttons are softly extruded from the page.",
+      "Applies everywhere and follows you across devices like the other skins.",
     ],
   },
   {

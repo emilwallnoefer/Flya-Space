@@ -6,8 +6,7 @@ import { isThemeValue, themeAttributes, type ThemeValue } from "@/lib/theme-attr
 // Appearance mode. `dark` and `light` (softened Solarized) are the base skins;
 // the rest are variants layered on one of them via data-mode (see
 // lib/theme-attrs.ts for the mapping): `blue` is a pastel cool-blue light skin,
-// `neu` the neumorphic soft-extruded light skin, `glass` frosted glass over a
-// vivid dark mesh.
+// `neu` the neumorphic soft-extruded light skin.
 export type Theme = ThemeValue;
 
 export const THEMES: { value: Theme; label: string; swatch: string }[] = [
@@ -18,11 +17,6 @@ export const THEMES: { value: Theme; label: string; swatch: string }[] = [
     value: "neu",
     label: "Neumorphism",
     swatch: "radial-gradient(circle at 35% 30%, #fafbfc, #ebecef 55%, #c5c9d1)",
-  },
-  {
-    value: "glass",
-    label: "Glassmorphism",
-    swatch: "linear-gradient(135deg, #2b3340, #141821 55%, #5a84ba)",
   },
 ];
 
