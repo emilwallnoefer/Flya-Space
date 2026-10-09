@@ -37,7 +37,7 @@ export function MobileHome({
   availableModules: ModuleKey[];
   summary: Summary;
   embeds: Array<{ key: ModuleKey; title: string }>;
-  onOpenModule: (module: ModuleKey) => void;
+  onOpenModule: (module: ModuleKey, options?: { editToday?: boolean }) => void;
   onOpenMore: () => void;
 }) {
   const [teamOpen, setTeamOpen] = useState(false);
@@ -79,7 +79,7 @@ export function MobileHome({
               value={today && today.net_mins > 0 ? fmtHM(today.net_mins) : today?.holiday ? "Vacation" : today?.sick_leave ? "Sick" : today?.public_holiday ? "Holiday" : "—"}
               detail={today && today.net_mins > 0 ? `${today.start_time}–${today.stop_time}` : "Not logged yet"}
               tone={today && today.net_mins > 0 ? "positive" : "default"}
-              onClick={() => onOpenModule("time")}
+              onClick={() => onOpenModule("time", { editToday: true })}
               icon={<IconClock className="h-4 w-4" />}
             />
             <MobileTile
@@ -107,7 +107,7 @@ export function MobileHome({
         ) : null}
 
         <MobileGroup title="Quick actions">
-          {hasTime ? <MobileRow icon={<IconClock className="h-4 w-4" />} label="Log today" detail="Start, stop, breaks" chevron onClick={() => onOpenModule("time")} /> : null}
+          {hasTime ? <MobileRow icon={<IconClock className="h-4 w-4" />} label="Log today" detail="Start, stop, breaks" chevron onClick={() => onOpenModule("time", { editToday: true })} /> : null}
           {hasFleet ? <MobileRow icon={<IconDrone className="h-4 w-4" />} label="Book material" detail="Drones and payloads by the day" chevron onClick={() => onOpenModule("fleet")} /> : null}
           {hasMail ? <MobileRow icon={<IconMail className="h-4 w-4" />} label="New training mail" detail="Draft and hand off to Gmail" chevron onClick={() => onOpenModule("mail")} /> : null}
         </MobileGroup>

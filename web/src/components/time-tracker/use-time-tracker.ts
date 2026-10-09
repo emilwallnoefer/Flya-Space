@@ -28,7 +28,15 @@ export function useTimeTracker({
   readOnly = false,
   apiBase,
   initialWeek,
-}: TimeTrackerPanelProps) {
+  manageEditorChrome = true,
+}: TimeTrackerPanelProps & {
+  /**
+   * Whether the hook locks page scroll and binds Escape while the day editor
+   * is open. The desktop modal relies on it; the phone's bottom sheet does
+   * both itself, so it passes false.
+   */
+  manageEditorChrome?: boolean;
+}) {
   const [weekStart, setWeekStart] = useState<string>(toDateKey(getMonday()));
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -314,22 +322,22 @@ export function useTimeTracker({
   }, []);
 
   useEffect(() => {
-    if (!editorOpen) return;
+    if (!editorOpen || !manageEditorChrome) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [editorOpen]);
+  }, [editorOpen, manageEditorChrome]);
 
   useEffect(() => {
-    if (!editorOpen) return;
+    if (!editorOpen || !manageEditorChrome) return;
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") returnToWeekdays();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [editorOpen, returnToWeekdays]);
+  }, [editorOpen, manageEditorChrome, returnToWeekdays]);
 
   const patchDayInCurrentWeek = useCallback(
     (date: string, updater: (day: DayData) => DayData, options?: { bankDeltaMins?: number }) => {

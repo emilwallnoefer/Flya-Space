@@ -8,7 +8,6 @@ import { useMailComposer } from "@/components/mail-composer/use-mail-composer";
 import { OfflineGameCard } from "@/components/offline-game-card";
 import { PanelLoading } from "@/components/panel-loading";
 import { StreamedAdminPanel, StreamedFleetPanel } from "@/components/streamed-panels";
-import { TimeTrackerPanel } from "@/components/time-tracker-panel";
 import { HOME_CARDS } from "@/components/workspace-home-layout";
 import { MODULE_KEYS, type ModuleKey } from "@/lib/dashboard-modules";
 import { LATEST_RELEASE } from "@/lib/release-notes";
@@ -16,6 +15,7 @@ import { playUiSound } from "@/lib/ui-sounds";
 import { pushViewParams, readViewParam, wasPushedByUs, writeViewParams } from "@/lib/view-params";
 import { MobileHome } from "./mobile-home";
 import { MobileTabBar, type MobileTab } from "./mobile-tab-bar";
+import { MobileTimeScreen } from "./time/mobile-time-screen";
 import { MobileButton, MobileGroup, MobileRow, MobileSheet, MobileTopBar } from "./primitives";
 import { useHomeSummary } from "./use-home-summary";
 
@@ -75,6 +75,8 @@ export function MobileShell({
   const [moreOpen, setMoreOpen] = useState(false);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  // "Log today" from Home opens the Time screen straight onto today's sheet.
+  const [timeEditToday, setTimeEditToday] = useState(false);
   const [gmailStatus, setGmailStatus] = useState<{ connected: boolean; gmail_email?: string | null }>(
     initialSettings?.gmail ?? { connected: false },
   );
@@ -144,9 +146,10 @@ export function MobileShell({
   }, [availableModules]);
 
   const openModule = useCallback(
-    (module: ModuleKey) => {
+    (module: ModuleKey, options?: { editToday?: boolean }) => {
       if (!availableModules.includes(module)) return;
       setMoreOpen(false);
+      setTimeEditToday(module === "time" && Boolean(options?.editToday));
       if (module === activeModule) return;
       playUiSound("switchWhoosh");
       if (activeModule === null) pushViewParams({ module, section: null });
@@ -227,9 +230,9 @@ export function MobileShell({
             }
             onBack={goHome}
           />
-          <div className="px-3 pt-2">
+          <div className={activeModule === "time" ? "" : "px-3 pt-2"}>
             {activeModule === "time" ? (
-              <TimeTrackerPanel initialWeek={summary.week} />
+              <MobileTimeScreen initialWeek={summary.week} editToday={timeEditToday} />
             ) : activeModule === "fleet" ? (
               <Suspense fallback={<PanelLoading />}>
                 <StreamedFleetPanel board={initialFleet} />
