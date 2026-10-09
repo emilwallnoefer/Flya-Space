@@ -13,6 +13,13 @@
  * they carry no styles of their own.
  */
 
+/**
+ * The page root. `has-bottom-nav` is the hook that, below the `sm` breakpoint,
+ * sets `--bottom-nav` to the tab bar's height (decorations.css) so the page
+ * shell and every `bottom-safe` element clear it. The skeleton carries it too.
+ */
+export const HOME_MAIN_CLASS = "has-bottom-nav relative min-h-dvh overflow-x-hidden bg-surface text-ink";
+
 export const NAVBAR_CLASS = "glass-card sticky top-3 z-[90] !overflow-visible p-2.5 md:p-3";
 export const NAVBAR_LOGO_CLASS =
   "navbar-logo grid h-7 w-7 place-items-center rounded-md bg-gradient-to-br from-accent-from to-accent-to text-[11px] font-semibold text-slate-950";
@@ -45,7 +52,7 @@ export function homeGridClass(cardCount: number): string {
 export const MODULE_CARD_CLASS =
   "home-card group relative flex flex-col overflow-hidden rounded-[1.4rem] border border-glass/[0.09] bg-glass/[0.04] p-1.5 text-left shadow-[var(--module-card-shadow)] transition duration-150 ease-fluid hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2";
 export const MODULE_CARD_CORE_CLASS =
-  "home-card-core relative flex flex-1 flex-col overflow-hidden rounded-[calc(1.4rem-0.375rem)] bg-gradient-to-br from-panel/95 via-surface/90 to-surface/80 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
+  "home-card-core relative flex flex-1 flex-col overflow-hidden rounded-[calc(1.4rem-0.375rem)] bg-gradient-to-br from-panel/95 via-surface/90 to-surface/80 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] sm:p-6";
 export const MODULE_CARD_ICON_CLASS = "home-card-icon mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl border";
 export const MODULE_CARD_TITLE_CLASS = "inline-flex items-center gap-2 text-lg font-semibold text-ink";
 export const MODULE_CARD_DESCRIPTION_CLASS = "mt-2 text-sm leading-relaxed text-ink-4";
@@ -93,5 +100,16 @@ export const HOME_CARDS = [
   },
 ] as const;
 
+/** Desktop only: on phones the tab bar's Chat item takes its place. */
 export const CHAT_PILL_CLASS =
-  "fixed bottom-safe right-4 z-[125] inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/95 px-4 py-3 text-sm font-semibold text-slate-900 shadow-[0_18px_36px_-12px_rgba(34,211,238,0.55)] backdrop-blur transition hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+  "fixed bottom-safe right-4 z-[125] hidden items-center sm:inline-flex gap-2 rounded-full border border-accent/40 bg-accent/95 px-4 py-3 text-sm font-semibold text-slate-900 shadow-[0_18px_36px_-12px_rgba(34,211,238,0.55)] backdrop-blur transition hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+
+/**
+ * The phone tab bar (components/mobile-tab-bar.tsx): fixed to the bottom edge
+ * below the `sm` breakpoint, padded for the home indicator. Its height is
+ * `--bottom-nav` in decorations.css — change both together.
+ */
+export const MOBILE_TAB_BAR_CLASS =
+  "mobile-tab-bar fixed inset-x-0 bottom-0 z-[95] flex items-stretch border-t border-glass/10 bg-surface/92 pb-safe backdrop-blur-md sm:hidden";
+export const MOBILE_TAB_ITEM_CLASS =
+  "flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 text-[10.5px] font-medium leading-none text-ink-4 transition";

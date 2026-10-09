@@ -12,6 +12,9 @@
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
+  /* Height of the phone tab bar while one is on screen (set by .has-bottom-nav
+   * in decorations.css below the sm breakpoint); 0 everywhere else. */
+  --bottom-nav: 0px;
   /* Sticky app nav (~top-3 + bar height); keeps scrollIntoView from tucking content under the header */
   --app-sticky-offset: max(5.75rem, calc(var(--safe-top) + 4.5rem));
 
@@ -188,10 +191,10 @@ body {
   padding-bottom: var(--safe-bottom);
 }
 @utility bottom-safe {
-  bottom: max(1rem, var(--safe-bottom));
+  bottom: calc(max(1rem, var(--safe-bottom)) + var(--bottom-nav));
 }
 @utility bottom-safe-16 {
-  bottom: calc(4rem + var(--safe-bottom));
+  bottom: calc(4rem + var(--safe-bottom) + var(--bottom-nav));
 }
 
 @layer base {

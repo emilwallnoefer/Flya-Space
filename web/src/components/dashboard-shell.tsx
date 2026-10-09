@@ -4,8 +4,10 @@ import { AnimatePresence, m } from "framer-motion";
 import dynamic from "next/dynamic";
 import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuthNavbar } from "@/components/auth-navbar";
+import { MobileTabBar } from "@/components/mobile-tab-bar";
 import { OfflineGameCard } from "@/components/offline-game-card";
 import { ChatBubbleIcon } from "@/components/chat/icons";
+import { IconClock, IconDrone, IconMail } from "@/components/module-icons";
 import {
   BETA_BADGE_CLASS,
   CHAT_PILL_CLASS,
@@ -15,6 +17,7 @@ import {
   HOME_GREETING_CLASS,
   HOME_HERO_CLASS,
   HOME_INTRO_CLASS,
+  HOME_MAIN_CLASS,
   HOME_ROLE_PILL_CLASS,
   HOME_SUBTITLE,
   HOME_SUBTITLE_CLASS,
@@ -33,8 +36,9 @@ import { TimeTrackerPanel, type WeekResponse } from "@/components/time-tracker-p
 import type { InitialSettingsData } from "@/lib/settings-queries";
 import type { AdminListedUser, AdminTimeOverview } from "@/lib/admin-queries";
 import { playUiSound } from "@/lib/ui-sounds";
-import type { ModuleKey } from "@/lib/dashboard-modules";
-import { writeViewParams } from "@/lib/view-params";
+import { MODULE_KEYS, type ModuleKey } from "@/lib/dashboard-modules";
+import { pushViewParams, readViewParam, wasPushedByUs, writeViewParams } from "@/lib/view-params";
+import { useIsMobile } from "@/lib/use-media-query";
 import { LATEST_RELEASE } from "@/lib/release-notes";
 import { userRoleLabel, type UserRole } from "@/lib/user-role";
 import type { GoogleEmbed } from "@/lib/google-embeds";
@@ -210,41 +214,8 @@ function timeGreeting(): string {
   return "Good evening";
 }
 
-function IconMail({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
-      />
-    </svg>
-  );
-}
 
-function IconClock({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  );
-}
 
-function IconDrone({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M9.5 9.5h5v5h-5zM9.5 9.5 7 7m7.5 2.5L17 7m-2.5 7.5L17 17m-7.5-2.5L7 17"
-      />
-      <circle cx="5.5" cy="5.5" r="2.5" />
-      <circle cx="18.5" cy="5.5" r="2.5" />
-      <circle cx="5.5" cy="18.5" r="2.5" />
-      <circle cx="18.5" cy="18.5" r="2.5" />
-    </svg>
-  );
-}
 
 function IconCalendar({ className }: { className?: string }) {
   return (
@@ -511,6 +482,43 @@ export function DashboardShell({
     [activeModule, availableModules],
   );
 
+  // Phones: opening a module from the home is a history entry, so the Back
+  // gesture returns here instead of leaving the site. Desktop keeps the URL as
+  // a bookmark only (see lib/view-params.ts). `popstate` then restores the
+  // view the entry describes — ours or one the user arrived on.
+  const isMobile = useIsMobile();
+  useEffect(() => {
+    function onPopState() {
+      const restored = readViewParam("module", MODULE_KEYS);
+      if (restored && availableModules.includes(restored)) {
+        setActiveModule(restored);
+        setShowComposer(true);
+      } else {
+        setShowComposer(false);
+      }
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [availableModules]);
+
+  /** Open a module: from the home on a phone this pushes history; otherwise it only switches. */
+  function enterModule(module: ModuleKey, animate: boolean) {
+    if (isMobile && !showComposer) pushViewParams({ module, section: null });
+    switchModule(module);
+    if (animate) handleBeginAutomating();
+    else setShowComposer(true);
+  }
+
+  /** Back to the workspace home — through history when we pushed the entry, so Back and this button agree. */
+  function leaveModule() {
+    playUiSound("switchWhoosh");
+    if (isMobile && wasPushedByUs()) {
+      window.history.back();
+      return;
+    }
+    setShowComposer(false);
+  }
+
   function dismissProgramReadmePrompt() {
     setShowProgramReadmePrompt(false);
     try {
@@ -539,18 +547,16 @@ export function DashboardShell({
   }
 
   function leaveEmbed() {
-    playUiSound("switchWhoosh");
-    setShowComposer(false);
+    leaveModule();
   }
 
   function openModuleCard(module: ModuleKey) {
     if (activeModule !== module) playUiSound("switchWhoosh");
-    switchModule(module);
-    handleBeginAutomating();
+    enterModule(module, true);
   }
 
   return (
-    <main id="main-content" className="relative min-h-dvh overflow-x-hidden bg-surface text-ink">
+    <main id="main-content" className={HOME_MAIN_CLASS}>
       <div className="absolute inset-0 aurora-bg" />
       <section className="page-shell">
         <AuthNavbar
@@ -560,8 +566,7 @@ export function DashboardShell({
           onSelectModule={(module) => {
             if (!availableModules.includes(module)) return;
             if (module !== activeModule) playUiSound("switchWhoosh");
-            switchModule(module);
-            setShowComposer(true);
+            enterModule(module, false);
           }}
         />
 
@@ -569,10 +574,7 @@ export function DashboardShell({
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-glass/[0.07] pb-4">
             <button
               type="button"
-              onClick={() => {
-                playUiSound("switchWhoosh");
-                setShowComposer(false);
-              }}
+              onClick={leaveModule}
               className="group inline-flex items-center gap-2 rounded-xl border border-glass/10 bg-overlay/40 px-3.5 py-2 text-xs font-medium text-ink-3 shadow-sm shadow-shade/20 backdrop-blur-sm transition hover:border-accent/25 hover:bg-glass/[0.06] hover:text-ink"
             >
               <span className="transition group-hover:-translate-x-0.5" aria-hidden>
@@ -847,6 +849,20 @@ export function DashboardShell({
         </AnimatePresence>
 
       </section>
+      <MobileTabBar
+        activeModule={showComposer ? activeModule : null}
+        availableModules={availableModules}
+        adminModuleLabel={adminModuleLabel}
+        hidden={embedOpen || chatOpen}
+        onHome={() => {
+          if (showComposer) leaveModule();
+        }}
+        onSelectModule={(module) => {
+          if (!availableModules.includes(module)) return;
+          enterModule(module, false);
+        }}
+        onOpenChat={() => setChatOpen(true)}
+      />
       {chatOpen ? <ChatWidget isAdmin={isAdmin} onClose={() => setChatOpen(false)} /> : null}
       <AnimatePresence>
         {/* Hidden while the panel is open, and while a bottom-right popup

@@ -208,7 +208,16 @@
   gap: 1rem;
   /* Edge padding grows with the device's safe areas (viewport-fit=cover):
    * the home indicator at the bottom, the rounded corners in landscape. */
-  padding: 1.25rem max(1rem, var(--safe-right)) calc(1.25rem + var(--safe-bottom)) max(1rem, var(--safe-left));
+  padding: 1.25rem max(1rem, var(--safe-right)) calc(1.25rem + var(--safe-bottom) + var(--bottom-nav)) max(1rem, var(--safe-left));
+}
+
+/* Phones: the dashboard has a tab bar along the bottom edge (MOBILE_TAB_BAR_CLASS
+ * in workspace-home-layout.ts). Its height, so the shell and every bottom-safe
+ * element sit above it. */
+@media (max-width: 639px) {
+  .has-bottom-nav {
+    --bottom-nav: 3.5rem;
+  }
 }
 
 /* Installed on a home screen: the page is the whole window, so rubber-banding
@@ -223,7 +232,7 @@
 @media (min-width: 768px) {
   .page-shell {
     gap: 1.5rem;
-    padding: 2rem max(2rem, var(--safe-right)) calc(2rem + var(--safe-bottom)) max(2rem, var(--safe-left));
+    padding: 2rem max(2rem, var(--safe-right)) calc(2rem + var(--safe-bottom) + var(--bottom-nav)) max(2rem, var(--safe-left));
   }
 }
 
@@ -1298,6 +1307,15 @@ html[data-mode="neu"] [role="tablist"][class*="bg-glass"] {
   }
 }
 html[data-mode="neu"] .menu-pop {
+  border-color: transparent;
+  background: rgb(var(--paper-3));
+  box-shadow: var(--neu-raised);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Phone tab bar: matte paper, raised off the page, no glass. */
+html[data-mode="neu"] .mobile-tab-bar {
   border-color: transparent;
   background: rgb(var(--paper-3));
   box-shadow: var(--neu-raised);

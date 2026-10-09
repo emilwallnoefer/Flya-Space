@@ -31,13 +31,14 @@ export function AuthNavbar({
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    function onDocClick(event: MouseEvent) {
+    function onDocClick(event: PointerEvent) {
       if (!menuRef.current) return;
       if (menuRef.current.contains(event.target as Node)) return;
       setMenuOpen(false);
     }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
+    // pointerdown, not mousedown: touch fires it at once, mouse on the same path.
+    document.addEventListener("pointerdown", onDocClick);
+    return () => document.removeEventListener("pointerdown", onDocClick);
   }, []);
 
 
@@ -84,7 +85,7 @@ export function AuthNavbar({
               <div className="mb-2">
                 <a
                   href="/onboarding"
-                  className="flex w-full items-center justify-between rounded-lg border border-glass/10 bg-glass/5 px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/70 hover:bg-accent/95 hover:text-slate-900"
+                  className="flex w-full items-center justify-between rounded-lg border border-glass/10 bg-glass/5 px-2.5 py-3 text-left text-xs sm:py-2 font-medium text-ink transition hover:border-accent/70 hover:bg-accent/95 hover:text-slate-900"
                 >
                   <span>Onboarding</span>
                   <span className="text-[11px] opacity-80">Open</span>
@@ -102,7 +103,7 @@ export function AuthNavbar({
                     }}
                     role="tab"
                     aria-selected={activeModule === "mail"}
-                    className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/70 hover:bg-accent/95 hover:text-slate-900 ${
+                    className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-3 text-left text-xs sm:py-2 font-medium text-ink transition hover:border-accent/70 hover:bg-accent/95 hover:text-slate-900 ${
                       activeModule === "mail" ? "border-accent/55 bg-glass/12" : "border-glass/10 bg-glass/5"
                     }`}
                   >
@@ -120,7 +121,7 @@ export function AuthNavbar({
                     }}
                     role="tab"
                     aria-selected={activeModule === "time"}
-                    className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/70 hover:bg-accent/95 hover:text-slate-900 ${
+                    className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-3 text-left text-xs sm:py-2 font-medium text-ink transition hover:border-accent/70 hover:bg-accent/95 hover:text-slate-900 ${
                       activeModule === "time" ? "border-accent/55 bg-glass/12" : "border-glass/10 bg-glass/5"
                     }`}
                   >
@@ -138,7 +139,7 @@ export function AuthNavbar({
                     }}
                     role="tab"
                     aria-selected={activeModule === "fleet"}
-                    className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/70 hover:bg-accent/95 hover:text-slate-900 ${
+                    className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-3 text-left text-xs sm:py-2 font-medium text-ink transition hover:border-accent/70 hover:bg-accent/95 hover:text-slate-900 ${
                       activeModule === "fleet" ? "border-accent/55 bg-glass/12" : "border-glass/10 bg-glass/5"
                     }`}
                   >
@@ -161,7 +162,7 @@ export function AuthNavbar({
                     }}
                     role="tab"
                     aria-selected={activeModule === "admin"}
-                    className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:border-amber-300/70 hover:bg-amber-400/95 hover:text-slate-900 ${
+                    className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-3 text-left text-xs sm:py-2 font-medium text-ink transition hover:border-amber-300/70 hover:bg-amber-400/95 hover:text-slate-900 ${
                       activeModule === "admin" ? "border-amber-300/55 bg-glass/12" : "border-glass/10 bg-glass/5"
                     }`}
                   >
@@ -184,7 +185,7 @@ export function AuthNavbar({
                       setMenuOpen(false);
                     }}
                     aria-current={activeModule === "settings" ? "page" : undefined}
-                    className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs font-medium text-ink transition hover:border-accent/70 hover:bg-accent/95 hover:text-slate-900 ${
+                    className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-3 text-left text-xs sm:py-2 font-medium text-ink transition hover:border-accent/70 hover:bg-accent/95 hover:text-slate-900 ${
                       activeModule === "settings" ? "border-accent/55 bg-glass/12" : "border-glass/10 bg-glass/5"
                     }`}
                   >
@@ -195,7 +196,7 @@ export function AuthNavbar({
                 <form action="/logout" method="post">
                   <button
                     type="submit"
-                    className="w-full rounded-lg border border-glass/15 bg-glass/8 px-2.5 py-2 text-left text-xs transition hover:bg-glass/12"
+                    className="w-full rounded-lg border border-glass/15 bg-glass/8 px-2.5 py-3 text-left text-xs sm:py-2 transition hover:bg-glass/12"
                   >
                     Sign out
                   </button>

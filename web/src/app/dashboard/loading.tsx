@@ -7,6 +7,7 @@ import {
   HOME_GREETING_CLASS,
   HOME_HERO_CLASS,
   HOME_INTRO_CLASS,
+  HOME_MAIN_CLASS,
   HOME_ROLE_PILL_CLASS,
   HOME_SUBTITLE,
   HOME_SUBTITLE_CLASS,
@@ -17,6 +18,8 @@ import {
   MODULE_CARD_CTA_CLASS,
   MODULE_CARD_DESCRIPTION_CLASS,
   MODULE_CARD_ICON_CLASS,
+  MOBILE_TAB_BAR_CLASS,
+  MOBILE_TAB_ITEM_CLASS,
   MODULE_CARD_TITLE_CLASS,
   NAVBAR_CLASS,
   NAVBAR_EYEBROW_CLASS,
@@ -49,7 +52,7 @@ function Bar({ children }: { children: React.ReactNode }) {
 
 export default function DashboardLoading() {
   return (
-    <main className="relative min-h-dvh overflow-x-hidden bg-surface text-ink" aria-busy="true">
+    <main className={HOME_MAIN_CLASS} aria-busy="true">
       <div className="absolute inset-0 aurora-bg" />
       <section className="page-shell">
         {/* Navbar and hero are direct children of the page shell, like on the
@@ -115,6 +118,15 @@ export default function DashboardLoading() {
         </span>
         <span className="sr-only">Loading your workspace…</span>
       </section>
+      {/* Phone tab bar placeholder: the six items pilots and admins get. */}
+      <div className={MOBILE_TAB_BAR_CLASS} aria-hidden>
+        {["Home", "Mail", "Time", "Fleet", "Chat", "More"].map((label) => (
+          <span key={label} className={`${MOBILE_TAB_ITEM_CLASS} text-transparent`}>
+            <span className="h-5 w-5 rounded-md bg-glass/10" />
+            {label}
+          </span>
+        ))}
+      </div>
     </main>
   );
 }
