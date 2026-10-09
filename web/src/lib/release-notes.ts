@@ -20,6 +20,14 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-09-time-tracker-today",
+    date: "Oct 9, 2026",
+    title: "Today stands out in the Time Tracker",
+    highlights: [
+      "Today's day card now has a red outline and a Today badge.",
+    ],
+  },
+  {
     version: "2026-10-06-flya-space",
     date: "Oct 6, 2026",
     title: "We're now Flya Space",

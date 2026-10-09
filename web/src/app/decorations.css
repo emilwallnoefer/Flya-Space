@@ -554,6 +554,20 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
+/* Today: a rose outline (the same rose as the calendar's today dot). An
+ * outline, so it stacks with the weekday/holiday accents and the cyan
+ * selected border instead of replacing them. */
+.liquid-day-card.liquid-day-card--today {
+  outline: 2px solid rgba(251, 113, 133, 0.85);
+  outline-offset: 2px;
+}
+
+.day-today-badge {
+  border: 1px solid rgba(251, 113, 133, 0.6);
+  background: rgba(244, 63, 94, 0.85);
+  color: #fff;
+}
+
 .day-ready-sweep-beam {
   position: absolute;
   inset: 0;
@@ -872,6 +886,15 @@ html[data-theme="light"] .day-card-selected {
     0 30px 64px rgba(7, 54, 66, 0.18),
     inset 0 1px 0 rgb(var(--paper-3) / 0.9),
     0 0 0 1px rgb(var(--ac-strong) / 0.3);
+}
+
+html[data-theme="light"] .liquid-day-card.liquid-day-card--today {
+  outline-color: rgba(220, 50, 47, 0.75);
+}
+
+html[data-theme="light"] .day-today-badge {
+  border-color: rgba(220, 50, 47, 0.6);
+  background: rgba(220, 50, 47, 0.9);
 }
 
 /* Wave tank: solarized cyan fill on paper. */
