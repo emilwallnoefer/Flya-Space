@@ -1078,7 +1078,7 @@ html[data-mode="neu"] .liquid-day-card {
   background: rgb(var(--paper-3));
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  border-radius: 1.75rem;
+  border-radius: var(--neu-radius);
   box-shadow: var(--neu-raised);
 }
 html[data-mode="neu"] .glass-card::before,
@@ -1103,7 +1103,7 @@ html[data-mode="neu"] .calendar-card {
 /* Day cards: smaller extrusion; weekends are a shade deeper (no hue) and
  * the selected day is pressed into the surface. */
 html[data-mode="neu"] .liquid-day-card {
-  border-radius: 1.5rem;
+  border-radius: var(--neu-radius);
   box-shadow: var(--neu-raised-sm);
 }
 html[data-mode="neu"] .liquid-day-card.liquid-day-card--sat,
@@ -1124,7 +1124,7 @@ html[data-mode="neu"] .liquid-day-card.day-card-selected {
  * backdrops), not wells — a shadow on those frames the whole viewport. */
 html[data-mode="neu"] .wave-tank,
 html[data-mode="neu"] .day-progress,
-html[data-mode="neu"] [class*="bg-overlay/"]:not([class*="absolute"]):not([class*="fixed"]) {
+html[data-mode="neu"] :not(nav)[class*="bg-overlay/"]:not([class*="absolute"]):not([class*="fixed"]) {
   border-color: transparent;
   background: rgb(var(--paper-1) / 0.35);
   box-shadow: var(--neu-inset);
@@ -1142,28 +1142,99 @@ html[data-mode="neu"] :is(input, textarea, select):focus-visible {
   outline-offset: 2px;
 }
 
-/* Buttons: filled ones (accent CTAs, bg-glass secondaries) become raised pills
+/* Buttons: filled ones (accent CTAs, bg-glass secondaries) become raised blocks
  * of the page colour with dark ink — as in the reference, a button is the
- * surface pushed out, not a coloured fill — and press in on :active. The
- * `[class^=…]` / `[class*=" …"]` pair matches a *base* bg-glass / bg-accent
- * utility only, not `hover:bg-…` on ghost buttons, which stay flat so the
- * surface stays calm. */
-html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]) {
+ * surface pushed out, not a coloured fill — and press in on :active. They keep
+ * their own corner radius. The `[class^=…]` / `[class*=" …"]` pair matches a
+ * *base* bg-glass / bg-accent utility only, not `hover:bg-…` on ghost buttons,
+ * which stay flat so the surface stays calm. Home cards and menu items have
+ * their own treatment below. */
+html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]) {
   border-color: transparent;
-  border-radius: 9999px;
   background-color: rgb(var(--paper-3));
   background-image: none;
   color: var(--ink);
   box-shadow: var(--neu-raised-sm);
 }
-html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):hover {
+html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]):hover {
   background-color: rgb(var(--paper-3));
   color: var(--ink);
 }
-html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):active:not(:disabled) {
+html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]):active:not(:disabled) {
   box-shadow: var(--neu-inset);
   transform: none;
   filter: none;
+}
+
+/* Home cards: one raised block each, no tint, no hover glow; the icon sits in
+ * an inset well and the arrow is a small raised disc. The per-card colour
+ * classes (emerald / sky / violet …) are neutralised here rather than in the
+ * markup, so the other skins keep them. */
+html[data-mode="neu"] .home-card {
+  border-color: transparent;
+  border-radius: var(--neu-radius);
+  background: rgb(var(--paper-3));
+  box-shadow: var(--neu-raised);
+}
+html[data-mode="neu"] .home-card:hover {
+  border-color: transparent;
+  box-shadow: var(--neu-raised);
+}
+html[data-mode="neu"] .home-card-core {
+  border-radius: calc(var(--neu-radius) - 0.375rem);
+  background: transparent;
+  box-shadow: none;
+}
+html[data-mode="neu"] .home-card-icon {
+  border-color: transparent;
+  background: rgb(var(--paper-1) / 0.35);
+  color: var(--ink);
+  box-shadow: var(--neu-inset);
+}
+html[data-mode="neu"] .home-card-cta {
+  color: var(--ink-2);
+}
+html[data-mode="neu"] .home-card-arrow {
+  border-color: transparent;
+  background: rgb(var(--paper-3));
+  box-shadow: var(--neu-raised-sm);
+}
+html[data-mode="neu"] .beta-badge {
+  background: rgb(var(--paper-1));
+  color: var(--ink-3);
+}
+html[data-mode="neu"] .navbar-logo {
+  background: var(--ink);
+  color: #ffffff;
+}
+
+/* Menus, tabs and segmented controls — the navbar menu, settings and admin
+ * side navs, fleet tabs, composer toggles, the appearance picker: one rule for
+ * all of them, so they match. Items lie flat on the surface; the chosen one is
+ * pressed into it. Day cards and the fleet day grid carry aria state too but
+ * are not menus, so they are left out. */
+html[data-mode="neu"] :is(button, a):is([role="tab"], [aria-pressed], [aria-current]):not(.liquid-day-card):not(.fleet-day) {
+  border-color: transparent;
+  background-color: transparent;
+  background-image: none;
+  color: var(--ink-3);
+  box-shadow: none;
+}
+html[data-mode="neu"] :is(button, a):is([role="tab"], [aria-pressed], [aria-current]):not(.liquid-day-card):not(.fleet-day):hover {
+  background-color: rgb(var(--paper-1) / 0.5);
+  color: var(--ink);
+}
+html[data-mode="neu"] :is(button, a):is([role="tab"][aria-selected="true"], [aria-pressed="true"], [aria-current]):not(.liquid-day-card):not(.fleet-day) {
+  background-color: rgb(var(--paper-1) / 0.35);
+  color: var(--ink);
+  box-shadow: var(--neu-inset);
+}
+/* Their containers (segment groups, the menu card) are plain raised blocks. */
+html[data-mode="neu"] [role="group"][class*="bg-glass"],
+html[data-mode="neu"] [role="tablist"][class*="bg-glass"] {
+  border-color: transparent;
+  background: rgb(var(--paper-3));
+  box-shadow: var(--neu-raised-sm);
 }
 
 /* Floating chat actions and the navbar menu: matte, raised. */

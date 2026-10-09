@@ -300,11 +300,14 @@ html[data-theme="light"][data-mode="neu"] {
   --card-amber: #3b4452;
   --card-rose: #3b4452;
 
-  /* The neumorphic shadow pair, in three strengths. Blur ≈ 2× distance. */
+  /* The neumorphic shadow pair, in three strengths. Blur ≈ 2× distance, kept
+   * short so edges stay crisp (brutalist, not pillowy). */
   --neu-light: #ffffff;
-  --neu-dark: #c5c9d1;
-  --neu-raised: 9px 9px 18px var(--neu-dark), -9px -9px 18px var(--neu-light);
-  --neu-raised-sm: 4px 4px 8px var(--neu-dark), -4px -4px 8px var(--neu-light);
-  --neu-inset: inset 4px 4px 8px var(--neu-dark), inset -4px -4px 8px var(--neu-light);
+  --neu-dark: #c6cad2;
+  --neu-raised: 6px 6px 12px var(--neu-dark), -6px -6px 12px var(--neu-light);
+  --neu-raised-sm: 3px 3px 6px var(--neu-dark), -3px -3px 6px var(--neu-light);
+  --neu-inset: inset 3px 3px 6px var(--neu-dark), inset -3px -3px 6px var(--neu-light);
+  /* One corner radius for every raised or inset block. */
+  --neu-radius: 0.875rem;
   --module-card-shadow: var(--neu-raised);
 }

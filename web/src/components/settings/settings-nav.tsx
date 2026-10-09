@@ -62,6 +62,7 @@ export function SettingsNav({
                 <button
                   type="button"
                   onClick={() => onSelect(item.id)}
+                  aria-current={active ? "true" : undefined}
                   className={`flex w-full items-center border-l-[3px] px-3 py-2.5 text-left text-sm transition ${
                     active
                       ? "border-accent bg-accent-deep/15 font-medium text-ink"
