@@ -372,6 +372,20 @@ export function DashboardShell({
     })();
   }, [userRole, gmailStatusSeeded]);
 
+  // Settings disconnected (or reconnected) Gmail while the composer is mounted.
+  useEffect(() => {
+    function refresh() {
+      fetch("/api/gmail/status")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: { connected: boolean; gmail_email?: string | null } | null) => {
+          if (data) setGmailStatus(data);
+        })
+        .catch(() => {});
+    }
+    window.addEventListener("ma-gmail-status-changed", refresh);
+    return () => window.removeEventListener("ma-gmail-status-changed", refresh);
+  }, []);
+
   // Which bottom-right popup to show, decided once from localStorage.
   //
   // `react-hooks/set-state-in-effect` is suppressed for this effect ONLY. The

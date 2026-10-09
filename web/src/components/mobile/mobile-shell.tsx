@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import { Suspense, use, useCallback, useEffect, useMemo, useState } from "react";
 import type { DashboardShellProps } from "@/components/dashboard-shell";
-import { MailComposerPanel } from "@/components/mail-composer/mail-composer-panel";
 import { useMailComposer } from "@/components/mail-composer/use-mail-composer";
 import { OfflineGameCard } from "@/components/offline-game-card";
 import { PanelLoading } from "@/components/panel-loading";
@@ -18,11 +17,13 @@ import { MobileHome } from "./mobile-home";
 import { MobileTabBar, type MobileTab } from "./mobile-tab-bar";
 import { MobileTimeScreen } from "./time/mobile-time-screen";
 import { MobileFleetScreen } from "./fleet/mobile-fleet-screen";
+import { MobileMailScreen } from "./mail/mobile-mail-screen";
+import { MobileSettingsScreen } from "./settings/mobile-settings-screen";
 import { MobileButton, MobileGroup, MobileRow, MobileSheet, MobileTopBar } from "./primitives";
 import { useHomeSummary } from "./use-home-summary";
 
-const SettingsPanel = dynamic(() => import("@/components/settings-panel").then((m) => m.SettingsPanel), { ssr: false, loading: PanelLoading });
-const ChatWidget = dynamic(() => import("@/components/chat-widget").then((m) => m.ChatWidget), { ssr: false });
+// Chat pulls supabase-js realtime into the browser; it loads only when opened.
+const MobileChatScreen = dynamic(() => import("./chat/mobile-chat-screen").then((m) => m.MobileChatScreen), { ssr: false });
 const GoogleEmbedPanel = dynamic(() => import("@/components/google-embed-panel").then((m) => m.GoogleEmbedPanel), { ssr: false, loading: PanelLoading });
 
 // Same keys as the desktop shell, so a release seen on one device is seen on both.
@@ -108,6 +109,18 @@ export function MobileShell({
       })
       .catch(() => {});
   }, [userRole, gmailStatusSeeded]);
+  useEffect(() => {
+    function refresh() {
+      fetch("/api/gmail/status")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: { connected: boolean; gmail_email?: string | null } | null) => {
+          if (data) setGmailStatus(data);
+        })
+        .catch(() => {});
+    }
+    window.addEventListener("ma-gmail-status-changed", refresh);
+    return () => window.removeEventListener("ma-gmail-status-changed", refresh);
+  }, []);
 
   // "What's new" once per release. A brand-new user is marked as having seen
   // the current release (everything is new to them); the first-launch README
@@ -221,6 +234,10 @@ export function MobileShell({
         <GoogleEmbedPanel title={HOME_CARDS[4].title} urls={fleetSheet} onBack={goHome} />
       ) : activeModule === "roaddays" && roadDays ? (
         <GoogleEmbedPanel title={HOME_CARDS[5].title} urls={roadDays} onBack={goHome} />
+      ) : activeModule === "settings" ? (
+        <div className="m-screen">
+          <MobileSettingsScreen userRole={userRole} initialData={initialSettings} onBack={goHome} />
+        </div>
       ) : (
         <div className="m-screen">
           <MobileTopBar
@@ -237,7 +254,7 @@ export function MobileShell({
             }
             onBack={goHome}
           />
-          <div className={activeModule === "time" || activeModule === "fleet" ? "" : "px-3 pt-2"}>
+          <div className={activeModule === "admin" ? "px-3 pt-2" : ""}>
             {activeModule === "time" ? (
               <MobileTimeScreen initialWeek={summary.week} editToday={timeEditToday} />
             ) : activeModule === "fleet" ? (
@@ -248,10 +265,8 @@ export function MobileShell({
               <Suspense fallback={<PanelLoading />}>
                 <StreamedAdminPanel canManageUsers={isAdmin} users={initialAdminUsers} overview={initialAdminOverview} />
               </Suspense>
-            ) : activeModule === "settings" ? (
-              <SettingsPanel email={email} userRole={userRole ?? "eu_pilot"} initialData={initialSettings} />
             ) : (
-              <MailComposerPanel composer={composer} userRole={userRole} gmailConnected={gmailStatus.connected} />
+              <MobileMailScreen composer={composer} userRole={userRole} gmailConnected={gmailStatus.connected} />
             )}
           </div>
         </div>
@@ -259,7 +274,7 @@ export function MobileShell({
 
       <MobileTabBar active={activeTab} availableModules={availableModules} onSelect={onTab} hidden={embedOpen || chatOpen} />
 
-      {chatOpen ? <ChatWidget isAdmin={isAdmin} onClose={() => setChatOpen(false)} /> : null}
+      {chatOpen ? <MobileChatScreen isAdmin={isAdmin} onClose={() => setChatOpen(false)} /> : null}
 
       <MobileSheet open={moreOpen} onClose={() => setMoreOpen(false)} title="More">
         <MobileGroup>
