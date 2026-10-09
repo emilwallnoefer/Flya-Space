@@ -20,6 +20,15 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-09",
+    date: "Oct 9, 2026",
+    title: "Faster sheets",
+    highlights: [
+      "Mission planning and Fleet management start loading sooner.",
+      "They open on today's row or column even on the first load.",
+    ],
+  },
+  {
     version: "2026-10-06-flya-space",
     date: "Oct 6, 2026",
     title: "We're now Flya Space",

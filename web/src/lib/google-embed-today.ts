@@ -34,6 +34,43 @@ const cache = new Map<string, string | null>();
 /** A failure is retried after a minute rather than on every open. */
 const failures = new Map<string, number>();
 const FAILURE_TTL_MS = 60 * 1000;
+/** The dashboard's warm-up and a click can ask at once; they share one read. */
+const inflight = new Map<string, Promise<string | null>>();
+/**
+ * Tab titles barely ever change; looking one up is a Google round trip of its
+ * own. Forgotten on any failure, so a renamed tab is found again.
+ */
+const tabTitles = new Map<EmbedSheet, string>();
+/**
+ * One OAuth client per source token, kept so its access token is reused for
+ * its hour instead of being refreshed (another Google round trip) every read.
+ */
+let authCache: { refreshToken: string; client: ReturnType<typeof getOAuthClient> } | null = null;
+
+function authFor(refreshToken: string, redirectUri: string) {
+  if (authCache?.refreshToken !== refreshToken) {
+    const client = getOAuthClient(redirectUri);
+    client.setCredentials({ refresh_token: refreshToken });
+    authCache = { refreshToken, client };
+  }
+  return authCache.client;
+}
+
+async function tabTitle(
+  sheets: ReturnType<typeof sheetsApi>,
+  sheet: EmbedSheet,
+  spreadsheetId: string,
+): Promise<string | null> {
+  const known = tabTitles.get(sheet);
+  if (known) return known;
+  const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets(properties(sheetId,title))" });
+  const tabs = meta.data.sheets ?? [];
+  const gid = Number.parseInt(SOURCES[sheet].gid ?? "", 10);
+  // No gid in the URL opens the first tab, so that is the one to search.
+  const tab = (Number.isFinite(gid) ? tabs.find((s) => s.properties?.sheetId === gid) : tabs[0])?.properties?.title;
+  if (tab) tabTitles.set(sheet, tab);
+  return tab ?? null;
+}
 
 async function read(sheet: EmbedSheet, today: string): Promise<string | null> {
   const source = SOURCES[sheet];
@@ -43,15 +80,8 @@ async function read(sheet: EmbedSheet, today: string): Promise<string | null> {
   const refreshToken = await fieldStatsSourceToken();
   if (!refreshToken) return null;
 
-  const oauthClient = getOAuthClient(redirectUri);
-  oauthClient.setCredentials({ refresh_token: refreshToken });
-  const sheets = sheetsApi({ version: "v4", auth: oauthClient });
-
-  const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets(properties(sheetId,title))" });
-  const tabs = meta.data.sheets ?? [];
-  const gid = Number.parseInt(source.gid ?? "", 10);
-  // No gid in the URL opens the first tab, so that is the one to search.
-  const tab = (Number.isFinite(gid) ? tabs.find((s) => s.properties?.sheetId === gid) : tabs[0])?.properties?.title;
+  const sheets = sheetsApi({ version: "v4", auth: authFor(refreshToken, redirectUri) });
+  const tab = await tabTitle(sheets, sheet, spreadsheetId);
   if (!tab) return null;
   const quoted = `'${tab.replace(/'/g, "''")}'`;
 
@@ -69,16 +99,24 @@ export async function todayCellFor(sheet: EmbedSheet, now: Date = new Date()): P
   if (cache.has(key)) return cache.get(key) ?? null;
   const failedAt = failures.get(sheet);
   if (failedAt && now.getTime() - failedAt < FAILURE_TTL_MS) return null;
-  try {
-    const cell = await read(sheet, today);
-    // Yesterday's keys are dead weight once the date turns.
-    for (const old of cache.keys()) if (old.startsWith(`${sheet}:`)) cache.delete(old);
-    cache.set(key, cell);
-    failures.delete(sheet);
-    return cell;
-  } catch (error) {
-    console.warn("[google-embed-today] sheet read failed", sheet, (error as Error)?.message);
-    failures.set(sheet, now.getTime());
-    return null;
-  }
+  const running = inflight.get(key);
+  if (running) return running;
+  const reading = read(sheet, today)
+    .then((cell) => {
+      // Yesterday's keys are dead weight once the date turns.
+      for (const old of cache.keys()) if (old.startsWith(`${sheet}:`)) cache.delete(old);
+      cache.set(key, cell);
+      failures.delete(sheet);
+      return cell;
+    })
+    .catch((error: unknown) => {
+      console.warn("[google-embed-today] sheet read failed", sheet, (error as Error)?.message);
+      failures.set(sheet, now.getTime());
+      tabTitles.delete(sheet);
+      authCache = null;
+      return null;
+    })
+    .finally(() => inflight.delete(key));
+  inflight.set(key, reading);
+  return reading;
 }

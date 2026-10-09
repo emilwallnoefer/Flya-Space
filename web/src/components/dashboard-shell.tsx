@@ -38,6 +38,8 @@ import { writeViewParams } from "@/lib/view-params";
 import { LATEST_RELEASE } from "@/lib/release-notes";
 import { userRoleLabel, type UserRole } from "@/lib/user-role";
 import type { GoogleEmbed } from "@/lib/google-embeds";
+import { todayCell } from "@/lib/google-embed-today-client";
+import { preconnect } from "react-dom";
 
 function PanelLoading() {
   return <div className="min-h-[40vh] animate-pulse rounded-2xl border border-glass/10 bg-glass/5" aria-hidden />;
@@ -414,6 +416,19 @@ export function DashboardShell({
       if (timeoutHandle != null) window.clearTimeout(timeoutHandle);
     };
   }, [availableModules, initialWeek]);
+
+  // Warm the Google sheets for pilots and admins. Finding today's cell is a
+  // server-side sheet read of a few seconds; started here, it is usually done
+  // before anyone clicks a card, so the sheet opens on today without waiting.
+  // The connection to Google and the panel's chunk are readied too, so the
+  // frame's own load starts a little sooner.
+  useEffect(() => {
+    const sheets = [missionPlanning?.today, fleetSheet?.today].filter((sheet) => sheet !== undefined);
+    if (sheets.length === 0 && !roadDays) return;
+    preconnect("https://docs.google.com");
+    for (const sheet of sheets) void todayCell(sheet);
+    void import("@/components/google-embed-panel");
+  }, [missionPlanning, fleetSheet, roadDays]);
 
   // Warm the Gmail connection status for the mail composer. Skipped when the SSR
   // already seeded it (pilots), so it is correct on first paint without a
