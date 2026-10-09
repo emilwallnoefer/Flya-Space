@@ -1438,3 +1438,63 @@ html[data-mode="neu"] .wave-tank { height: 40px; }
 html[data-mode="neu"] .wave-fill { background: var(--accent); }
 html[data-mode="neu"] .wave-fill::before,
 html[data-mode="neu"] .wave-fill::after { background: rgb(255 255 255 / 0.25); }
+
+/* =========================================================================
+ * Touch devices: the same skins, cheaper to composite
+ *
+ * The underwater and paper skins stack large blurred, blend-moded layers
+ * under backdrop-filter glass. A phone GPU pays for every one of them on
+ * every scroll frame. Below, for any device without hover (a finger) and for
+ * anyone who asked the OS for less transparency: the backdrop blurs are
+ * halved and the decorative ::before/::after layers lose their blur and
+ * blend mode (their gradients stay, a little fainter, so the look survives).
+ * The aurora's blurred stripe layers come off entirely — without the blur
+ * they would read as hard lines.
+ *
+ * Selectors are written to outrank the light-skin overrides above
+ * (html[data-theme="light"] …) and to leave the Neumorphism skin alone,
+ * which already runs without any of this.
+ * ========================================================================= */
+@media (hover: none) and (pointer: coarse), (prefers-reduced-transparency: reduce) {
+  html:not([data-theme]) .glass-card,
+  html[data-theme]:not([data-mode="neu"]) .glass-card {
+    backdrop-filter: blur(10px) saturate(140%);
+    -webkit-backdrop-filter: blur(10px) saturate(140%);
+  }
+  html:not([data-theme]) .liquid-day-card,
+  html[data-theme]:not([data-mode="neu"]) .liquid-day-card {
+    backdrop-filter: blur(12px) saturate(150%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+  }
+  html:not([data-theme]) .day-logger-card,
+  html[data-theme]:not([data-mode="neu"]) .day-logger-card {
+    backdrop-filter: blur(8px) saturate(130%);
+    -webkit-backdrop-filter: blur(8px) saturate(130%);
+  }
+  html:not([data-theme]) .glass-card::before,
+  html:not([data-theme]) .glass-card::after,
+  html:not([data-theme]) .liquid-day-card::before,
+  html:not([data-theme]) .liquid-day-card::after,
+  html:not([data-theme]) .day-logger-card::before,
+  html:not([data-theme]) .day-logger-card::after,
+  html:not([data-theme]) .underwater-panel::before,
+  html:not([data-theme]) .underwater-panel::after,
+  html[data-theme]:not([data-mode="neu"]) .glass-card::before,
+  html[data-theme]:not([data-mode="neu"]) .glass-card::after,
+  html[data-theme]:not([data-mode="neu"]) .liquid-day-card::before,
+  html[data-theme]:not([data-mode="neu"]) .liquid-day-card::after,
+  html[data-theme]:not([data-mode="neu"]) .day-logger-card::before,
+  html[data-theme]:not([data-mode="neu"]) .day-logger-card::after,
+  html[data-theme]:not([data-mode="neu"]) .underwater-panel::before,
+  html[data-theme]:not([data-mode="neu"]) .underwater-panel::after {
+    filter: none;
+    mix-blend-mode: normal;
+    opacity: 0.5;
+  }
+  html:not([data-theme]) .aurora-bg::before,
+  html:not([data-theme]) .aurora-bg::after,
+  html[data-theme]:not([data-mode="neu"]) .aurora-bg::before,
+  html[data-theme]:not([data-mode="neu"]) .aurora-bg::after {
+    display: none;
+  }
+}
