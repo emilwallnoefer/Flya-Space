@@ -1196,35 +1196,21 @@ html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"
  * an inset well and the arrow is a small raised disc. The per-card colour
  * classes (emerald / sky / violet …) are neutralised here rather than in the
  * markup, so the other skins keep them. */
-/* Same grid, more air: a wider gap makes each card smaller without moving it. */
-html[data-mode="neu"] div:has(> .home-card) {
-  gap: 1.75rem;
-}
+/* Size, shape and spacing are the shared ones (workspace-home-layout.ts);
+ * only the material changes. */
 html[data-mode="neu"] .home-card {
   border-color: transparent;
-  border-radius: 1.125rem;
   background: rgb(var(--paper-3));
   box-shadow: var(--neu-raised-sm);
-  padding: 0;
 }
 html[data-mode="neu"] .home-card:hover {
   border-color: transparent;
   box-shadow: var(--neu-raised);
 }
 html[data-mode="neu"] .home-card-core {
-  border-radius: 1.125rem;
   background: transparent;
   box-shadow: none;
-  padding: 1rem;
 }
-html[data-mode="neu"] .home-card-icon {
-  height: 2.25rem;
-  width: 2.25rem;
-  margin-bottom: 0.75rem;
-}
-html[data-mode="neu"] .home-card-title { font-size: 0.9375rem; }
-html[data-mode="neu"] .home-card-description { margin-top: 0.25rem; font-size: 0.8125rem; line-height: 1.45; }
-html[data-mode="neu"] .home-card-cta { margin-top: 0.875rem; }
 /* The icon glyph and the CTA keep their per-card hue (muted by the tokens);
  * only the coloured well behind the icon is neutralised. */
 html[data-mode="neu"] .home-card-icon {
