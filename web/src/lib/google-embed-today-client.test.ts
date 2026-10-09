@@ -19,7 +19,7 @@ describe("todayCell", () => {
   });
 
   it("asks again after a miss, and treats a failure as no cell", async () => {
-    const fetchMock = vi.fn(() => Promise.reject(new Error("offline")));
+    const fetchMock = vi.fn((): Promise<Response> => Promise.reject(new Error("offline")));
     vi.stubGlobal("fetch", fetchMock);
     expect(await todayCell("fleet")).toBeNull();
     fetchMock.mockImplementation(() => respond("KA3"));
