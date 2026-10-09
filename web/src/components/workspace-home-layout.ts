@@ -47,8 +47,8 @@ export const MODULE_CARD_CLASS =
 export const MODULE_CARD_CORE_CLASS =
   "home-card-core relative flex flex-1 flex-col overflow-hidden rounded-[calc(1.4rem-0.375rem)] bg-gradient-to-br from-panel/95 via-surface/90 to-surface/80 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
 export const MODULE_CARD_ICON_CLASS = "home-card-icon mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl border";
-export const MODULE_CARD_TITLE_CLASS = "inline-flex items-center gap-2 text-lg font-semibold text-ink";
-export const MODULE_CARD_DESCRIPTION_CLASS = "mt-2 text-sm leading-relaxed text-ink-4";
+export const MODULE_CARD_TITLE_CLASS = "home-card-title inline-flex items-center gap-2 text-lg font-semibold text-ink";
+export const MODULE_CARD_DESCRIPTION_CLASS = "home-card-description mt-2 text-sm leading-relaxed text-ink-4";
 export const MODULE_CARD_CTA_CLASS = "home-card-cta mt-6 inline-flex items-center gap-2 text-xs font-semibold";
 export const MODULE_CARD_ARROW_CLASS =
   "home-card-arrow grid h-6 w-6 place-items-center rounded-full border border-glass/15 bg-glass/10 transition ease-fluid group-hover:-translate-y-[1px] group-hover:translate-x-1";
