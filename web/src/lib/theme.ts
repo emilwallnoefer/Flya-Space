@@ -1,30 +1,39 @@
 "use client";
 
 import { syncAppearanceToServer } from "@/lib/appearance-sync";
+import { isThemeValue, themeAttributes, type ThemeValue } from "@/lib/theme-attrs";
 
 // Appearance mode. `dark` and `light` (softened Solarized) are the base skins;
-// `blue` is a clean pastel cool-blue variant of the light skin — it reuses the
-// entire light CSS via data-theme="light" and adds a data-mode="blue" tint.
-export type Theme = "dark" | "light" | "blue";
+// the rest are variants layered on one of them via data-mode (see
+// lib/theme-attrs.ts for the mapping): `blue` is a pastel cool-blue light skin,
+// `neu` the neumorphic soft-extruded light skin, `glass` frosted glass over a
+// vivid dark mesh.
+export type Theme = ThemeValue;
 
 export const THEMES: { value: Theme; label: string; swatch: string }[] = [
   { value: "dark", label: "Dark", swatch: "#0f172a" },
   { value: "light", label: "Solarized light", swatch: "#fcfaf5" },
   { value: "blue", label: "Glacier blue", swatch: "#a9cdf0" },
+  {
+    value: "neu",
+    label: "Neumorphism",
+    swatch: "radial-gradient(circle at 35% 30%, #f4f7fb, #e3e8ef 55%, #c3cbd6)",
+  },
+  {
+    value: "glass",
+    label: "Glassmorphism",
+    swatch: "linear-gradient(135deg, #7c3aed, #db2777 50%, #0ea5e9)",
+  },
 ];
 
 const THEME_STORAGE_KEY = "ma_theme";
 const DEFAULT_THEME: Theme = "dark";
 
-function isTheme(v: unknown): v is Theme {
-  return v === "dark" || v === "light" || v === "blue";
-}
-
 // Map any stored value to a current theme. Legacy "glacier"/"sky" (the old split
 // cool-blue skins) now collapse into the single "blue" mode.
 function normalizeStoredTheme(v: unknown): Theme {
   if (v === "glacier" || v === "sky") return "blue";
-  return isTheme(v) ? v : DEFAULT_THEME;
+  return isThemeValue(v) ? v : DEFAULT_THEME;
 }
 
 function readStoredTheme(): Theme {
@@ -40,18 +49,13 @@ let themeCache: Theme | null = null;
 
 function applyThemeAttribute(theme: Theme): void {
   if (typeof document === "undefined") return;
+  // Mirrors the pre-hydration bootstrap script in app/layout.tsx.
   const root = document.documentElement;
-  if (theme === "blue") {
-    // Light skin + cool-blue tint. Mirrors the pre-hydration bootstrap script.
-    root.dataset.theme = "light";
-    root.dataset.mode = "blue";
-  } else if (theme === "light") {
-    root.dataset.theme = "light";
-    delete root.dataset.mode;
-  } else {
-    delete root.dataset.theme;
-    delete root.dataset.mode;
-  }
+  const attrs = themeAttributes(theme);
+  if (attrs.theme) root.dataset.theme = attrs.theme;
+  else delete root.dataset.theme;
+  if (attrs.mode) root.dataset.mode = attrs.mode;
+  else delete root.dataset.mode;
 }
 
 export function getTheme(): Theme {

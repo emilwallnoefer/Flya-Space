@@ -28,9 +28,9 @@ export function AppearanceSection() {
           {THEMES.find((t) => t.value === theme)?.label ?? "Dark"}
         </p>
         <p className="mt-2 text-[11px] leading-snug tracking-wide text-ink-4/90">
-          Choose the app palette: the default dark theme, the softened Solarized Light skin, or the clean pastel Glacier blue skin. Synced to your account, so it follows you across devices.
+          Choose the app look: the default dark theme, the softened Solarized Light skin, the pastel Glacier blue skin, soft-extruded Neumorphism, or frosted Glassmorphism. Synced to your account, so it follows you across devices.
         </p>
-        <div className="mt-3 grid grid-cols-3 gap-2">
+        <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
           {THEMES.map((t) => {
             const selected = t.value === theme;
             return (

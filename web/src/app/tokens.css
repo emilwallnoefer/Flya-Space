@@ -255,3 +255,94 @@ html[data-theme="light"][data-mode="blue"] {
   --ac-from: 104 168 230;  /* gradient: light */
   --ac-to: 38 98 168;      /* gradient: deep */
 }
+
+/* ---- Appearance mode: Neumorphism (soft-extruded light skin) ----
+ * html[data-theme="light"][data-mode="neu"]. The defining trait: every surface
+ * is the *same* colour as the page, and depth comes only from a pair of soft
+ * shadows — light from the top-left (white), shade to the bottom-right (the
+ * page colour darkened ~18%). Raised = shadows outside, pressed/well = inset.
+ * So --paper-2 (panels) equals --paper-3 (page) on purpose, and the decoration
+ * re-skins in decorations.css drop borders, gradients and backdrop blur.
+ *
+ * Contrast: soft shadows carry no text contrast, so the ink ladder is a cooler,
+ * darker slate than the Solarized skin (ink-4 ≥ 4.5:1 on the page colour) and
+ * the accent is a saturated blue that stays ≥ 4.5:1 as text. The page colour
+ * sits away from pure white so both shadows have room to show. */
+html[data-theme="light"][data-mode="neu"] {
+  --paper-3: 227 232 239; /* page #e3e8ef */
+  --paper-2: 227 232 239; /* panels: same as the page — the whole point */
+  --paper-1: 214 220 229; /* deeper fills / hovers */
+  --foreground: #3f4b5c;
+
+  --glass: #2f3a4a;
+  --ink: #2f3a4a;
+  --ink-2: #3f4b5c;
+  --ink-3: #4f5b6c;
+  --ink-4: #5e6a80;
+  --ink-5: #7a8597;
+
+  --ac-strong: 79 112 196;  /* #4f70c4 fills / dots */
+  --ac-deep: 58 88 168;     /* deep fills / solid borders */
+  --ac-text: 44 75 150;     /* links / accent glyphs */
+  --ac-from: 125 155 225;
+  --ac-to: 58 88 168;
+
+  --warn: #8a6a00;
+  --positive: #3f7a1a;
+  --danger: #b62b2b;
+  --neutral: #8690a3;
+  --shade: #5a6478;
+
+  --card-sky: #2563a8;
+  --card-violet: #5b5fc0;
+  --card-amber: #8a6a00;
+  --card-rose: #b8365f;
+
+  /* The neumorphic shadow pair, in three strengths. Blur ≈ 2× distance. */
+  --neu-light: #ffffff;
+  --neu-dark: #b9c1cd;
+  --neu-raised: 9px 9px 18px var(--neu-dark), -9px -9px 18px var(--neu-light);
+  --neu-raised-sm: 4px 4px 8px var(--neu-dark), -4px -4px 8px var(--neu-light);
+  --neu-inset: inset 4px 4px 8px var(--neu-dark), inset -4px -4px 8px var(--neu-light);
+  --module-card-shadow: var(--neu-raised);
+}
+
+/* ---- Appearance mode: Glassmorphism (frosted glass over a vivid mesh) ----
+ * html[data-mode="glass"], dark base (no data-theme). Glass only reads as glass
+ * when something colourful sits behind it, so the page is a deep violet with a
+ * violet / pink / sky mesh (decorations.css re-skins .aurora-bg), and panels are
+ * low-alpha white with a backdrop blur and a 1px luminous border. The mesh is
+ * kept dim (alpha ≤ 0.6 over the base) so light ink stays ≥ 4.5:1 over every
+ * part of it, not just the dark areas. */
+html[data-mode="glass"] {
+  --background: #1a1033;
+  --surface: #1a1033;
+  --panel: #241a45;
+  --raised: #31265a;
+  --overlay: #120a26;
+  --glass: #ffffff;
+
+  --ink: #f5f3ff;
+  --ink-2: #e9e5fb;
+  --ink-3: #d4cdee;
+  --ink-4: #b3abd0;
+  --ink-5: #8f87ad;
+
+  --accent: #38bdf8;        /* sky-400 */
+  --accent-soft: #bae6fd;   /* sky-200 */
+  --accent-deep: #0ea5e9;   /* sky-500 */
+  --accent-from: #7dd3fc;   /* sky-300 */
+  --accent-to: #c084fc;     /* purple-400 */
+
+  --neutral: #8f87ad;
+  --shade: #0a0020;
+
+  --card-sky: #bae6fd;
+  --card-violet: #ddd6fe;
+  --card-amber: #fde68a;
+  --card-rose: #fbcfe8;
+  --module-card-shadow: 0 24px 48px -12px rgb(10 0 40 / 0.6);
+
+  /* One blur radius for every glass surface, so stacked panes read as one material. */
+  --glass-blur: 18px;
+}

@@ -2,8 +2,12 @@
  * reduced-motion guards). Order matters: light re-skins override the dark
  * base classes above them, and the Glacier block wins by source order. */
 
+/* No `position` here: every mount is `absolute inset-0 aurora-bg` (a Tailwind
+ * utility, which lives in @layer utilities), and an unlayered `position:
+ * relative` on this class used to beat it — the layer collapsed to 0×0 and
+ * the whole wash went unseen. The pseudo-elements below position against the
+ * absolutely-placed element itself. */
 .aurora-bg {
-  position: relative;
   overflow: hidden;
   background:
     radial-gradient(45rem 45rem at 0% 0%, rgba(34, 211, 238, 0.2), transparent 60%),
@@ -1040,4 +1044,266 @@ html[data-theme="light"] .day-ready-sweep-beam::before {
     ),
     radial-gradient(28% 24% at 50% 50%, rgb(var(--ac-strong) / 0.22), rgb(var(--ac-strong) / 0) 72%);
   mix-blend-mode: multiply;
+}
+
+/* =========================================================================
+ * Appearance mode: Neumorphism — html[data-theme="light"][data-mode="neu"]
+ *
+ * Rides on the light re-skins above and replaces their paper glass with soft
+ * extrusion: one page colour everywhere, depth from the --neu-* shadow pair
+ * (tokens.css), no borders, no gradients, no backdrop blur. Raised things
+ * (cards, primary buttons) cast the pair outward; wells (inputs, progress
+ * tanks, settings panels) carry it inset; a pressed button flips to inset.
+ * Kept sparse on purpose — only containers and controls, never text or icons.
+ * ========================================================================= */
+
+/* Page: flat. The beams/ripples would read as dirt on a matte surface. */
+html[data-mode="neu"] .aurora-bg {
+  background: rgb(var(--paper-3));
+  filter: none;
+}
+html[data-mode="neu"] .aurora-bg::before,
+html[data-mode="neu"] .aurora-bg::after,
+html[data-mode="neu"] .dashboard-mesh,
+html[data-mode="neu"] .dashboard-mesh-fade,
+html[data-mode="neu"] .underwater-panel::before,
+html[data-mode="neu"] .underwater-panel::after {
+  display: none;
+}
+
+/* Raised panels. */
+html[data-mode="neu"] .glass-card,
+html[data-mode="neu"] .liquid-day-card {
+  border-color: transparent;
+  background: rgb(var(--paper-3));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: 1.25rem;
+  box-shadow: var(--neu-raised);
+}
+html[data-mode="neu"] .glass-card::before,
+html[data-mode="neu"] .glass-card::after,
+html[data-mode="neu"] .liquid-day-card::before,
+html[data-mode="neu"] .liquid-day-card::after {
+  display: none;
+}
+
+/* Modals float above a scrim, so they get a real drop on top of the pair. */
+html[data-mode="neu"] .day-logger-card,
+html[data-mode="neu"] .calendar-card {
+  border-color: transparent;
+  background: rgb(var(--paper-3));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow:
+    var(--neu-raised),
+    0 30px 60px -20px rgba(47, 58, 74, 0.35);
+}
+
+/* Day cards: smaller extrusion; the category tints become faint washes and
+ * the selected day is pressed into the surface. */
+html[data-mode="neu"] .liquid-day-card {
+  box-shadow: var(--neu-raised-sm);
+}
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--sat {
+  background: linear-gradient(145deg, rgba(91, 95, 192, 0.1), rgb(var(--paper-3)) 60%);
+}
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--sun {
+  background: linear-gradient(145deg, rgba(184, 54, 95, 0.1), rgb(var(--paper-3)) 60%);
+}
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--vac,
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--ph,
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--sl {
+  box-shadow: var(--neu-raised-sm);
+}
+html[data-mode="neu"] .liquid-day-card.day-card-selected {
+  box-shadow: var(--neu-inset);
+}
+
+/* Wells: progress tanks and the translucent panel wells (bg-overlay/N) sink
+ * in. Positioned bg-overlay layers are scrims (the login blur, modal
+ * backdrops), not wells — a shadow on those frames the whole viewport. */
+html[data-mode="neu"] .wave-tank,
+html[data-mode="neu"] .day-progress,
+html[data-mode="neu"] [class*="bg-overlay/"]:not([class*="absolute"]):not([class*="fixed"]) {
+  border-color: transparent;
+  background: rgb(var(--paper-1) / 0.35);
+  box-shadow: var(--neu-inset);
+}
+
+/* Form controls are wells too. (Unlayered, so it wins over the Tailwind
+ * utilities' @layer regardless of specificity.) */
+html[data-mode="neu"] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select) {
+  border-color: transparent;
+  background-color: rgb(var(--paper-3));
+  box-shadow: var(--neu-inset);
+}
+html[data-mode="neu"] :is(input, textarea, select):focus-visible {
+  outline: 2px solid rgb(var(--ac-strong) / 0.6);
+  outline-offset: 2px;
+}
+
+/* Buttons: filled ones (accent CTAs, bg-glass secondaries) are raised and
+ * press in on :active. Ghost/icon buttons stay flat so the surface stays calm. */
+html[data-mode="neu"] button[class*="bg-glass"],
+html[data-mode="neu"] a[class*="bg-glass"] {
+  border-color: transparent;
+  background-color: rgb(var(--paper-3));
+  box-shadow: var(--neu-raised-sm);
+}
+html[data-mode="neu"] button[class*="bg-accent"] {
+  border-color: transparent;
+  box-shadow: var(--neu-raised-sm);
+}
+html[data-mode="neu"] button[class*="bg-glass"]:hover,
+html[data-mode="neu"] a[class*="bg-glass"]:hover {
+  background-color: rgb(var(--paper-3));
+}
+html[data-mode="neu"] button[class*="bg-glass"]:active:not(:disabled),
+html[data-mode="neu"] button[class*="bg-accent"]:active:not(:disabled) {
+  box-shadow: var(--neu-inset);
+  transform: none;
+  filter: none;
+}
+
+/* Floating chat actions and the navbar menu: matte, raised. */
+@media (hover: hover) {
+  html[data-mode="neu"] .chat-actions-row {
+    border-color: transparent;
+    background: rgb(var(--paper-3));
+    box-shadow: var(--neu-raised-sm);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+html[data-mode="neu"] .menu-pop {
+  border-color: transparent;
+  background: rgb(var(--paper-3));
+  box-shadow: var(--neu-raised);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-mode="neu"] .skip-link {
+  border-color: transparent;
+  box-shadow: var(--neu-raised-sm);
+}
+
+/* =========================================================================
+ * Appearance mode: Glassmorphism — html[data-mode="glass"]
+ *
+ * Dark base. The recipe: a vivid, dim mesh behind everything (that is what
+ * makes glass visible), then panels of low-alpha white with one shared
+ * backdrop blur (--glass-blur), a 1px luminous border and a top highlight.
+ * Hierarchy is by alpha, not by hue: page mesh < cards (6–14 %) < day cards
+ * (7–16 %) < modals (nearly opaque, so the content behind cannot compete).
+ * The underwater caustic layers are dropped — glass over glass over blobs
+ * turns to mud, and fewer blurred layers is cheaper to composite.
+ * ========================================================================= */
+
+html[data-mode="glass"] .aurora-bg {
+  background:
+    radial-gradient(42rem 42rem at 8% 0%, rgba(124, 58, 237, 0.55), transparent 62%),
+    radial-gradient(38rem 38rem at 92% 12%, rgba(219, 39, 119, 0.42), transparent 58%),
+    radial-gradient(40rem 34rem at 50% 100%, rgba(14, 165, 233, 0.42), transparent 60%),
+    radial-gradient(30rem 30rem at 80% 70%, rgba(168, 85, 247, 0.3), transparent 60%),
+    linear-gradient(135deg, #1a1033 0%, #1d1240 50%, #160c2e 100%);
+  filter: saturate(118%);
+}
+html[data-mode="glass"] .aurora-bg::before,
+html[data-mode="glass"] .aurora-bg::after,
+html[data-mode="glass"] .underwater-panel::before,
+html[data-mode="glass"] .underwater-panel::after,
+html[data-mode="glass"] .glass-card::before,
+html[data-mode="glass"] .liquid-day-card::before {
+  display: none;
+}
+
+html[data-mode="glass"] .dashboard-mesh {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+}
+html[data-mode="glass"] .dashboard-mesh-fade {
+  background: radial-gradient(ellipse 90% 55% at 50% 100%, rgba(26, 16, 51, 0.6), transparent 65%);
+}
+
+html[data-mode="glass"] .glass-card {
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.06));
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  box-shadow:
+    0 8px 32px rgba(10, 0, 40, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+}
+html[data-mode="glass"] .glass-card::after {
+  background: linear-gradient(112deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(255, 255, 255, 0) 70%);
+  opacity: 0.6;
+  filter: none;
+}
+
+html[data-mode="glass"] .liquid-day-card {
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: linear-gradient(142deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.07));
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  box-shadow:
+    0 8px 28px rgba(10, 0, 40, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+html[data-mode="glass"] .liquid-day-card::after {
+  opacity: 0.5;
+  filter: none;
+}
+html[data-mode="glass"] .liquid-day-card.liquid-day-card--sat {
+  background: linear-gradient(145deg, rgba(129, 140, 248, 0.3), rgba(255, 255, 255, 0.07));
+}
+html[data-mode="glass"] .liquid-day-card.liquid-day-card--sun {
+  background: linear-gradient(145deg, rgba(244, 114, 182, 0.28), rgba(255, 255, 255, 0.07));
+}
+
+/* Modals: near-opaque glass so the mesh cannot fight the form. */
+html[data-mode="glass"] .day-logger-card,
+html[data-mode="glass"] .calendar-card {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: linear-gradient(140deg, rgba(36, 26, 69, 0.92), rgba(26, 16, 51, 0.9));
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  box-shadow:
+    0 28px 64px rgba(10, 0, 40, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* Workspace-home card cores: the same material instead of an opaque slate wash. */
+html[data-mode="glass"] [class*="from-panel/95"] {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+html[data-mode="glass"] .wave-tank,
+html[data-mode="glass"] .day-progress {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(10, 0, 40, 0.35);
+}
+
+@media (hover: hover) {
+  html[data-mode="glass"] .chat-actions-row {
+    border-color: rgba(255, 255, 255, 0.28);
+    background: rgba(36, 26, 69, 0.92);
+  }
+}
+
+/* Reduced transparency: solid panes, no blur — the mesh stays, the glass does
+ * not (NN/g: let people turn the transparency down). */
+@media (prefers-reduced-transparency: reduce) {
+  html[data-mode="glass"] .glass-card,
+  html[data-mode="glass"] .liquid-day-card,
+  html[data-mode="glass"] [class*="from-panel/95"] {
+    background: rgba(36, 26, 69, 0.96);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }

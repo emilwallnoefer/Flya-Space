@@ -20,6 +20,15 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-09-neu-glass-appearance",
+    date: "Oct 9, 2026",
+    title: "Two new looks: Neumorphism and Glassmorphism",
+    highlights: [
+      "Settings → Appearance now offers Neumorphism (soft, extruded light) and Glassmorphism (frosted glass over a vivid mesh).",
+      "Both apply everywhere and follow you across devices like the other skins.",
+    ],
+  },
+  {
     version: "2026-10-09-time-tracker-today",
     date: "Oct 9, 2026",
     title: "Today stands out in the Time Tracker",
