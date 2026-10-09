@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { withRange, type GoogleEmbed } from "@/lib/google-embeds";
+import { todayCell as lookUpTodayCell } from "@/lib/google-embed-today-client";
 
 const BUTTON_CLASS =
   "inline-flex items-center gap-1.5 rounded-lg border border-glass/15 bg-glass/8 px-2.5 py-1 text-[11px] font-medium text-ink-2 transition ease-fluid hover:bg-glass/12 hover:text-ink";
@@ -14,8 +15,12 @@ const BUTTON_CLASS =
  */
 const SHEET_ZOOM = 0.8;
 
-/** How long to wait for today's cell before opening the sheet at its top. */
-const TODAY_TIMEOUT_MS = 3000;
+/**
+ * How long the frame holds back for today's cell. The dashboard asks for it on
+ * mount, so it is usually already known; past this, the sheet starts loading
+ * without it and is moved to today when the cell arrives.
+ */
+const TODAY_GRACE_MS = 800;
 
 const COPY: Record<GoogleEmbed["kind"], { hint: string; app: string; frame: string }> = {
   sheet: {
@@ -45,7 +50,11 @@ const COPY: Record<GoogleEmbed["kind"], { hint: string; app: string; frame: stri
  *
  * Mission planning and Fleet management open scrolled to today: the server
  * finds today's cell and it goes into the URL as `range=` (lib/google-embeds.ts).
- * The frame waits briefly for it; without it, the sheet opens at its top.
+ * The dashboard starts that lookup on mount (lib/google-embed-today-client.ts),
+ * so the frame rarely waits. When the cell comes late, the sheet has already
+ * started loading at its top, and the cell is added to the frame's URL hash
+ * once it has loaded — a hash change scrolls the sheet in place, where changing
+ * the URL mid-load would throw away the load and start over.
  *
  * The frame is cross-origin, so the page cannot tell whether it shows the
  * content or a sign-in prompt. The hidden buttons cover both escape hatches:
@@ -64,32 +73,44 @@ export function GoogleEmbedPanel({
   const [showHelp, setShowHelp] = useState(false);
   // undefined while today's cell is being looked up; null when there is none.
   const [todayCell, setTodayCell] = useState<string | null | undefined>(urls.today ? undefined : null);
+  // What the frame shows. Unset only during the short grace for today's cell.
+  const [frameSrc, setFrameSrc] = useState<string | null>(urls.today ? null : urls.embed);
+  const frameLoaded = useRef(false);
   const copy = COPY[urls.kind];
   const zoom = urls.kind === "sheet" ? SHEET_ZOOM : 1;
-  const embedUrl = withRange(urls.embed, todayCell);
   const openUrl = withRange(urls.open, todayCell);
 
   useEffect(() => {
     if (!urls.today) return;
     let cancelled = false;
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), TODAY_TIMEOUT_MS);
-    fetch(`/api/google-embeds/today?sheet=${urls.today}`, { signal: controller.signal })
-      .then((response) => (response.ok ? response.json() : null))
-      .then(
-        (body: { cell?: string | null } | null) => body?.cell ?? null,
-        () => null,
-      )
-      .then((cell) => {
-        if (!cancelled) setTodayCell(cell);
-      })
-      .finally(() => window.clearTimeout(timer));
+    const grace = window.setTimeout(() => {
+      if (!cancelled) setFrameSrc((src) => src ?? urls.embed);
+    }, TODAY_GRACE_MS);
+    void lookUpTodayCell(urls.today).then((cell) => {
+      if (cancelled) return;
+      window.clearTimeout(grace);
+      setTodayCell(cell);
+      // Before the grace ran out: the frame starts on today. After it, the
+      // frame is already loading, so only a loaded frame is moved (onLoad
+      // covers the other case).
+      setFrameSrc((src) => (src === null || frameLoaded.current ? withRange(urls.embed, cell) : src));
+    });
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
-      controller.abort();
+      window.clearTimeout(grace);
     };
-  }, [urls.today]);
+  }, [urls.today, urls.embed]);
+
+  function handleFrameLoad() {
+    if (frameLoaded.current) return;
+    frameLoaded.current = true;
+    if (todayCell) setFrameSrc(withRange(urls.embed, todayCell));
+  }
+
+  function reloadFrame() {
+    frameLoaded.current = false;
+    setFrameKey((key) => key + 1);
+  }
 
   useEffect(() => {
     const root = document.documentElement;
@@ -118,7 +139,7 @@ export function GoogleEmbedPanel({
             <a href={urls.signIn} target="_blank" rel="noopener noreferrer" className={BUTTON_CLASS}>
               Sign in to Google
             </a>
-            <button type="button" onClick={() => setFrameKey((key) => key + 1)} className={BUTTON_CLASS}>
+            <button type="button" onClick={reloadFrame} className={BUTTON_CLASS}>
               Reload
             </button>
             <a href={openUrl} target="_blank" rel="noopener noreferrer" className={BUTTON_CLASS}>
@@ -136,10 +157,11 @@ export function GoogleEmbedPanel({
         )}
       </div>
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-glass/10 bg-white">
-        {todayCell === undefined ? null : (
+        {frameSrc === null ? null : (
           <iframe
             key={frameKey}
-            src={embedUrl}
+            src={frameSrc}
+            onLoad={handleFrameLoad}
             title={`${title} ${copy.frame}`}
             allow="clipboard-read; clipboard-write"
             referrerPolicy="strict-origin-when-cross-origin"
