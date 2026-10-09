@@ -1,13 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, use, useCallback, useEffect, useMemo, useState } from "react";
 import type { DashboardShellProps } from "@/components/dashboard-shell";
 import { MailComposerPanel } from "@/components/mail-composer/mail-composer-panel";
 import { useMailComposer } from "@/components/mail-composer/use-mail-composer";
 import { OfflineGameCard } from "@/components/offline-game-card";
 import { PanelLoading } from "@/components/panel-loading";
-import { StreamedAdminPanel, StreamedFleetPanel } from "@/components/streamed-panels";
+import type { FleetBoardResponse } from "@/components/fleet/types";
+import { StreamedAdminPanel } from "@/components/streamed-panels";
 import { HOME_CARDS } from "@/components/workspace-home-layout";
 import { MODULE_KEYS, type ModuleKey } from "@/lib/dashboard-modules";
 import { LATEST_RELEASE } from "@/lib/release-notes";
@@ -16,6 +17,7 @@ import { pushViewParams, readViewParam, wasPushedByUs, writeViewParams } from "@
 import { MobileHome } from "./mobile-home";
 import { MobileTabBar, type MobileTab } from "./mobile-tab-bar";
 import { MobileTimeScreen } from "./time/mobile-time-screen";
+import { MobileFleetScreen } from "./fleet/mobile-fleet-screen";
 import { MobileButton, MobileGroup, MobileRow, MobileSheet, MobileTopBar } from "./primitives";
 import { useHomeSummary } from "./use-home-summary";
 
@@ -28,6 +30,11 @@ const PROGRAM_README_PROMPT_SEEN_KEY = "ma_program_readme_prompt_seen_v1";
 const WHATS_NEW_SEEN_VERSION_KEY = "ma_whats_new_seen_version_v1";
 
 const RESOLVED_NULL: Promise<null> = Promise.resolve(null);
+
+/** The fleet board streams in from the server; suspend until it lands. */
+function StreamedMobileFleet({ board }: { board: Promise<FleetBoardResponse | null> }) {
+  return <MobileFleetScreen initialBoard={use(board)} />;
+}
 
 export type MobileShellProps = DashboardShellProps;
 
@@ -230,12 +237,12 @@ export function MobileShell({
             }
             onBack={goHome}
           />
-          <div className={activeModule === "time" ? "" : "px-3 pt-2"}>
+          <div className={activeModule === "time" || activeModule === "fleet" ? "" : "px-3 pt-2"}>
             {activeModule === "time" ? (
               <MobileTimeScreen initialWeek={summary.week} editToday={timeEditToday} />
             ) : activeModule === "fleet" ? (
               <Suspense fallback={<PanelLoading />}>
-                <StreamedFleetPanel board={initialFleet} />
+                <StreamedMobileFleet board={initialFleet} />
               </Suspense>
             ) : activeModule === "admin" ? (
               <Suspense fallback={<PanelLoading />}>
