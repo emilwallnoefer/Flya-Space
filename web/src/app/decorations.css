@@ -1230,6 +1230,11 @@ html[data-mode="neu"] :is(button, a):is([role="tab"][aria-selected="true"], [ari
   font-weight: 600;
   box-shadow: var(--neu-raised-sm);
 }
+/* The selected fleet day cell is an accent fill under dark text; the accent is
+ * dark here, so the text goes light. */
+html[data-mode="neu"] .fleet-day[aria-pressed="true"] {
+  color: #f3f5f8;
+}
 /* Side-nav rows (settings, admin) are full-width, so the raised one is pulled
  * in from the edges to show its shadow on all sides. */
 html[data-mode="neu"] button[aria-current] {

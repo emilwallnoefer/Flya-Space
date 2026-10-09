@@ -283,26 +283,28 @@ html[data-theme="light"][data-mode="neu"] {
   --ink-4: #5f6978;
   --ink-5: #7c8696;
 
-  /* Muted palette: every hue is pulled toward the grey of the page, so it
-   * reads as a tint on the material rather than paint on top of it. Dusty
-   * slate-blue accent; semantic and card hues are the same idea in other
-   * directions (sage, ochre, dusty rose, heather). All ≥ 4.5:1 as text. */
-  --ac-strong: 122 140 171; /* #7a8cab fills / dots — dark text still ≥ 4.5:1 on it */
-  --ac-deep: 92 110 142;    /* deep fills / solid borders */
-  --ac-text: 70 88 122;     /* links / accent glyphs */
-  --ac-from: 160 174 198;
-  --ac-to: 108 126 158;
+  /* Deep, desaturated palette: dark teal accent, and dark ochre / green / red
+   * / plum for the semantic and card hues — ink-dark colours that sit in the
+   * grey rather than on it. All ≥ 6:1 as text on the page. The accent is used
+   * as a fill under dark text in a few places; in this skin those are all
+   * buttons, which decorations.css turns into raised page-colour blocks, plus
+   * the selected fleet day cell, which gets light text there. */
+  --ac-strong: 47 95 99;   /* #2f5f63 dark teal — fills / dots */
+  --ac-deep: 36 74 78;     /* deep fills / solid borders */
+  --ac-text: 40 84 88;     /* links / accent glyphs */
+  --ac-from: 74 122 126;
+  --ac-to: 36 74 78;
 
-  --warn: #8c7430;      /* ochre */
-  --positive: #5a7c58;  /* sage */
-  --danger: #9e5a5a;    /* dusty rose */
+  --warn: #6b5620;      /* dark ochre */
+  --positive: #3f5e3c;  /* dark green */
+  --danger: #7a3535;    /* dark red */
   --neutral: #8690a3;
   --shade: #5a6478;
 
-  --card-sky: #5c7a9c;    /* slate blue */
-  --card-violet: #76709a; /* heather */
-  --card-amber: #8c7430;  /* ochre */
-  --card-rose: #9e5a5a;   /* dusty rose */
+  --card-sky: #2f5f63;    /* dark teal */
+  --card-violet: #4a4668; /* dark plum */
+  --card-amber: #6b5620;  /* dark ochre */
+  --card-rose: #7a3535;   /* dark red */
 
   /* The neumorphic shadow pair, in three strengths. Blur ≈ 2× distance, kept
    * short so edges stay crisp (brutalist, not pillowy). */
