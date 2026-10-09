@@ -10,4 +10,4 @@
  *
  * One constant so the two can be compared on the same build by flipping it.
  */
-export const MOBILE_LOOK: "native" | "skin" = "native";
+export const MOBILE_LOOK: "native" | "skin" = "skin";
