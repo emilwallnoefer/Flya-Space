@@ -17,12 +17,12 @@ export const THEMES: { value: Theme; label: string; swatch: string }[] = [
   {
     value: "neu",
     label: "Neumorphism",
-    swatch: "radial-gradient(circle at 35% 30%, #f4f7fb, #e3e8ef 55%, #c3cbd6)",
+    swatch: "radial-gradient(circle at 35% 30%, #fafbfc, #ebecef 55%, #c5c9d1)",
   },
   {
     value: "glass",
     label: "Glassmorphism",
-    swatch: "linear-gradient(135deg, #7c3aed, #db2777 50%, #0ea5e9)",
+    swatch: "linear-gradient(135deg, #2b3340, #141821 55%, #5a84ba)",
   },
 ];
 

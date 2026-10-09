@@ -1078,7 +1078,7 @@ html[data-mode="neu"] .liquid-day-card {
   background: rgb(var(--paper-3));
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  border-radius: 1.25rem;
+  border-radius: 1.75rem;
   box-shadow: var(--neu-raised);
 }
 html[data-mode="neu"] .glass-card::before,
@@ -1100,16 +1100,15 @@ html[data-mode="neu"] .calendar-card {
     0 30px 60px -20px rgba(47, 58, 74, 0.35);
 }
 
-/* Day cards: smaller extrusion; the category tints become faint washes and
+/* Day cards: smaller extrusion; weekends are a shade deeper (no hue) and
  * the selected day is pressed into the surface. */
 html[data-mode="neu"] .liquid-day-card {
+  border-radius: 1.5rem;
   box-shadow: var(--neu-raised-sm);
 }
-html[data-mode="neu"] .liquid-day-card.liquid-day-card--sat {
-  background: linear-gradient(145deg, rgba(91, 95, 192, 0.1), rgb(var(--paper-3)) 60%);
-}
+html[data-mode="neu"] .liquid-day-card.liquid-day-card--sat,
 html[data-mode="neu"] .liquid-day-card.liquid-day-card--sun {
-  background: linear-gradient(145deg, rgba(184, 54, 95, 0.1), rgb(var(--paper-3)) 60%);
+  background: rgb(var(--paper-1) / 0.6);
 }
 html[data-mode="neu"] .liquid-day-card.liquid-day-card--vac,
 html[data-mode="neu"] .liquid-day-card.liquid-day-card--ph,
@@ -1203,12 +1202,11 @@ html[data-mode="neu"] .skip-link {
 
 html[data-mode="glass"] .aurora-bg {
   background:
-    radial-gradient(42rem 42rem at 8% 0%, rgba(124, 58, 237, 0.55), transparent 62%),
-    radial-gradient(38rem 38rem at 92% 12%, rgba(219, 39, 119, 0.42), transparent 58%),
-    radial-gradient(40rem 34rem at 50% 100%, rgba(14, 165, 233, 0.42), transparent 60%),
-    radial-gradient(30rem 30rem at 80% 70%, rgba(168, 85, 247, 0.3), transparent 60%),
-    linear-gradient(135deg, #1a1033 0%, #1d1240 50%, #160c2e 100%);
-  filter: saturate(118%);
+    radial-gradient(46rem 46rem at 6% 0%, rgba(122, 162, 214, 0.22), transparent 62%),
+    radial-gradient(40rem 40rem at 94% 14%, rgba(150, 160, 178, 0.14), transparent 58%),
+    radial-gradient(44rem 34rem at 50% 100%, rgba(90, 132, 186, 0.2), transparent 60%),
+    linear-gradient(135deg, #141821 0%, #171c27 50%, #11151d 100%);
+  filter: none;
 }
 html[data-mode="glass"] .aurora-bg::before,
 html[data-mode="glass"] .aurora-bg::after,
@@ -1225,55 +1223,54 @@ html[data-mode="glass"] .dashboard-mesh {
     linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
 }
 html[data-mode="glass"] .dashboard-mesh-fade {
-  background: radial-gradient(ellipse 90% 55% at 50% 100%, rgba(26, 16, 51, 0.6), transparent 65%);
+  background: radial-gradient(ellipse 90% 55% at 50% 100%, rgba(20, 24, 33, 0.6), transparent 65%);
 }
 
 html[data-mode="glass"] .glass-card {
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.06));
-  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.05));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   box-shadow:
-    0 8px 32px rgba(10, 0, 40, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+    0 8px 32px rgba(5, 7, 11, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
 }
 html[data-mode="glass"] .glass-card::after {
-  background: linear-gradient(112deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(255, 255, 255, 0) 70%);
-  opacity: 0.6;
+  background: linear-gradient(112deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.015) 40%, rgba(255, 255, 255, 0) 70%);
+  opacity: 0.5;
   filter: none;
 }
 
 html[data-mode="glass"] .liquid-day-card {
-  border: 1px solid rgba(255, 255, 255, 0.26);
-  background: linear-gradient(142deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.07));
-  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(142deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.06));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   box-shadow:
-    0 8px 28px rgba(10, 0, 40, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    0 8px 28px rgba(5, 7, 11, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 html[data-mode="glass"] .liquid-day-card::after {
-  opacity: 0.5;
+  opacity: 0.4;
   filter: none;
 }
-html[data-mode="glass"] .liquid-day-card.liquid-day-card--sat {
-  background: linear-gradient(145deg, rgba(129, 140, 248, 0.3), rgba(255, 255, 255, 0.07));
-}
+/* Weekend tints: a shade lighter / darker, not a hue. */
+html[data-mode="glass"] .liquid-day-card.liquid-day-card--sat,
 html[data-mode="glass"] .liquid-day-card.liquid-day-card--sun {
-  background: linear-gradient(145deg, rgba(244, 114, 182, 0.28), rgba(255, 255, 255, 0.07));
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
 }
 
-/* Modals: near-opaque glass so the mesh cannot fight the form. */
+/* Modals: near-opaque glass so the backdrop cannot fight the form. */
 html[data-mode="glass"] .day-logger-card,
 html[data-mode="glass"] .calendar-card {
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: linear-gradient(140deg, rgba(36, 26, 69, 0.92), rgba(26, 16, 51, 0.9));
-  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: linear-gradient(140deg, rgba(28, 33, 44, 0.94), rgba(20, 24, 33, 0.92));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   box-shadow:
-    0 28px 64px rgba(10, 0, 40, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    0 28px 64px rgba(5, 7, 11, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 /* Workspace-home card cores: the same material instead of an opaque slate wash. */
@@ -1285,14 +1282,14 @@ html[data-mode="glass"] [class*="from-panel/95"] {
 
 html[data-mode="glass"] .wave-tank,
 html[data-mode="glass"] .day-progress {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(10, 0, 40, 0.35);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(5, 7, 11, 0.35);
 }
 
 @media (hover: hover) {
   html[data-mode="glass"] .chat-actions-row {
-    border-color: rgba(255, 255, 255, 0.28);
-    background: rgba(36, 26, 69, 0.92);
+    border-color: rgba(255, 255, 255, 0.22);
+    background: rgba(28, 33, 44, 0.94);
   }
 }
 
@@ -1302,7 +1299,7 @@ html[data-mode="glass"] .day-progress {
   html[data-mode="glass"] .glass-card,
   html[data-mode="glass"] .liquid-day-card,
   html[data-mode="glass"] [class*="from-panel/95"] {
-    background: rgba(36, 26, 69, 0.96);
+    background: rgba(28, 33, 44, 0.96);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }

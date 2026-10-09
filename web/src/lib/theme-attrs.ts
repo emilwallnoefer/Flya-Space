@@ -37,6 +37,6 @@ export const THEME_COLORS: Record<ThemeValue, string> = {
   dark: "#020617",
   light: "#fcfaf5",
   blue: "#f7fafd",
-  neu: "#e3e8ef",
-  glass: "#1a1033",
+  neu: "#ebecef",
+  glass: "#141821",
 };

@@ -264,28 +264,30 @@ html[data-theme="light"][data-mode="blue"] {
  * So --paper-2 (panels) equals --paper-3 (page) on purpose, and the decoration
  * re-skins in decorations.css drop borders, gradients and backdrop blur.
  *
- * Contrast: soft shadows carry no text contrast, so the ink ladder is a cooler,
- * darker slate than the Solarized skin (ink-4 ≥ 4.5:1 on the page colour) and
- * the accent is a saturated blue that stays ≥ 4.5:1 as text. The page colour
- * sits away from pure white so both shadows have room to show. */
+ * Monochrome by design: a neutral near-white page, charcoal ink, and an
+ * "accent" that is just a mid grey — fills become grey raised pills with dark
+ * text, exactly like the reference, and nothing glows. Only the semantic
+ * warn / positive / danger hues keep colour, muted. Soft shadows carry no
+ * text contrast, so the ink ladder stays ≥ 4.5:1 on the page colour (ink-4
+ * included), and the page sits away from pure white so both shadows show. */
 html[data-theme="light"][data-mode="neu"] {
-  --paper-3: 227 232 239; /* page #e3e8ef */
-  --paper-2: 227 232 239; /* panels: same as the page — the whole point */
-  --paper-1: 214 220 229; /* deeper fills / hovers */
-  --foreground: #3f4b5c;
+  --paper-3: 235 236 239; /* page #ebecef */
+  --paper-2: 235 236 239; /* panels: same as the page — the whole point */
+  --paper-1: 222 224 229; /* deeper fills / hovers */
+  --foreground: #2f3742;
 
-  --glass: #2f3a4a;
-  --ink: #2f3a4a;
-  --ink-2: #3f4b5c;
-  --ink-3: #4f5b6c;
-  --ink-4: #5e6a80;
-  --ink-5: #7a8597;
+  --glass: #1f252e;
+  --ink: #1f252e;
+  --ink-2: #2f3742;
+  --ink-3: #4b5563;
+  --ink-4: #5f6978;
+  --ink-5: #7c8696;
 
-  --ac-strong: 79 112 196;  /* #4f70c4 fills / dots */
-  --ac-deep: 58 88 168;     /* deep fills / solid borders */
-  --ac-text: 44 75 150;     /* links / accent glyphs */
-  --ac-from: 125 155 225;
-  --ac-to: 58 88 168;
+  --ac-strong: 154 163 178; /* #9aa3b2 fills / dots — grey pill, dark text on it */
+  --ac-deep: 107 116 132;   /* deep fills / solid borders */
+  --ac-text: 59 68 82;      /* links / accent glyphs — charcoal */
+  --ac-from: 180 188 200;
+  --ac-to: 138 147 163;
 
   --warn: #8a6a00;
   --positive: #3f7a1a;
@@ -293,14 +295,14 @@ html[data-theme="light"][data-mode="neu"] {
   --neutral: #8690a3;
   --shade: #5a6478;
 
-  --card-sky: #2563a8;
-  --card-violet: #5b5fc0;
-  --card-amber: #8a6a00;
-  --card-rose: #b8365f;
+  --card-sky: #3b4452;
+  --card-violet: #3b4452;
+  --card-amber: #3b4452;
+  --card-rose: #3b4452;
 
   /* The neumorphic shadow pair, in three strengths. Blur ≈ 2× distance. */
   --neu-light: #ffffff;
-  --neu-dark: #b9c1cd;
+  --neu-dark: #c5c9d1;
   --neu-raised: 9px 9px 18px var(--neu-dark), -9px -9px 18px var(--neu-light);
   --neu-raised-sm: 4px 4px 8px var(--neu-dark), -4px -4px 8px var(--neu-light);
   --neu-inset: inset 4px 4px 8px var(--neu-dark), inset -4px -4px 8px var(--neu-light);
@@ -309,39 +311,39 @@ html[data-theme="light"][data-mode="neu"] {
 
 /* ---- Appearance mode: Glassmorphism (frosted glass over a vivid mesh) ----
  * html[data-mode="glass"], dark base (no data-theme). Glass only reads as glass
- * when something colourful sits behind it, so the page is a deep violet with a
- * violet / pink / sky mesh (decorations.css re-skins .aurora-bg), and panels are
- * low-alpha white with a backdrop blur and a 1px luminous border. The mesh is
- * kept dim (alpha ≤ 0.6 over the base) so light ink stays ≥ 4.5:1 over every
- * part of it, not just the dark areas. */
+ * when something sits behind it with some tonal variation, so the page is a
+ * near-black slate with a few soft, desaturated slate-blue pools (decorations.css
+ * re-skins .aurora-bg) — tone, not colour — and panels are low-alpha white with
+ * a backdrop blur and a 1px luminous border. One restrained blue accent; every
+ * other hue is grey. The pools stay dim so light ink is ≥ 4.5:1 over all of them. */
 html[data-mode="glass"] {
-  --background: #1a1033;
-  --surface: #1a1033;
-  --panel: #241a45;
-  --raised: #31265a;
-  --overlay: #120a26;
+  --background: #141821;
+  --surface: #141821;
+  --panel: #1c212c;
+  --raised: #262c39;
+  --overlay: #0d1017;
   --glass: #ffffff;
 
-  --ink: #f5f3ff;
-  --ink-2: #e9e5fb;
-  --ink-3: #d4cdee;
-  --ink-4: #b3abd0;
-  --ink-5: #8f87ad;
+  --ink: #f3f5f8;
+  --ink-2: #e2e6ec;
+  --ink-3: #c6ccd6;
+  --ink-4: #a3abb8;
+  --ink-5: #7f8794;
 
-  --accent: #38bdf8;        /* sky-400 */
-  --accent-soft: #bae6fd;   /* sky-200 */
-  --accent-deep: #0ea5e9;   /* sky-500 */
-  --accent-from: #7dd3fc;   /* sky-300 */
-  --accent-to: #c084fc;     /* purple-400 */
+  --accent: #7aa2d6;        /* muted blue */
+  --accent-soft: #cfe0f5;
+  --accent-deep: #5a84ba;
+  --accent-from: #a9c3e6;
+  --accent-to: #7aa2d6;
 
-  --neutral: #8f87ad;
-  --shade: #0a0020;
+  --neutral: #7f8794;
+  --shade: #05070b;
 
-  --card-sky: #bae6fd;
-  --card-violet: #ddd6fe;
-  --card-amber: #fde68a;
-  --card-rose: #fbcfe8;
-  --module-card-shadow: 0 24px 48px -12px rgb(10 0 40 / 0.6);
+  --card-sky: #d6dde8;
+  --card-violet: #d6dde8;
+  --card-amber: #d6dde8;
+  --card-rose: #d6dde8;
+  --module-card-shadow: 0 24px 48px -12px rgb(5 7 11 / 0.6);
 
   /* One blur radius for every glass surface, so stacked panes read as one material. */
   --glass-blur: 18px;
