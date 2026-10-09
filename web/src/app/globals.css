@@ -2,6 +2,7 @@
 @import "./tokens.css";
 @import "./decorations.css";
 @import "./animations.css";
+@import "./mobile.css";
 
 /* Split for navigability (tokens / decorations / animations).
  * Tailwind v4 inlines these @imports at build; within-file rule order

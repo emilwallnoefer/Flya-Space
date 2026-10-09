@@ -192,6 +192,8 @@ export function useSettings(
     }
     setGmailStatus({ connected: false });
     setMessage("Gmail disconnected.");
+    // The mail composer keeps its own copy of this status (in the shell); tell it.
+    window.dispatchEvent(new Event("ma-gmail-status-changed"));
   }
 
   async function handleImportFile(file: File) {

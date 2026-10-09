@@ -1,4 +1,6 @@
 import { DashboardShell } from "@/components/dashboard-shell";
+import { MobileShell } from "@/components/mobile/mobile-shell";
+import { isPhoneRequest } from "@/lib/device";
 import { RoleGate } from "@/components/role-gate";
 import { notifyAdminsOfPendingRole } from "@/lib/role-assignment-notice";
 // Deliberately NOT from the shell: it is a client module, and a server
@@ -21,6 +23,7 @@ import {
 import { buildFleetBoard, type FleetBoardPayload } from "@/lib/fleet-board";
 import { DEFAULT_WINDOW_DAYS, displayNameFor } from "@/lib/fleet-queries";
 import { canSeeGoogleEmbeds, formEmbed, sheetEmbed } from "@/lib/google-embeds";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 export default async function DashboardPage({
@@ -191,20 +194,25 @@ export default async function DashboardPage({
   const fleetSheet = seesEmbeds ? sheetEmbed(process.env.FLEET_SHEET_ID, process.env.FLEET_SHEET_GID, "fleet") : null;
   const roadDays = seesEmbeds ? formEmbed(process.env.ROAD_DAYS_FORM_ID) : null;
 
-  return (
-    <DashboardShell
-      email={email ?? "Signed in"}
-      initialRole={initialRole}
-      isAdmin={isAdmin}
-      initialWeek={initialWeek}
-      initialSettings={initialSettings}
-      initialAdminUsers={adminUsersPromise}
-      initialAdminOverview={adminOverviewPromise}
-      initialFleet={initialFleetPromise}
-      initialModule={requestedModule}
-      missionPlanning={missionPlanning}
-      fleetSheet={fleetSheet}
-      roadDays={roadDays}
-    />
-  );
+  const shellProps = {
+    email: email ?? "Signed in",
+    initialRole,
+    isAdmin,
+    initialWeek,
+    initialSettings,
+    initialAdminUsers: adminUsersPromise,
+    initialAdminOverview: adminOverviewPromise,
+    initialFleet: initialFleetPromise,
+    initialModule: requestedModule,
+    missionPlanning,
+    fleetSheet,
+    roadDays,
+  };
+
+  // Phones get the dedicated mobile shell (components/mobile/); everything
+  // else the desktop shell, unchanged. Same props, same data — only the
+  // presentation differs. Decided here, on the server, so the first paint is
+  // already the right layout (lib/device.ts).
+  if (isPhoneRequest(await headers())) return <MobileShell {...shellProps} />;
+  return <DashboardShell {...shellProps} />;
 }

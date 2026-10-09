@@ -4,6 +4,8 @@ import { normalizeUserRole } from "@/lib/user-role";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { isAdminEmail } from "@/lib/admin";
+import { isPhoneRequest } from "@/lib/device";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 export default async function SettingsPage({
@@ -44,6 +46,12 @@ export default async function SettingsPage({
     SETTINGS_SECTION_IDS.includes(requestedSectionRaw as SettingsSectionId)
       ? (requestedSectionRaw as SettingsSectionId)
       : null;
+
+  // Phones: Settings lives inside the mobile shell (components/mobile/),
+  // which the dashboard renders for them.
+  if (isPhoneRequest(await headers())) {
+    redirect(initialSection ? `/dashboard?module=settings&section=${initialSection}` : "/dashboard?module=settings");
+  }
 
   return (
     <SettingsShell email={user.email ?? "Signed in"} userRole={userRole} initialSection={initialSection} />

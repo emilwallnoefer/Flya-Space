@@ -5,8 +5,15 @@
 :root {
   --background: #020617;
   --foreground: #e2e8f0;
+  /* Device safe areas (notch, home indicator, rounded corners). Non-zero only
+   * once the viewport declares viewport-fit=cover (app/layout.tsx); used by the
+   * pt-safe / pb-safe / bottom-safe utilities below and by .page-shell. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
   /* Sticky app nav (~top-3 + bar height); keeps scrollIntoView from tucking content under the header */
-  --app-sticky-offset: max(5.75rem, calc(env(safe-area-inset-top, 0px) + 4.5rem));
+  --app-sticky-offset: max(5.75rem, calc(var(--safe-top) + 4.5rem));
 
   /* =====================================================================
    * Semantic design tokens (dark = base skin).
@@ -172,7 +179,41 @@ body {
  * per-button basis. Framer-motion buttons set inline `transform: none`,
  * which beats this rule — those get matching `whileTap` props instead.
  */
+/* Safe-area spacing for fixed and edge-hugging elements. `bottom-safe` keeps
+ * the usual 1rem gap and grows it by the home indicator's height. */
+@utility pt-safe {
+  padding-top: var(--safe-top);
+}
+@utility pb-safe {
+  padding-bottom: var(--safe-bottom);
+}
+@utility bottom-safe {
+  bottom: max(1rem, var(--safe-bottom));
+}
+@utility bottom-safe-16 {
+  bottom: calc(4rem + var(--safe-bottom));
+}
+
 @layer base {
+  html {
+    /* Phones: no grey flash on tap, and no automatic text inflation in
+     * landscape — the layout sets its own sizes. */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* iOS Safari zooms the page into any focused control smaller than 16px and
+   * does not zoom back out. Below the `sm` breakpoint every control is at
+   * least 16px, whatever utility it carries, so no form can trigger it. */
+  @media (max-width: 639px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select,
+    textarea {
+      font-size: max(16px, 1em);
+    }
+  }
+
   button {
     cursor: pointer;
   }

@@ -1,3 +1,6 @@
+import { headers } from "next/headers";
+import { MobileSkeleton } from "@/components/mobile/mobile-skeleton";
+import { isPhoneRequest } from "@/lib/device";
 import {
   BETA_BADGE_CLASS,
   CHAT_PILL_CLASS,
@@ -47,7 +50,11 @@ function Bar({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function DashboardLoading() {
+export default async function DashboardLoading() {
+  // Same split as app/dashboard/page.tsx, so the skeleton is drawn for the
+  // shell that is about to arrive. Loading UI renders inside the request (the
+  // root layout already reads headers()), so the User-Agent is available.
+  if (isPhoneRequest(await headers())) return <MobileSkeleton />;
   return (
     <main className="relative min-h-dvh overflow-x-hidden bg-surface text-ink" aria-busy="true">
       <div className="absolute inset-0 aurora-bg" />

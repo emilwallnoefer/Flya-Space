@@ -20,6 +20,27 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-09-phone-layout",
+    date: "Oct 9, 2026",
+    title: "A phone layout of its own",
+    highlights: [
+      "On a phone, Flya Space now opens as an app: a home of tiles, a tab bar, and screens built for one hand.",
+      "Time: your week as a list; tap a day to log it in a sheet. Fleet: my material, book in two taps, who has what.",
+      "Chat fills the screen and stays above the keyboard; mail, settings and team time fit the phone too.",
+      "On a computer nothing changes.",
+    ],
+  },
+  {
+    version: "2026-10-09-home-screen",
+    date: "Oct 9, 2026",
+    title: "Flya Space on your phone",
+    highlights: [
+      "Add it to your iPhone home screen: in Safari, tap Share → Add to Home Screen.",
+      "It opens full screen with its own icon, like an app. Sign in once inside it.",
+      "Typing no longer zooms the page in, and nothing hides behind the home bar.",
+    ],
+  },
+  {
     version: "2026-10-09-faster-sheets",
     date: "Oct 9, 2026",
     title: "Faster sheets, today stands out",

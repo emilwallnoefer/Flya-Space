@@ -46,6 +46,35 @@ const eslintConfig = defineConfig([
     },
   },
 
+  // The dedicated mobile UI lives in src/components/mobile/** and is chosen on
+  // the server (lib/device.ts). The desktop tree must never reach into it, nor
+  // branch on the viewport in JS: that is what keeps the desktop byte-identical
+  // on every phone-side change. The AST guard in src/lib/desktop-tree.test.ts
+  // checks the same from the other direction.
+  {
+    files: ["src/components/**/*.{ts,tsx}"],
+    ignores: ["src/components/mobile/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/components/mobile", "@/components/mobile/*", "@/components/mobile/**", "**/components/mobile/**"],
+              message:
+                "Desktop components must not import the mobile tree. The two shells share hooks and data, never markup; see the mobile masterplan and src/lib/desktop-tree.test.ts.",
+            },
+            {
+              group: ["@/lib/use-media-query"],
+              message:
+                "Desktop components must not branch on the viewport in JS. Phone vs desktop is decided on the server (lib/device.ts); use CSS for anything responsive inside the desktop tree.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

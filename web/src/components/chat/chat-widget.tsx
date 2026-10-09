@@ -116,7 +116,7 @@ export function ChatWidget(props: ChatWidgetProps) {
               playUiSound("switchWhoosh");
               setOpen(true);
             }}
-            style={{ bottom: `${bottomOffsetRem}rem` }}
+            style={{ bottom: `calc(${bottomOffsetRem}rem + var(--safe-bottom))` }}
             className="fixed right-4 z-[125] inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/95 px-4 py-3 text-sm font-semibold text-slate-900 shadow-[0_18px_36px_-12px_rgba(34,211,238,0.55)] backdrop-blur transition hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             <ChatBubbleIcon className="h-5 w-5" />
@@ -161,7 +161,7 @@ export function ChatWidget(props: ChatWidgetProps) {
               exit={{ opacity: 0, scale: 0.92, y: 18 }}
               transition={{ type: "spring", stiffness: 320, damping: 30 }}
               style={{ transformOrigin: "bottom right" }}
-              className="fixed bottom-5 right-5 z-[131] flex h-[calc(100dvh-2.5rem)] max-h-[780px] w-[min(94vw,380px)] flex-col rounded-[2.75rem] bg-gradient-to-b from-neutral/80 via-panel to-surface p-[6px] shadow-[0_40px_80px_-20px_rgba(0,0,0,0.75),0_10px_30px_-10px_rgba(0,0,0,0.6)] ring-1 ring-glass/10"
+              className="fixed bottom-[max(1.25rem,var(--safe-bottom))] right-5 z-[131] flex h-[calc(100dvh-2.5rem-var(--safe-bottom))] max-h-[780px] w-[min(94vw,380px)] flex-col rounded-[2.75rem] bg-gradient-to-b from-neutral/80 via-panel to-surface p-[6px] shadow-[0_40px_80px_-20px_rgba(0,0,0,0.75),0_10px_30px_-10px_rgba(0,0,0,0.6)] ring-1 ring-glass/10"
             >
               {/* Inner "screen" — content lives here; rounded slightly less than the frame so the bezel reads as a thin band. */}
               <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[2.3rem] bg-surface ring-1 ring-inset ring-glass/5">
@@ -397,7 +397,7 @@ export function ChatWidget(props: ChatWidgetProps) {
                           ? "Message your team…"
                           : `Posting as ${messageKindLabel(pendingKind).toLowerCase()}…`
                       }
-                      className="min-h-9 max-h-32 flex-1 resize-none border-0 bg-transparent px-1 py-2 text-sm text-ink placeholder:text-ink-5 focus:outline-none focus:ring-0"
+                      className="min-h-9 max-h-32 flex-1 resize-none border-0 bg-transparent px-1 py-2 text-base text-ink placeholder:text-ink-5 focus:outline-none focus:ring-0 sm:text-sm"
                     />
                     <button
                       type="button"
