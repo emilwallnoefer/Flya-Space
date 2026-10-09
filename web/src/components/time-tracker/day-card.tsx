@@ -16,6 +16,7 @@ import type { TimeTrackerState } from "./use-time-tracker";
 export function DayCard({ state, day, index }: { state: TimeTrackerState; day: DayData; index: number }) {
   const {
     selectedDay,
+    calendarTodayKey,
     revealedDayCount,
     showUpToDateSweep,
     weekLoadTick,
@@ -26,6 +27,7 @@ export function DayCard({ state, day, index }: { state: TimeTrackerState; day: D
   } = state;
 
   const isSelected = selectedDay?.date === day.date;
+  const isToday = day.date === calendarTodayKey;
   const revealed = index < revealedDayCount;
   const isSickLeave = day.sick_leave;
   // Vacation and public holiday share the same excused/premium-overtime rule.
@@ -103,9 +105,11 @@ export function DayCard({ state, day, index }: { state: TimeTrackerState; day: D
       } ${isSun ? "liquid-day-card--sun" : ""} ${isVac ? "liquid-day-card--vac" : ""} ${
         isPh ? "liquid-day-card--ph" : ""
       } ${isSl ? "liquid-day-card--sl" : ""
+      } ${isToday ? "liquid-day-card--today" : ""
       } ${isSelected ? "day-card-selected" : ""
       } ${revealed ? "opacity-100" : "pointer-events-none opacity-0"}`}
       style={{ "--day-sweep-delay": `${index * 58}ms` } as CSSProperties}
+      aria-current={isToday ? "date" : undefined}
     >
       {showUpToDateSweep && revealed ? <span className="day-ready-sweep-beam" aria-hidden="true" /> : null}
       <button
@@ -117,7 +121,12 @@ export function DayCard({ state, day, index }: { state: TimeTrackerState; day: D
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <p className="text-xs text-ink-3/80">{dayLabel(day.date)}</p>
+            <p className={`text-xs ${isToday ? "font-semibold text-ink" : "text-ink-3/80"}`}>{dayLabel(day.date)}</p>
+            {isToday ? (
+              <span className="day-today-badge shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider">
+                Today
+              </span>
+            ) : null}
             {isSat ? (
               <span className="shrink-0 rounded border border-indigo-400/35 bg-indigo-500/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-accent-soft/95">
                 Sat

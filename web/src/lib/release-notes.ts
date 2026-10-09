@@ -20,12 +20,13 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: "2026-10-09",
+    version: "2026-10-09-faster-sheets",
     date: "Oct 9, 2026",
-    title: "Faster sheets",
+    title: "Faster sheets, today stands out",
     highlights: [
       "Mission planning and Fleet management start loading sooner.",
       "They open on today's row or column even on the first load.",
+      "Today's day card in the Time Tracker has a red outline and a Today badge.",
     ],
   },
   {
