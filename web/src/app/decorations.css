@@ -1185,14 +1185,12 @@ html[data-mode="neu"] .home-card-core {
   background: transparent;
   box-shadow: none;
 }
+/* The icon glyph and the CTA keep their per-card hue (muted by the tokens);
+ * only the coloured well behind the icon is neutralised. */
 html[data-mode="neu"] .home-card-icon {
   border-color: transparent;
   background: rgb(var(--paper-1) / 0.35);
-  color: var(--ink);
   box-shadow: var(--neu-inset);
-}
-html[data-mode="neu"] .home-card-cta {
-  color: var(--ink-2);
 }
 html[data-mode="neu"] .home-card-arrow {
   border-color: transparent;
@@ -1210,9 +1208,10 @@ html[data-mode="neu"] .navbar-logo {
 
 /* Menus, tabs and segmented controls — the navbar menu, settings and admin
  * side navs, fleet tabs, composer toggles, the appearance picker: one rule for
- * all of them, so they match. Items lie flat on the surface; the chosen one is
- * pressed into it. Day cards and the fleet day grid carry aria state too but
- * are not menus, so they are left out. */
+ * all of them, so they match. Items lie flat on the surface; the chosen one
+ * stands out of it (raised, with its radius) — pressed-in is the convention
+ * for a toggle, but in a list it reads as disabled. Day cards and the fleet
+ * day grid carry aria state too but are not menus, so they are left out. */
 html[data-mode="neu"] :is(button, a):is([role="tab"], [aria-pressed], [aria-current]):not(.liquid-day-card):not(.fleet-day) {
   border-color: transparent;
   background-color: transparent;
@@ -1225,9 +1224,17 @@ html[data-mode="neu"] :is(button, a):is([role="tab"], [aria-pressed], [aria-curr
   color: var(--ink);
 }
 html[data-mode="neu"] :is(button, a):is([role="tab"][aria-selected="true"], [aria-pressed="true"], [aria-current]):not(.liquid-day-card):not(.fleet-day) {
-  background-color: rgb(var(--paper-1) / 0.35);
+  border-radius: calc(var(--neu-radius) - 0.25rem);
+  background-color: rgb(var(--paper-3));
   color: var(--ink);
-  box-shadow: var(--neu-inset);
+  font-weight: 600;
+  box-shadow: var(--neu-raised-sm);
+}
+/* Side-nav rows (settings, admin) are full-width, so the raised one is pulled
+ * in from the edges to show its shadow on all sides. */
+html[data-mode="neu"] button[aria-current] {
+  width: calc(100% - 1rem);
+  margin: 0.125rem 0.5rem;
 }
 /* Their containers (segment groups, the menu card) are plain raised blocks. */
 html[data-mode="neu"] [role="group"][class*="bg-glass"],
