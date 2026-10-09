@@ -16,8 +16,32 @@
 html[data-device="phone"] {
   /* The phone shell is the whole window: no rubber-band gap behind it. */
   overscroll-behavior-y: none;
+  /* Height of the tab bar, so screens can pad their bottom past it. */
+  --m-tabbar: 3.5rem;
 }
 
 html[data-device="phone"] body {
   background: var(--surface);
+}
+
+/* A screen under the tab bar: scrolls past the bar and the home indicator. */
+[data-mobile-look] .m-screen {
+  padding-bottom: calc(var(--m-tabbar) + var(--safe-bottom) + 1rem);
+}
+
+/* Native look: matte surfaces; the sticky top bar is a flat band. */
+[data-mobile-look="native"] .m-topbar {
+  border-bottom: 1px solid rgb(from var(--glass) r g b / 0.08);
+}
+
+/* Neumorphism skin on the phone: raised matte tab bar and groups, no glass. */
+html[data-mode="neu"] [data-mobile-look] .m-tabbar,
+html[data-mode="neu"] [data-mobile-look] .m-group-body,
+html[data-mode="neu"] [data-mobile-look] .m-tile,
+html[data-mode="neu"] [data-mobile-look] .m-sheet {
+  border-color: transparent;
+  background: rgb(var(--paper-3));
+  box-shadow: var(--neu-raised-sm);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
