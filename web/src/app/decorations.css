@@ -1098,11 +1098,20 @@ html[data-mode="neu"] .underwater-panel .glass-card {
   border-radius: 0;
   overflow: visible;
 }
-html[data-mode="neu"] .underwater-panel div[class*="bg-overlay/"]:not([class*="rounded"]),
-html[data-mode="neu"] .underwater-panel nav[class*="bg-overlay/"] {
+/* (The extra `[class]` keeps these ahead of the generic wells rule below,
+ * which they would otherwise tie with and lose to by source order.) */
+html[data-mode="neu"] .underwater-panel div[class][class*="bg-overlay/"]:not([class*="rounded"]),
+html[data-mode="neu"] .underwater-panel nav[class][class*="bg-overlay/"] {
   background: transparent;
   box-shadow: none;
   border-color: rgb(var(--paper-1));
+}
+/* Section cards inside a module (Gmail status, Appearance, …) stand on the
+ * flat pane as raised cards rather than sinking into it. */
+html[data-mode="neu"] .underwater-panel div[class][class*="rounded"][class*="bg-overlay/"] {
+  border-color: transparent;
+  background: rgb(var(--paper-3));
+  box-shadow: var(--neu-raised-sm);
 }
 
 /* Modals float above a scrim, so they get a real drop on top of the pair. */
@@ -1187,9 +1196,13 @@ html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"
  * an inset well and the arrow is a small raised disc. The per-card colour
  * classes (emerald / sky / violet …) are neutralised here rather than in the
  * markup, so the other skins keep them. */
+/* Same grid, more air: a wider gap makes each card smaller without moving it. */
+html[data-mode="neu"] div:has(> .home-card) {
+  gap: 1.75rem;
+}
 html[data-mode="neu"] .home-card {
   border-color: transparent;
-  border-radius: 1rem;
+  border-radius: 1.125rem;
   background: rgb(var(--paper-3));
   box-shadow: var(--neu-raised-sm);
   padding: 0;
@@ -1199,7 +1212,7 @@ html[data-mode="neu"] .home-card:hover {
   box-shadow: var(--neu-raised);
 }
 html[data-mode="neu"] .home-card-core {
-  border-radius: 1rem;
+  border-radius: 1.125rem;
   background: transparent;
   box-shadow: none;
   padding: 1rem;
@@ -1250,17 +1263,19 @@ html[data-mode="neu"] :is(button, a):is([role="tab"], [aria-pressed], [aria-curr
   background-color: rgb(var(--paper-1) / 0.5);
   color: var(--ink);
 }
-/* The chosen item is typography, not a box: ink and semibold. Side-nav rows
- * (aria-current) add a 3px ink bar on the left — the slot their own classes
- * already reserve (`border-l-[3px]`). */
+/* The chosen item stands out of the surface: the small shadow pair, ink,
+ * semibold. Side-nav rows (aria-current) are full-width, so they are pulled
+ * in from the edges to show the shadow on all sides. */
 html[data-mode="neu"] :is(button, a):is([role="tab"][aria-selected="true"], [aria-pressed="true"], [aria-current]):not(.liquid-day-card):not(.fleet-day) {
-  background-color: transparent;
+  border-radius: calc(var(--neu-radius) - 0.25rem);
+  background-color: rgb(var(--paper-3));
   color: var(--ink);
   font-weight: 600;
-  box-shadow: none;
+  box-shadow: var(--neu-raised-sm);
 }
 html[data-mode="neu"] button[aria-current] {
-  border-left-color: var(--ink);
+  width: calc(100% - 1rem);
+  margin: 0.125rem 0.5rem;
 }
 /* The selected fleet day cell is an accent fill under dark text; the accent is
  * dark here, so the text goes light. */
