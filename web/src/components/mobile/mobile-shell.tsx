@@ -7,7 +7,6 @@ import { useMailComposer } from "@/components/mail-composer/use-mail-composer";
 import { OfflineGameCard } from "@/components/offline-game-card";
 import { PanelLoading } from "@/components/panel-loading";
 import type { FleetBoardResponse } from "@/components/fleet/types";
-import { StreamedAdminPanel } from "@/components/streamed-panels";
 import { HOME_CARDS } from "@/components/workspace-home-layout";
 import { MODULE_KEYS, type ModuleKey } from "@/lib/dashboard-modules";
 import { LATEST_RELEASE } from "@/lib/release-notes";
@@ -19,6 +18,9 @@ import { MobileTimeScreen } from "./time/mobile-time-screen";
 import { MobileFleetScreen } from "./fleet/mobile-fleet-screen";
 import { MobileMailScreen } from "./mail/mobile-mail-screen";
 import { MobileSettingsScreen } from "./settings/mobile-settings-screen";
+import { MobileAdminScreen } from "./admin/mobile-admin-screen";
+import { MobileTeamScreen } from "./team/mobile-team-screen";
+import { useFieldStats } from "./team/use-field-stats";
 import { MobileButton, MobileGroup, MobileRow, MobileSheet, MobileTopBar } from "./primitives";
 import { useHomeSummary } from "./use-home-summary";
 
@@ -85,6 +87,9 @@ export function MobileShell({
   const [refreshKey, setRefreshKey] = useState(0);
   // "Log today" from Home opens the Time screen straight onto today's sheet.
   const [timeEditToday, setTimeEditToday] = useState(false);
+  // "Team in the field": a screen of its own, not a module (no URL state).
+  const [teamOpen, setTeamOpen] = useState(false);
+  const field = useFieldStats(true);
   const [gmailStatus, setGmailStatus] = useState<{ connected: boolean; gmail_email?: string | null }>(
     initialSettings?.gmail ?? { connected: false },
   );
@@ -218,15 +223,21 @@ export function MobileShell({
 
   return (
     <main id="main-content" className="relative min-h-dvh bg-surface text-ink" data-mobile-look="native">
-      {activeModule === null ? (
+      {teamOpen ? (
+        <div className="m-screen">
+          <MobileTeamScreen field={field} onBack={() => setTeamOpen(false)} />
+        </div>
+      ) : activeModule === null ? (
         <MobileHome
           email={email}
           role={userRole}
           availableModules={availableModules}
           summary={summary}
+          field={field}
           embeds={embeds}
           onOpenModule={openModule}
           onOpenMore={() => setMoreOpen(true)}
+          onOpenTeam={() => setTeamOpen(true)}
         />
       ) : activeModule === "planning" && missionPlanning ? (
         <GoogleEmbedPanel title={HOME_CARDS[3].title} urls={missionPlanning} onBack={goHome} />
@@ -234,6 +245,12 @@ export function MobileShell({
         <GoogleEmbedPanel title={HOME_CARDS[4].title} urls={fleetSheet} onBack={goHome} />
       ) : activeModule === "roaddays" && roadDays ? (
         <GoogleEmbedPanel title={HOME_CARDS[5].title} urls={roadDays} onBack={goHome} />
+      ) : activeModule === "admin" ? (
+        <div className="m-screen">
+          <Suspense fallback={<PanelLoading />}>
+            <MobileAdminScreen canManageUsers={isAdmin} initialUsers={initialAdminUsers} initialOverview={initialAdminOverview} onBack={goHome} />
+          </Suspense>
+        </div>
       ) : activeModule === "settings" ? (
         <div className="m-screen">
           <MobileSettingsScreen userRole={userRole} initialData={initialSettings} onBack={goHome} />
@@ -246,24 +263,16 @@ export function MobileShell({
                 ? "Mail Composer"
                 : activeModule === "time"
                   ? "Time Tracker"
-                  : activeModule === "fleet"
-                    ? "Fleet"
-                    : activeModule === "admin"
-                      ? adminModuleLabel
-                      : "Settings"
+                  : "Fleet"
             }
             onBack={goHome}
           />
-          <div className={activeModule === "admin" ? "px-3 pt-2" : ""}>
+          <div>
             {activeModule === "time" ? (
               <MobileTimeScreen initialWeek={summary.week} editToday={timeEditToday} />
             ) : activeModule === "fleet" ? (
               <Suspense fallback={<PanelLoading />}>
                 <StreamedMobileFleet board={initialFleet} />
-              </Suspense>
-            ) : activeModule === "admin" ? (
-              <Suspense fallback={<PanelLoading />}>
-                <StreamedAdminPanel canManageUsers={isAdmin} users={initialAdminUsers} overview={initialAdminOverview} />
               </Suspense>
             ) : (
               <MobileMailScreen composer={composer} userRole={userRole} gmailConnected={gmailStatus.connected} />
@@ -280,7 +289,7 @@ export function MobileShell({
         <MobileGroup>
           <MobileRow label="Settings" detail="Appearance, Gmail, signature, data" chevron onClick={() => openModule("settings")} />
           {availableModules.includes("admin") ? (
-            <MobileRow label={adminModuleLabel} detail={isAdmin ? "Users, team time, tracking" : "Everyone's hours"} chevron onClick={() => openModule("admin")} />
+            <MobileRow label={adminModuleLabel} detail={isAdmin ? "Team time and users · the rest on desktop" : "Everyone's hours"} chevron onClick={() => openModule("admin")} />
           ) : null}
           <MobileRow label="Onboarding" detail="Your training checklist" chevron href="/onboarding" />
           <MobileRow label="What's new" detail={LATEST_RELEASE.title} chevron onClick={() => { setMoreOpen(false); setWhatsNewOpen(true); }} />

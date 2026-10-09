@@ -1,7 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { useState } from "react";
 import { IconClock, IconDrone, IconMail } from "@/components/module-icons";
 import { HOME_CARDS } from "@/components/workspace-home-layout";
 import { fmtHM, fmtSignedHM } from "@/components/time-tracker/types";
@@ -10,13 +8,11 @@ import { greetingFromEmail, timeGreeting } from "@/lib/greeting";
 import { userRoleLabel, type UserRole } from "@/lib/user-role";
 import { ChevronIcon, MobileGroup, MobileRow, MobileTile, MobileTopBar } from "./primitives";
 import type { useHomeSummary } from "./use-home-summary";
-
-const FieldStatsPanel = dynamic(() => import("@/components/field-stats/field-stats-panel").then((m) => m.FieldStatsPanel), {
-  ssr: false,
-  loading: () => <div className="h-40 animate-pulse rounded-xl bg-glass/5" aria-hidden />,
-});
+import type { useFieldStats } from "./team/use-field-stats";
+import { useOnboardingProgress } from "./use-onboarding-progress";
 
 type Summary = ReturnType<typeof useHomeSummary>;
+type Field = ReturnType<typeof useFieldStats>;
 
 /**
  * The phone's home: a glance, not a landing page. The greeting is one line,
@@ -28,20 +24,32 @@ export function MobileHome({
   role,
   availableModules,
   summary,
+  field,
   embeds,
   onOpenModule,
   onOpenMore,
+  onOpenTeam,
 }: {
   email: string;
   role: UserRole | null;
   availableModules: ModuleKey[];
   summary: Summary;
+  field: Field;
   embeds: Array<{ key: ModuleKey; title: string }>;
   onOpenModule: (module: ModuleKey, options?: { editToday?: boolean }) => void;
   onOpenMore: () => void;
+  onOpenTeam: () => void;
 }) {
-  const [teamOpen, setTeamOpen] = useState(false);
+  const onboarding = useOnboardingProgress();
   const { week, today, myLive, myOut } = summary;
+  const all = field.stats?.all ?? null;
+  const totals = all
+    ? {
+        poc: all.pilots.reduce((n, p) => n + p.poc, 0),
+        training: all.pilots.reduce((n, p) => n + p.training, 0),
+        travel: all.pilots.reduce((n, p) => n + p.travelDays, 0),
+      }
+    : null;
   const initials = greetingFromEmail(email).slice(0, 1);
   const hasTime = availableModules.includes("time");
   const hasFleet = availableModules.includes("fleet");
@@ -121,18 +129,24 @@ export function MobileHome({
         ) : null}
 
         <MobileGroup title="Team">
-          <button type="button" onClick={() => setTeamOpen((open) => !open)} className="flex min-h-12 w-full items-center gap-3 px-4 py-2.5 text-left active:bg-glass/8" aria-expanded={teamOpen}>
+          <button type="button" onClick={onOpenTeam} className="flex min-h-12 w-full items-center gap-3 px-4 py-2.5 text-left active:bg-glass/8">
             <span className="min-w-0 flex-1">
               <span className="block text-[15px] text-ink">Team in the field</span>
-              <span className="mt-0.5 block text-xs text-ink-4">Regions, POCs and trainings this year</span>
+              <span className="mt-0.5 block text-xs text-ink-4">
+                {totals ? `${totals.poc} POCs · ${totals.training} trainings · ${totals.travel} travel days this year` : field.loading ? "Reading the planning sheet…" : "Regions, POCs and trainings this year"}
+              </span>
             </span>
-            <ChevronIcon className={`h-4 w-4 shrink-0 text-ink-5 transition ${teamOpen ? "rotate-90" : ""}`} />
+            <ChevronIcon className="h-4 w-4 shrink-0 text-ink-5" />
           </button>
-          {teamOpen ? (
-            <div className="px-2 pb-2">
-              <FieldStatsPanel />
-            </div>
-          ) : null}
+        </MobileGroup>
+
+        <MobileGroup title="You">
+          <MobileRow
+            label="Onboarding"
+            detail={onboarding === null ? "Your training checklist" : onboarding.items === 0 ? "Not started yet" : `${onboarding.average}% across ${onboarding.items} item${onboarding.items === 1 ? "" : "s"}`}
+            chevron
+            href="/onboarding"
+          />
         </MobileGroup>
       </div>
     </div>
