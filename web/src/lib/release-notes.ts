@@ -20,15 +20,6 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: "2026-10-09-neumorphism-appearance",
-    date: "Oct 9, 2026",
-    title: "New look: Neumorphism",
-    highlights: [
-      "Settings → Appearance now offers Neumorphism: a clean, monochrome light skin where panels and buttons are softly extruded from the page.",
-      "Applies everywhere and follows you across devices like the other skins.",
-    ],
-  },
-  {
     version: "2026-10-09-time-tracker-today",
     date: "Oct 9, 2026",
     title: "Today stands out in the Time Tracker",
