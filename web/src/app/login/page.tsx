@@ -4,6 +4,13 @@ import { createClient } from "@/lib/supabase/client";
 import { m } from "framer-motion";
 import { useState } from "react";
 
+/** True when the page runs as a home-screen app (iOS `navigator.standalone`, or the manifest's display mode elsewhere). */
+function isStandaloneApp(): boolean {
+  if (typeof window === "undefined") return false;
+  const nav = window.navigator as Navigator & { standalone?: boolean };
+  return nav.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+}
+
 export default function LoginPage() {
   const supabaseConfigured = Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -14,7 +21,14 @@ export default function LoginPage() {
     if (typeof window === "undefined") return null;
     const authError = new URLSearchParams(window.location.search).get("error");
     if (authError === "domain_not_allowed") return "Only @flyability.com Google accounts are allowed.";
-    if (authError === "oauth_failed") return "Google sign-in failed. Please try again.";
+    if (authError === "oauth_failed") {
+      // Installed on an iPhone home screen: the first sign-in sometimes
+      // completes in Safari's in-app sheet instead of the app window. A
+      // second tap, now from inside the app, goes through.
+      return isStandaloneApp()
+        ? "Sign-in didn't finish inside the app. Tap Continue with Google once more."
+        : "Google sign-in failed. Please try again.";
+    }
     return null;
   });
 

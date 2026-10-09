@@ -129,7 +129,7 @@ function ScrollHint({ active }: { active: boolean }) {
   }, [done]);
   if (!active || done) return null;
   return (
-    <div aria-hidden className="pointer-events-none fixed inset-x-0 bottom-16 z-[60] flex justify-center text-ink-3">
+    <div aria-hidden className="pointer-events-none fixed inset-x-0 bottom-safe-16 z-[60] flex justify-center text-ink-3">
       <m.div initial={{ opacity: 0 }} animate={{ opacity: 0.55 }} transition={{ duration: 0.6, delay: 0.8, ease: "easeOut" }}>
         <svg className="h-8 w-12" viewBox="0 0 48 32" fill="none" stroke="currentColor" strokeWidth="1.75">
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 5l18 10L42 5" />
@@ -876,7 +876,7 @@ export function DashboardShell({
       <OfflineGameCard />
       {showProgramReadmePrompt ? (
         <div
-          className="fixed bottom-4 right-4 z-[120] w-[min(92vw,22rem)] rounded-xl border border-glass/20 bg-surface/92 p-3 shadow-xl backdrop-blur-xl"
+          className="fixed bottom-safe right-4 z-[120] w-[min(92vw,22rem)] rounded-xl border border-glass/20 bg-surface/92 p-3 shadow-xl backdrop-blur-xl"
         >
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -910,7 +910,7 @@ export function DashboardShell({
       ) : null}
       {showWhatsNew ? (
         <div
-          className="fixed bottom-4 right-4 z-[120] w-[min(92vw,22rem)] rounded-xl border border-glass/20 bg-surface/92 p-3 shadow-xl backdrop-blur-xl"
+          className="fixed bottom-safe right-4 z-[120] w-[min(92vw,22rem)] rounded-xl border border-glass/20 bg-surface/92 p-3 shadow-xl backdrop-blur-xl"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">

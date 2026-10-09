@@ -35,6 +35,16 @@ export async function GET(request: NextRequest) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
+      // A home-screen (standalone) install on iOS runs Google's pages in an
+      // in-app sheet and can request this URL once from the sheet and once
+      // from the app window. The first request consumes the one-shot code,
+      // so the second fails here — while the session cookies it set are
+      // already in the request. Honour them rather than bouncing to the
+      // login page with an error the user cannot act on.
+      const { data } = await supabase.auth.getClaims();
+      if (data?.claims?.sub) {
+        return response;
+      }
       return NextResponse.redirect(new URL("/login?error=oauth_failed", requestUrl.origin));
     }
     const {

@@ -21,7 +21,19 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Flya Space",
+  applicationName: "Flya Space",
   description: "Flyability internal allround workspace for mail automation and time tracking.",
+  // Home-screen install on iOS (the manifest in app/manifest.ts covers the
+  // rest). `statusBarStyle: "default"` on purpose: the status bar then takes
+  // the per-skin theme-color below and picks readable text for it, which
+  // "black-translucent" would get wrong on the three light skins.
+  appleWebApp: { capable: true, title: "Flya Space", statusBarStyle: "default" },
+  // Phone numbers never appear as data here; without this iOS turns any
+  // number-looking run (a time log total, an order id) into a tel: link.
+  formatDetection: { telephone: false },
+  // Next emits the standard `mobile-web-app-capable`; iOS before 17.4 only
+  // reads Apple's older spelling, so both go out.
+  other: { "apple-mobile-web-app-capable": "yes" },
 };
 
 // Browser-chrome tint follows the account's saved skin (each skin's page-bg
@@ -29,6 +41,16 @@ export const metadata: Metadata = {
 export async function generateViewport(): Promise<Viewport> {
   const { theme } = await resolveServerAppearance();
   return {
+    width: "device-width",
+    initialScale: 1,
+    // Lets the page extend under the notch and home indicator; the safe-area
+    // utilities in tokens.css keep controls out of those zones. Without this,
+    // every env(safe-area-inset-*) in the stylesheet resolves to 0.
+    viewportFit: "cover",
+    // Android: the layout viewport shrinks with the on-screen keyboard, so
+    // 100dvh sheets keep their composer visible. iOS ignores it (handled by
+    // the visualViewport listener in the chat sheet).
+    interactiveWidget: "resizes-content",
     themeColor: THEME_COLORS[theme ?? "dark"],
   };
 }

@@ -342,7 +342,7 @@ export function DayLoggerModal({ state }: { state: TimeTrackerState }) {
                                   const name = event.target.value;
                                   setFormBreaks((prev) => prev.map((row, rowIdx) => (rowIdx === index ? { ...row, name } : row)));
                                 }}
-                                className="rounded-lg border border-glass/20 bg-glass/10 px-2 py-1.5 text-xs"
+                                className="rounded-lg border border-glass/20 bg-glass/10 px-2 py-1.5 text-base sm:text-xs"
                               />
                               <input
                                 type="number"
@@ -353,7 +353,7 @@ export function DayLoggerModal({ state }: { state: TimeTrackerState }) {
                                   const mins = Number.parseInt(event.target.value || "0", 10) || 0;
                                   setFormBreaks((prev) => prev.map((row, rowIdx) => (rowIdx === index ? { ...row, mins } : row)));
                                 }}
-                                className="rounded-lg border border-glass/20 bg-glass/10 px-2 py-1.5 text-xs"
+                                className="rounded-lg border border-glass/20 bg-glass/10 px-2 py-1.5 text-base sm:text-xs"
                               />
                               <button
                                 type="button"

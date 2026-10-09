@@ -122,7 +122,7 @@ export function GoogleEmbedPanel({
   }, []);
 
   return createPortal(
-    <div className="fixed inset-0 z-[110] flex flex-col gap-1.5 bg-surface p-1.5">
+    <div className="fixed inset-0 z-[110] flex flex-col gap-1.5 bg-surface p-1.5 pt-[max(0.375rem,var(--safe-top))] pb-[max(0.375rem,var(--safe-bottom))]">
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex min-w-0 items-center gap-3">
           <button type="button" onClick={onBack} className={BUTTON_CLASS}>

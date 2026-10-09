@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    Flya Space app icon — source of truth. `scripts/build-app-icons.mjs`
+    rasterises it into public/icons/ and src/app/apple-icon.png; edit this
+    file, then re-run the script, never the PNGs.
+
+    Full-bleed square on purpose: every platform applies its own mask (iOS
+    rounds the corners, Android uses the separate maskable render), so no
+    corner radius is baked in here.
+
+    The mark: the Elios cage as a sphere of three rings in the app's accent
+    gradient (the accent-from and accent-to tokens in tokens.css), with the "F" of Flya
+    flying through it as a white flight path, trailed by its wake.
+  -->
+  <defs>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#67e8f9"/>
+      <stop offset="1" stop-color="#818cf8"/>
+    </linearGradient>
+    <radialGradient id="glow-cyan" cx="0.28" cy="0.24" r="0.55">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow-indigo" cx="0.78" cy="0.82" r="0.6">
+      <stop offset="0" stop-color="#6366f1" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#6366f1" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vignette" cx="0.5" cy="0.5" r="0.72">
+      <stop offset="0.55" stop-color="#020617" stop-opacity="0"/>
+      <stop offset="1" stop-color="#020617" stop-opacity="0.55"/>
+    </radialGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+  </defs>
+
+  <!-- Deep-space page background (the surface token in tokens.css) with an aurora. -->
+  <rect width="512" height="512" fill="#020617"/>
+  <rect width="512" height="512" fill="url(#glow-cyan)"/>
+  <rect width="512" height="512" fill="url(#glow-indigo)"/>
+  <rect width="512" height="512" fill="url(#vignette)"/>
+
+  <!-- Everything inside #mark is the glyph; the maskable build scales it
+       down around the centre while the background keeps bleeding to the edge. -->
+  <g id="mark">
+  <!-- The cage: a sphere drawn as its outline and two great circles. -->
+  <g fill="none" stroke="url(#accent)" stroke-linecap="round">
+    <!-- halo behind the outer ring -->
+    <circle cx="256" cy="256" r="166" stroke-width="30" opacity="0.35" filter="url(#soft)"/>
+    <circle cx="256" cy="256" r="166" stroke-width="16"/>
+    <ellipse cx="256" cy="256" rx="166" ry="62" stroke-width="7" opacity="0.6"/>
+    <ellipse cx="256" cy="256" rx="62" ry="166" stroke-width="7" opacity="0.6" transform="rotate(24 256 256)"/>
+  </g>
+
+  <!-- The flight path: an F with rounded joins, and the wake it leaves. -->
+  <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M206 348 V170 H318" stroke-width="40"/>
+    <path d="M206 258 H292" stroke-width="40"/>
+    <!-- wake: three fading strokes behind the stem -->
+    <path d="M166 304 H178" stroke-width="12" opacity="0.7"/>
+    <path d="M142 326 H160" stroke-width="12" opacity="0.45"/>
+    <path d="M124 348 H148" stroke-width="12" opacity="0.25"/>
+  </g>
+  </g>
+</svg>

@@ -20,6 +20,16 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-09-home-screen",
+    date: "Oct 9, 2026",
+    title: "Flya Space on your phone",
+    highlights: [
+      "Add it to your iPhone home screen: in Safari, tap Share → Add to Home Screen.",
+      "It opens full screen with its own icon, like an app. Sign in once inside it.",
+      "Typing no longer zooms the page in, and nothing hides behind the home bar.",
+    ],
+  },
+  {
     version: "2026-10-09-faster-sheets",
     date: "Oct 9, 2026",
     title: "Faster sheets, today stands out",
