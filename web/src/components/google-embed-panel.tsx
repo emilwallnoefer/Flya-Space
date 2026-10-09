@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { withRange, type GoogleEmbed } from "@/lib/google-embeds";
 import { todayCell as lookUpTodayCell } from "@/lib/google-embed-today-client";
+import { lockPageScroll } from "@/lib/scroll-lock";
 
 const BUTTON_CLASS =
   "inline-flex items-center gap-1.5 rounded-lg border border-glass/15 bg-glass/8 px-2.5 py-1 text-[11px] font-medium text-ink-2 transition ease-fluid hover:bg-glass/12 hover:text-ink";
@@ -112,14 +113,9 @@ export function GoogleEmbedPanel({
     setFrameKey((key) => key + 1);
   }
 
-  useEffect(() => {
-    const root = document.documentElement;
-    const previous = root.style.overflow;
-    root.style.overflow = "hidden";
-    return () => {
-      root.style.overflow = previous;
-    };
-  }, []);
+  // The page behind the frame must not scroll (lib/scroll-lock.ts: the
+  // variant iOS honours; overflow: hidden on <html> is ignored there).
+  useEffect(() => lockPageScroll(), []);
 
   return createPortal(
     <div className="fixed inset-0 z-[110] flex flex-col gap-1.5 bg-surface p-1.5 pt-[max(0.375rem,var(--safe-top))] pb-[max(0.375rem,var(--safe-bottom))]">

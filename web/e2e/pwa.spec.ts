@@ -43,3 +43,16 @@ test("login fits the screen without sideways scroll and keeps a tappable button"
   expect(box).not.toBeNull();
   expect(box!.height).toBeGreaterThanOrEqual(44);
 });
+
+// Phone vs desktop is decided on the server from the User-Agent
+// (lib/device.ts); the root layout marks phone requests with
+// html[data-device="phone"]. The iphone-emulated project sends an iPhone UA,
+// the desktop project a desktop one, so the same test proves both sides:
+// a phone gets the mark, and a desktop browser never does — however narrow
+// its window.
+test("the server marks phone requests and only phone requests", async ({ page, isMobile }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/login");
+  const device = await page.locator("html").getAttribute("data-device");
+  expect(device).toBe(isMobile ? "phone" : null);
+});

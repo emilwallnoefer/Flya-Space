@@ -7,6 +7,7 @@ import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { NONCE_HEADER } from "@/lib/security/csp";
+import { isPhoneRequest } from "@/lib/device";
 import { isThemeValue, THEME_COLORS, themeAttributes, type ThemeValue } from "@/lib/theme-attrs";
 
 const geistSans = Geist({
@@ -101,12 +102,17 @@ export default async function RootLayout({
   // 'unsafe-inline'. Null only if middleware did not run (it always does for
   // HTML routes) — the script is then simply omitted rather than emitted in a
   // form the browser would refuse.
-  const nonce = (await headers()).get(NONCE_HEADER);
+  const requestHeaders = await headers();
+  const nonce = requestHeaders.get(NONCE_HEADER);
 
   // When the account has a saved theme, apply it as data-* on <html> at SSR time
   // (authoritative, no flash) and flag the source so the bootstrap reconciles
   // localStorage instead of overriding. Otherwise leave it to the bootstrap.
   const htmlProps: Record<string, string> = { lang: "en" };
+  // Phones get the dedicated mobile UI (lib/device.ts). The attribute is set
+  // only for them, so desktop markup is exactly what it was; app/mobile.css
+  // keys every rule on it.
+  if (isPhoneRequest(requestHeaders)) htmlProps["data-device"] = "phone";
   if (theme) {
     htmlProps["data-appearance-source"] = "server";
     htmlProps["data-accent"] = accent;

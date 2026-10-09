@@ -1,0 +1,23 @@
+/* =========================================================================
+ * Mobile UI — styles for the dedicated phone shell (src/components/mobile/).
+ *
+ * Imported last from globals.css so it wins ties. Every rule is keyed on
+ * html[data-device="phone"] (set by app/layout.tsx from the User-Agent, see
+ * lib/device.ts) and/or [data-mobile-look], so nothing here can match on a
+ * desktop page: the desktop DOM has neither attribute.
+ *
+ * Components use the semantic tokens (--surface, --panel, --raised, --glass,
+ * --ink-*, --accent*) which already re-key per skin, so the "native" look
+ * needs no per-skin rules of its own. The "skin" look reuses the desktop
+ * decoration classes (glass-card, liquid-day-card, …) on the mobile
+ * primitives, inheriting every light/neu/touch override in decorations.css.
+ * ========================================================================= */
+
+html[data-device="phone"] {
+  /* The phone shell is the whole window: no rubber-band gap behind it. */
+  overscroll-behavior-y: none;
+}
+
+html[data-device="phone"] body {
+  background: var(--surface);
+}

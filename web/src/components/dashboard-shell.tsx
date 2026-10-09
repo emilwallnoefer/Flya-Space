@@ -2,10 +2,13 @@
 
 import { AnimatePresence, m } from "framer-motion";
 import dynamic from "next/dynamic";
-import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuthNavbar } from "@/components/auth-navbar";
 import { OfflineGameCard } from "@/components/offline-game-card";
+import { PanelLoading } from "@/components/panel-loading";
+import { StreamedAdminPanel, StreamedFleetPanel } from "@/components/streamed-panels";
 import { ChatBubbleIcon } from "@/components/chat/icons";
+import { IconClock, IconDrone, IconMail } from "@/components/module-icons";
 import {
   BETA_BADGE_CLASS,
   CHAT_PILL_CLASS,
@@ -32,6 +35,7 @@ import { useMailComposer } from "@/components/mail-composer/use-mail-composer";
 import { TimeTrackerPanel, type WeekResponse } from "@/components/time-tracker-panel";
 import type { InitialSettingsData } from "@/lib/settings-queries";
 import type { AdminListedUser, AdminTimeOverview } from "@/lib/admin-queries";
+import { greetingFromEmail, timeGreeting } from "@/lib/greeting";
 import { playUiSound } from "@/lib/ui-sounds";
 import type { ModuleKey } from "@/lib/dashboard-modules";
 import { writeViewParams } from "@/lib/view-params";
@@ -41,19 +45,11 @@ import type { GoogleEmbed } from "@/lib/google-embeds";
 import { todayCell } from "@/lib/google-embed-today-client";
 import { preconnect } from "react-dom";
 
-function PanelLoading() {
-  return <div className="min-h-[40vh] animate-pulse rounded-2xl border border-glass/10 bg-glass/5" aria-hidden />;
-}
-
 // Settings and Admin sit behind a click for every user, so their code (and the
 // admin insights charts behind AdminPanel) stays out of the dashboard's first
 // bundle. Mail/Time stay static: one of them is the landing module per role.
 const SettingsPanel = dynamic(
   () => import("@/components/settings-panel").then((m) => m.SettingsPanel),
-  { ssr: false, loading: PanelLoading },
-);
-const AdminPanel = dynamic(
-  () => import("@/components/admin-panel").then((m) => m.AdminPanel),
   { ssr: false, loading: PanelLoading },
 );
 // Team chat opens from the floating pill and is mounted only while it is open.
@@ -67,11 +63,6 @@ const AdminPanel = dynamic(
 const ChatWidget = dynamic(() => import("@/components/chat-widget").then((m) => m.ChatWidget), {
   ssr: false,
 });
-// Fleet is beta and behind a click for everyone, so it stays out of the first bundle.
-const FleetPanel = dynamic(
-  () => import("@/components/fleet/fleet-panel").then((m) => m.FleetPanel),
-  { ssr: false, loading: PanelLoading },
-);
 // The Google sheets and form are cards for pilots and admins only; the chunk is
 // tiny, but no iframe should exist until someone opens one.
 const GoogleEmbedPanel = dynamic(
@@ -86,9 +77,6 @@ const FieldStatsPanel = dynamic(
   { ssr: false, loading: PanelLoading },
 );
 
-// Fleet and Admin sit behind a click, so the server does not hold the first
-// paint for their data: it streams in as a promise after the shell is already
-// on screen. The panel suspends only if it is opened before the data arrives.
 /**
  * Mounts Field stats once the bottom of the workspace home comes within a
  * screen of the viewport, so a visit that never scrolls loads no chart code and
@@ -140,25 +128,9 @@ function ScrollHint({ active }: { active: boolean }) {
   );
 }
 
-function StreamedFleetPanel({ board }: { board: Promise<FleetBoardResponse | null> }) {
-  return <FleetPanel initialBoard={use(board)} />;
-}
-
-function StreamedAdminPanel({
-  canManageUsers,
-  users,
-  overview,
-}: {
-  canManageUsers: boolean;
-  users: Promise<AdminListedUser[] | null>;
-  overview: Promise<AdminTimeOverview | null>;
-}) {
-  return <AdminPanel canManageUsers={canManageUsers} initialUsers={use(users)} initialOverview={use(overview)} />;
-}
-
 const RESOLVED_NULL: Promise<null> = Promise.resolve(null);
 
-type DashboardShellProps = {
+export type DashboardShellProps = {
   email: string;
   initialRole: UserRole | null;
   isAdmin?: boolean;
@@ -196,55 +168,10 @@ const PROGRAM_README_PROMPT_SEEN_KEY = "ma_program_readme_prompt_seen_v1";
 // Tracks the last release whose "What's new" popup the user dismissed.
 const WHATS_NEW_SEEN_VERSION_KEY = "ma_whats_new_seen_version_v1";
 
-function greetingFromEmail(addr: string): string {
-  const local = addr.split("@")[0]?.trim() ?? "";
-  const first = local.split(/[._-]/)[0] ?? local;
-  if (!first) return "there";
-  return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
-}
 
-function timeGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
-}
 
-function IconMail({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
-      />
-    </svg>
-  );
-}
 
-function IconClock({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  );
-}
 
-function IconDrone({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M9.5 9.5h5v5h-5zM9.5 9.5 7 7m7.5 2.5L17 7m-2.5 7.5L17 17m-7.5-2.5L7 17"
-      />
-      <circle cx="5.5" cy="5.5" r="2.5" />
-      <circle cx="18.5" cy="5.5" r="2.5" />
-      <circle cx="5.5" cy="18.5" r="2.5" />
-      <circle cx="18.5" cy="18.5" r="2.5" />
-    </svg>
-  );
-}
 
 function IconCalendar({ className }: { className?: string }) {
   return (
