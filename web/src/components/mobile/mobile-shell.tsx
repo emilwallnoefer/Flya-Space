@@ -12,6 +12,7 @@ import { MODULE_KEYS, type ModuleKey } from "@/lib/dashboard-modules";
 import { LATEST_RELEASE } from "@/lib/release-notes";
 import { playUiSound } from "@/lib/ui-sounds";
 import { pushViewParams, readViewParam, wasPushedByUs, writeViewParams } from "@/lib/view-params";
+import { MOBILE_LOOK } from "./look";
 import { MobileHome } from "./mobile-home";
 import { MobileTabBar, type MobileTab } from "./mobile-tab-bar";
 import { MobileTimeScreen } from "./time/mobile-time-screen";
@@ -222,7 +223,8 @@ export function MobileShell({
   ).filter((embed): embed is { key: ModuleKey; title: string } => embed !== null);
 
   return (
-    <main id="main-content" className="relative min-h-dvh bg-surface text-ink" data-mobile-look="native">
+    <main id="main-content" className="relative min-h-dvh bg-surface text-ink" data-mobile-look={MOBILE_LOOK}>
+      {MOBILE_LOOK === "skin" ? <div className="fixed inset-0 -z-10 aurora-bg" aria-hidden /> : null}
       {teamOpen ? (
         <div className="m-screen">
           <MobileTeamScreen field={field} onBack={() => setTeamOpen(false)} />

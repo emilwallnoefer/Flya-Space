@@ -1,3 +1,5 @@
+import { MOBILE_LOOK } from "./look";
+
 /**
  * Route-level skeleton for the phone dashboard, returned by
  * app/dashboard/loading.tsx when the request comes from a phone. Drawn to the
@@ -7,7 +9,7 @@
  */
 export function MobileSkeleton() {
   return (
-    <main className="relative min-h-dvh bg-surface text-ink" aria-busy="true" data-mobile-look="native">
+    <main className="relative min-h-dvh bg-surface text-ink" aria-busy="true" data-mobile-look={MOBILE_LOOK}>
       <div className="m-screen motion-safe:animate-pulse">
         <header className="flex items-center gap-2 px-3 pb-2 pt-[max(0.5rem,var(--safe-top))]">
           <span className="w-1" />
