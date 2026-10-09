@@ -20,11 +20,13 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: "2026-10-09-time-tracker-today",
+    version: "2026-10-09-faster-sheets",
     date: "Oct 9, 2026",
-    title: "Today stands out in the Time Tracker",
+    title: "Faster sheets, today stands out",
     highlights: [
-      "Today's day card now has a red outline and a Today badge.",
+      "Mission planning and Fleet management start loading sooner.",
+      "They open on today's row or column even on the first load.",
+      "Today's day card in the Time Tracker has a red outline and a Today badge.",
     ],
   },
   {
