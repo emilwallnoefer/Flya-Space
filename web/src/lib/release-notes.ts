@@ -29,6 +29,16 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     ],
   },
   {
+    version: "2026-10-12-phone-day-sheet",
+    date: "Oct 12, 2026",
+    title: "Phone time tracker: a cleaner week, a clearer day",
+    highlights: [
+      "The week is a plain list again — open a day to fill it",
+      "Compensate day and Standard day now sit inside the day",
+      "Start and Stop are visible boxes that read --:-- until set",
+    ],
+  },
+  {
     version: "2026-10-12-phone-notifications",
     date: "Oct 12, 2026",
     title: "Notifications on your phone",

@@ -2,7 +2,8 @@
 
 import { AnimatePresence } from "framer-motion";
 import type { TimeTrackerState } from "@/components/time-tracker/use-time-tracker";
-import { fmtHM, type WeekResponse } from "@/components/time-tracker/types";
+import { fmtHM, TARGET_MINS, type WeekResponse } from "@/components/time-tracker/types";
+import { isWeekendDate } from "@/lib/time-tracker-rules";
 import { Toast } from "@/components/ui";
 import { playUiSound } from "@/lib/ui-sounds";
 import { cn } from "@/lib/cn";
@@ -12,9 +13,12 @@ type DayType = "normal" | "holiday" | "public_holiday" | "sick";
 
 /**
  * The phone's day editor: a bottom sheet over the week list, driven entirely
- * by the shared hook's form state. Native time pickers, a 2×2 day-type grid,
- * the ±15 break counter (or the break list for older weeks), travel info as
- * a collapsed section, Save as the sticky footer.
+ * by the shared hook's form state. Start/Stop as visible boxes that read
+ * `--:--` until set (the native picker sits on top, invisible, so a tap still
+ * opens it — iOS draws an empty `<input type="time">` as nothing at all), the
+ * quick fills (compensate / standard day) for a weekday that is short, a 2×2
+ * day-type grid, the ±15 break counter (or the break list for older weeks),
+ * travel info as a collapsed section, Save as the sticky footer.
  */
 export function MobileDaySheet({
   state,
@@ -57,12 +61,28 @@ export function MobileDaySheet({
     computedNet,
     handleSaveDay,
     handleResetDay,
+    handleFillMissing,
   } = state;
 
   const dayType: DayType = formHoliday ? "holiday" : formPublicHoliday ? "public_holiday" : formSickLeave ? "sick" : "normal";
   const disabled = !selectedDay || readOnly;
   const inputClass = "min-h-12 w-full rounded-xl border border-glass/15 bg-glass/8 px-3 text-base text-ink tabular-nums focus:border-accent/40 focus:outline-none";
   const hasTravel = selectedTravelInfo && (selectedTravelInfo.client || selectedTravelInfo.location || selectedTravelInfo.responsible);
+  const compMins = Math.max(0, selectedDay?.comp_mins ?? 0);
+  // Quick fills: only for a weekday logged as a normal day — vacation, public
+  // holidays and sick leave are excused, weekends have no target.
+  const showQuickFill = !readOnly && selectedDay != null && !isWeekendDate(selectedDay.date) && dayType === "normal";
+  const dayIsShort = selectedDay != null && Math.max(0, selectedDay.net_mins) + compMins < TARGET_MINS;
+
+  function fillStandardDay() {
+    setFormStart("09:00");
+    setFormStop("17:54");
+    setFormBreaks([{ name: "Break", mins: 30 }]);
+    setFormHoliday(false);
+    setFormPublicHoliday(false);
+    setFormSickLeave(false);
+    playUiSound("fillSwoosh");
+  }
 
   return (
     <MobileSheet
@@ -86,16 +106,39 @@ export function MobileDaySheet({
       }
     >
       <div className="space-y-5 pb-2">
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="mb-1 block text-xs text-ink-4">Start</span>
-            <input type="time" value={formStart} disabled={disabled} onChange={(e) => setFormStart(e.target.value)} className={inputClass} />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs text-ink-4">Stop</span>
-            <input type="time" value={formStop} disabled={disabled} onChange={(e) => setFormStop(e.target.value)} className={inputClass} />
-          </label>
+        <div>
+          <div className="grid grid-cols-2 gap-3">
+            <TimeField label="Start" value={formStart} disabled={disabled} onChange={setFormStart} />
+            <TimeField label="Stop" value={formStop} disabled={disabled} onChange={setFormStop} />
+          </div>
+          {!readOnly && (!formStart || !formStop) ? <p className="mt-1.5 text-xs text-ink-4">Tap a field to pick the time.</p> : null}
         </div>
+
+        {showQuickFill ? (
+          <div>
+            <span className="mb-1.5 block text-xs text-ink-4">Fill the day</span>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={saving || (!dayIsShort && compMins === 0)}
+                aria-pressed={compMins > 0}
+                onClick={() => void handleFillMissing(selectedDay.date)}
+                className={cn(
+                  "min-h-11 rounded-xl border px-3 text-sm font-medium transition disabled:opacity-50",
+                  compMins > 0 ? "border-rose-400/40 bg-rose-400/15 text-ink" : "border-glass/15 bg-glass/8 text-ink-2 active:bg-glass/12",
+                )}
+              >
+                {compMins > 0 ? `Compensated · ${fmtHM(compMins)}` : "Compensate day"}
+              </button>
+              <button type="button" disabled={saving} onClick={fillStandardDay} className="min-h-11 rounded-xl border border-glass/15 bg-glass/8 px-3 text-sm font-medium text-ink-2 transition active:bg-glass/12 disabled:opacity-50">
+                Standard day
+              </button>
+            </div>
+            <p className="mt-1.5 text-xs leading-snug text-ink-4">
+              {compMins > 0 ? "Missing hours taken from your overtime bank. Tap again to undo." : "Compensate takes the missing hours from your overtime bank. Standard day fills 09:00–17:54 with a 30 min break — then Save."}
+            </p>
+          </div>
+        ) : null}
 
         <div>
           <span className="mb-1.5 block text-xs text-ink-4">Day type</span>
@@ -215,6 +258,30 @@ export function MobileDaySheet({
         </AnimatePresence>
       </div>
     </MobileSheet>
+  );
+}
+
+/**
+ * A time field the phone actually draws. iOS renders an empty native time
+ * input as blank space, so the visible part is our own box (value or
+ * `--:--`) and the native input lies on top at opacity 0 to catch the tap.
+ */
+function TimeField({ label, value, disabled, onChange }: { label: string; value: string; disabled: boolean; onChange: (next: string) => void }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs text-ink-4">{label}</span>
+      <span className={cn("relative flex min-h-12 items-center rounded-xl border border-glass/15 bg-glass/8 px-3 text-base tabular-nums has-[:focus-visible]:border-accent/40", disabled && "opacity-50")}>
+        <span className={value ? "text-ink" : "text-ink-5"}>{value || "--:--"}</span>
+        <input
+          type="time"
+          value={value}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.value)}
+          aria-label={label}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-default"
+        />
+      </span>
+    </label>
   );
 }
 
