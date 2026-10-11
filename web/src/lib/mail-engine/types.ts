@@ -67,6 +67,6 @@ export type BriefRenderInput = {
   recipient_name: string;
   /** Post-mail only: link to the flight data collected during the training; renders the Add-ons section. */
   datasets_link?: string;
-  /** Shown in the closing; defaults to the standard signature when omitted. */
+  /** Sender's name in the closing; the routes derive it from the session user. */
   signature_name?: string;
 };

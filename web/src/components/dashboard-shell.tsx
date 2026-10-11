@@ -135,7 +135,7 @@ export type DashboardShellProps = {
   initialRole: UserRole | null;
   isAdmin?: boolean;
   initialWeek?: WeekResponse | null;
-  /** SSR-prefetched Settings data (Gmail status + travel mapping + signature). */
+  /** SSR-prefetched Settings data (Gmail status + travel mapping). */
   initialSettings?: InitialSettingsData | null;
   /** SSR-prefetched admin data, streamed (resolves to null for non-admins). */
   initialAdminUsers?: Promise<AdminListedUser[] | null>;

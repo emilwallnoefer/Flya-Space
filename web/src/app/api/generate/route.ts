@@ -1,4 +1,5 @@
 import { MailInput, renderMail } from "@/lib/mail-engine";
+import { displayNameFor } from "@/lib/fleet-queries";
 import { enrichWithAutoResearch } from "@/lib/company-research";
 import { sanitizeEmailList, sanitizeNullableText, sanitizeText } from "@/lib/security/input-sanitize";
 import { checkRateLimit, createRateLimitHeaders, getClientIp } from "@/lib/security/rate-limit";
@@ -45,7 +46,6 @@ const generateSchema = z.object({
   include_customer_toolkit: z.boolean().optional(),
   company_research_text: z.string().optional(),
   included_change_ids: z.array(z.string().min(1).max(80)).max(200).optional(),
-  signature_name: z.string().max(120).optional(),
 });
 
 function sanitizeMailPayload(input: z.infer<typeof generateSchema>): MailInput {
@@ -62,7 +62,6 @@ function sanitizeMailPayload(input: z.infer<typeof generateSchema>): MailInput {
     datasets_link: sanitizeNullableText(input.datasets_link, { maxLen: 600 }),
     company_research_text: sanitizeNullableText(input.company_research_text, { maxLen: 4000, allowNewlines: true }),
     included_change_ids: input.included_change_ids?.map((id) => sanitizeText(id, { maxLen: 80 })).filter(Boolean),
-    signature_name: sanitizeText(input.signature_name, { maxLen: 120 }) || undefined,
   };
 }
 
@@ -98,7 +97,11 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    const payload = sanitizeMailPayload(parsedPayload.data);
+    const payload: MailInput = {
+      ...sanitizeMailPayload(parsedPayload.data),
+      // The sign-off is the sender's own name from the sign-in provider, never a client value.
+      signature_name: displayNameFor(user),
+    };
 
     const requiredBase: Array<keyof MailInput> = ["mail_type", "language", "recipient_name"];
     const requiredPost: Array<keyof MailInput> = ["training_type", "company_name", "use_case"];

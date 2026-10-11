@@ -348,7 +348,7 @@ export function MobileShell({
 
       <MobileSheet open={moreOpen} onClose={() => setMoreOpen(false)} title="More">
         <MobileGroup>
-          <MobileRow label="Settings" detail="Appearance, Gmail, signature, data" chevron onClick={() => openModule("settings")} />
+          <MobileRow label="Settings" detail="Appearance, Gmail, data" chevron onClick={() => openModule("settings")} />
           {availableModules.includes("admin") ? (
             <MobileRow label={adminModuleLabel} detail={isAdmin ? "Team time and users · the rest on desktop" : "Everyone's hours"} chevron onClick={() => openModule("admin")} />
           ) : null}

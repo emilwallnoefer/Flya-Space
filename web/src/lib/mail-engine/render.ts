@@ -1,7 +1,6 @@
 import { CHANGE_OPTIONS, type MailLanguage } from "@/lib/change-options";
 import industryLinks from "@/mail-config/industry-training-links.json";
 import trainingLinks from "@/mail-config/training-links.json";
-import { MAIL_SIGNATURE_DEFAULT_NAME } from "@/lib/mail-signature-presets";
 import type { BriefLlmResult } from "@/lib/mail-brief-llm";
 import { buildAgendaBlock, facilityPrepBlock, flightSiteLine } from "@/lib/training-disciplines";
 import type { BriefRenderInput, Course, MailInput, RenderResult } from "./types";
@@ -29,6 +28,12 @@ import {
   resolveIncludedChangeIds,
   simulatorNote,
 } from "./links";
+
+/**
+ * The API routes always pass the signed-in sender's name (`displayNameFor`), so
+ * this only covers direct callers that leave it out.
+ */
+const FALLBACK_SIGNATURE_NAME = "Flyability Team";
 
 export function renderMail(input: MailInput): RenderResult {
   const templates = parseTemplates(readTemplates());
@@ -75,7 +80,7 @@ export function renderMail(input: MailInput): RenderResult {
     SIMULATOR_NOTE_BLOCK: simulatorNote(input.language, input.include_simulator_note),
     ADDONS_BLOCK: isPre ? "" : addonsBlock(input.language, input.datasets_link, singular),
     COMPANY_CONTEXT_LINE: "",
-    SIGNATURE_NAME: (input.signature_name && input.signature_name.trim()) || MAIL_SIGNATURE_DEFAULT_NAME,
+    SIGNATURE_NAME: (input.signature_name && input.signature_name.trim()) || FALLBACK_SIGNATURE_NAME,
   };
 
   subject = normalize(replacePlaceholders(applyGrammaticalNumber(subject, singular), replacements)).trim();
@@ -112,7 +117,7 @@ export function renderBriefMail(input: BriefRenderInput, llm: BriefLlmResult): R
   const selectedChangeIds = llm.selected_change_ids.filter((id) => validIds.has(id));
 
   const feedbackQr = resolveFeedbackQr({ mail_type: "post", language } as MailInput);
-  const signature = (input.signature_name && input.signature_name.trim()) || MAIL_SIGNATURE_DEFAULT_NAME;
+  const signature = (input.signature_name && input.signature_name.trim()) || FALLBACK_SIGNATURE_NAME;
 
   const greeting = `${BRIEF_GREETING[language]} ${input.recipient_name},`;
   // The model is told not to repeat the greeting but often does; strip it so it can't show twice.

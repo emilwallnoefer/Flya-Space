@@ -3,7 +3,6 @@
 import { AppearanceSection } from "@/components/settings/sections/appearance-section";
 import { GmailSection } from "@/components/settings/sections/gmail-section";
 import { InterfaceSoundsSection } from "@/components/settings/sections/interface-sounds-section";
-import { MailSignatureSection } from "@/components/settings/sections/mail-signature-section";
 import { NotificationsSection } from "@/components/settings/sections/notifications-section";
 import { ReadmeSection } from "@/components/settings/sections/readme-section";
 import { SecuritySection } from "@/components/settings/sections/security-section";
@@ -19,7 +18,6 @@ import { MobileScreen, type NavDirection } from "../screen";
 const DETAIL: Record<SettingsSectionId, string> = {
   gmail: "Save drafts to Gmail",
   travel_mapping: "Your columns in the planning sheet",
-  mail_signature: "How mails sign off",
   time_data: "Import or export your hours",
   appearance: "Skin and accent",
   interface_sounds: "Clicks and whooshes",
@@ -77,9 +75,6 @@ export function MobileSettingsScreen({
       <MobileTopBar title={title} onBack={() => chooseSection(null)} />
       <div className="px-4 pt-1 pb-4 [&_input]:min-h-11 [&_select]:min-h-11 [&_button:not([role=switch])]:min-h-10 [&_button:not([role=switch])]:text-sm">
         {open === "gmail" ? <GmailSection status={s.gmailStatus} onDisconnect={() => void s.handleDisconnectGmail()} /> : null}
-        {open === "mail_signature" ? (
-          <MailSignatureSection preset={s.mailSigPreset} custom={s.mailSigCustom} saving={s.mailSigSaving} onPresetChange={s.setMailSigPreset} onCustomChange={s.setMailSigCustom} onSave={() => void s.handleSaveMailSignature()} />
-        ) : null}
         {open === "travel_mapping" ? (
           <TravelMappingSection mapping={s.travelMapping} setMapping={s.setTravelMapping} saving={s.mappingSaving} onSave={() => void s.handleSaveTravelMapping()} onReset={() => void s.handleResetTravelMapping()} />
         ) : null}

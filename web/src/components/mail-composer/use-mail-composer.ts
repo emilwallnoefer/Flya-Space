@@ -9,7 +9,6 @@ import {
   type MailLanguage,
   RESOURCE_SECTION_ORDER,
 } from "@/lib/change-options";
-import { MAIL_SIGNATURE_DEFAULT_NAME } from "@/lib/mail-signature-presets";
 import type { TrainingDiscipline } from "@/lib/training-disciplines";
 import { playUiSound, playUiSoundWithCrossfadeFill, stopUiSound } from "@/lib/ui-sounds";
 import type { UserRole } from "@/lib/user-role";
@@ -183,30 +182,6 @@ export function useMailComposer(userRole: UserRole | null) {
     setChangesTouched(false);
   }, []);
 
-  // Signature name: follow Settings saves live, and load the stored name once.
-  useEffect(() => {
-    function onMailSignatureSaved(event: Event) {
-      const detail = (event as CustomEvent<{ signature_name?: string }>).detail;
-      const name = typeof detail?.signature_name === "string" ? detail.signature_name.trim() : "";
-      if (!name) return;
-      setForm((prev) => ({ ...prev, signature_name: name }));
-    }
-    window.addEventListener("mail-signature-saved", onMailSignatureSaved);
-    return () => window.removeEventListener("mail-signature-saved", onMailSignatureSaved);
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      if (userRole === "sales" || userRole === "hr") return;
-      const sigResponse = await fetch("/api/settings/mail-signature");
-      if (sigResponse.ok) {
-        const sigData = (await sigResponse.json()) as { signature_name?: string };
-        const name = (sigData.signature_name ?? "").trim() || MAIL_SIGNATURE_DEFAULT_NAME;
-        setForm((prev) => ({ ...prev, signature_name: name }));
-      }
-    })();
-  }, [userRole]);
-
   // Generation mode: load the stored mode once.
   useEffect(() => {
     (async () => {
@@ -339,7 +314,6 @@ export function useMailComposer(userRole: UserRole | null) {
           day3_site: isPreLausanne && form.day_count >= 3 ? form.day3_site || undefined : undefined,
           included_change_ids: isPost && changesTouched ? form.included_change_ids : undefined,
           datasets_link: isPost ? form.datasets_link.trim() || undefined : undefined,
-          signature_name: form.signature_name.trim() || MAIL_SIGNATURE_DEFAULT_NAME,
         }),
       });
       const data = (await response.json()) as GenerateResponse | { error: string };
@@ -372,7 +346,6 @@ export function useMailComposer(userRole: UserRole | null) {
           language: userRole === "us_pilot" ? "en" : form.language || "en",
           recipient_name: form.recipient_name,
           brief: briefText,
-          signature_name: form.signature_name.trim() || MAIL_SIGNATURE_DEFAULT_NAME,
           datasets_link: form.datasets_link.trim() || undefined,
         }),
       });
@@ -406,7 +379,6 @@ export function useMailComposer(userRole: UserRole | null) {
         body: JSON.stringify({
           language: userRole === "us_pilot" ? "en" : form.language || "en",
           recipient_name: form.recipient_name,
-          signature_name: form.signature_name.trim() || MAIL_SIGNATURE_DEFAULT_NAME,
           datasets_link: form.datasets_link.trim() || undefined,
           prose: briefContent,
           selected_change_ids: form.included_change_ids,
@@ -466,11 +438,10 @@ export function useMailComposer(userRole: UserRole | null) {
   }
 
   function handleResetComposer() {
-    setForm((prev) => ({
+    setForm({
       ...INITIAL_FORM_STATE,
       included_change_ids: [...DEFAULT_INCLUDED_CHANGE_IDS],
-      signature_name: prev.signature_name,
-    }));
+    });
     setResult(null);
     setError(null);
     setDraftInfo(null);

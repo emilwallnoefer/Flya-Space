@@ -20,6 +20,15 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-12-signature-from-account",
+    date: "Oct 12, 2026",
+    title: "Mails sign with your name",
+    highlights: [
+      "Training mails now close with your first and last name from your Google account",
+      "The Mail signature setting is gone — nothing to pick or type",
+    ],
+  },
+  {
     version: "2026-10-12-phone-notifications-prompt",
     date: "Oct 12, 2026",
     title: "One tap to notifications",

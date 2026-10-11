@@ -4,7 +4,6 @@ import { SETTINGS_NAV, type SettingsPanelProps } from "./types";
 import { useSettings } from "./use-settings";
 import { SettingsNav } from "./settings-nav";
 import { GmailSection } from "./sections/gmail-section";
-import { MailSignatureSection } from "./sections/mail-signature-section";
 import { TravelMappingSection } from "./sections/travel-mapping-section";
 import { TimeDataSection } from "./sections/time-data-section";
 import { AppearanceSection } from "./sections/appearance-section";
@@ -46,17 +45,6 @@ export function SettingsPanel({
 
                 {!s.isSalesOnly && s.activeSection === "gmail" ? (
                   <GmailSection status={s.gmailStatus} onDisconnect={() => void s.handleDisconnectGmail()} />
-                ) : null}
-
-                {!s.isSalesOnly && s.activeSection === "mail_signature" ? (
-                  <MailSignatureSection
-                    preset={s.mailSigPreset}
-                    custom={s.mailSigCustom}
-                    saving={s.mailSigSaving}
-                    onPresetChange={s.setMailSigPreset}
-                    onCustomChange={s.setMailSigCustom}
-                    onSave={() => void s.handleSaveMailSignature()}
-                  />
                 ) : null}
 
                 {!s.isSalesOnly && s.activeSection === "travel_mapping" ? (

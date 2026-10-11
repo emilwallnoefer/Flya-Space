@@ -1,6 +1,5 @@
 import type { MailLanguage } from "@/lib/change-options";
 import { DEFAULT_INCLUDED_CHANGE_IDS } from "@/lib/change-options";
-import { MAIL_SIGNATURE_DEFAULT_NAME } from "@/lib/mail-signature-presets";
 import type { LausanneSite, TrainingDiscipline } from "@/lib/training-disciplines";
 
 /** The LLM-written prose of a Brief-mode email, held so assets can be re-rendered without another LLM call. */
@@ -51,8 +50,6 @@ export type FormState = {
   included_change_ids: string[];
   /** Post-mail only. Link to the collected flight data; renders the Add-ons section. */
   datasets_link: string;
-  /** Closing name in generated training emails; synced from Settings. */
-  signature_name: string;
 };
 
 export const DAY_DISCIPLINE_KEYS = ["day1_disciplines", "day2_disciplines", "day3_disciplines"] as const;
@@ -79,5 +76,4 @@ export const INITIAL_FORM_STATE: FormState = {
   to: "",
   included_change_ids: [...DEFAULT_INCLUDED_CHANGE_IDS],
   datasets_link: "",
-  signature_name: MAIL_SIGNATURE_DEFAULT_NAME,
 };
