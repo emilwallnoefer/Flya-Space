@@ -20,6 +20,15 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-12-phone-tour",
+    date: "Oct 12, 2026",
+    title: "A tour of the phone app",
+    highlights: [
+      "On the desktop, a one-time walkthrough shows the phone app on an iPhone: the four tabs, logging a day, and installing it from Safari",
+      "Missed it? Open the dashboard with ?tour=phone to see it again",
+    ],
+  },
+  {
     version: "2026-10-12-signature-from-account",
     date: "Oct 12, 2026",
     title: "Mails sign with your name",
