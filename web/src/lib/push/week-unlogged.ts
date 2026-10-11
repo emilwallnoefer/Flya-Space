@@ -81,11 +81,11 @@ export function hasLoggedAnyDay(days: readonly DayLogRow[], compAdjustments = 0)
   );
 }
 
+/** Short on purpose: a lock screen shows one line of body before it truncates. */
 export function weekUnloggedPayload(name: string | null) {
-  const greeting = name ? `${name}, ` : "";
   return {
-    title: "No hours logged this week",
-    body: `${greeting}your time sheet for this week is still empty. Take a minute to fill in your days.`,
+    title: name ? `${name}, log your week` : "Log your week",
+    body: "No days logged yet. Tap to fill them in.",
     url: "/dashboard?module=time",
     tag: WEEK_UNLOGGED_KIND,
   };

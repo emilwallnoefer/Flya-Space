@@ -73,13 +73,16 @@ describe("hasLoggedAnyDay", () => {
 });
 
 describe("weekUnloggedPayload", () => {
-  it("greets by name and lands on the Time module", () => {
+  it("greets by name in the title and lands on the Time module", () => {
     const payload = weekUnloggedPayload("Sam");
-    expect(payload.body.startsWith("Sam, ")).toBe(true);
+    expect(payload.title).toBe("Sam, log your week");
     expect(payload.url).toBe("/dashboard?module=time");
     expect(payload.tag).toBe("week_unlogged");
   });
   it("works without a name", () => {
-    expect(weekUnloggedPayload(null).body.startsWith("your time sheet")).toBe(true);
+    expect(weekUnloggedPayload(null).title).toBe("Log your week");
+  });
+  it("stays short enough for one lock-screen line", () => {
+    expect(weekUnloggedPayload("Sam").body.length).toBeLessThanOrEqual(45);
   });
 });
