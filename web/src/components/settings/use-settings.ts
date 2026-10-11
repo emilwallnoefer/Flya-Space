@@ -1,12 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  MAIL_SIGNATURE_CUSTOM_VALUE,
-  MAIL_SIGNATURE_DEFAULT_NAME,
-  MAIL_SIGNATURE_NAME_PRESETS,
-  isPresetSignatureName,
-} from "@/lib/mail-signature-presets";
 import type { UserRole } from "@/lib/user-role";
 import { useViewParam } from "@/lib/view-params";
 import {
@@ -18,13 +12,6 @@ import {
   type SettingsSectionId,
   type TravelMapping,
 } from "./types";
-
-function presetStateFor(name: string): { preset: string; custom: string } {
-  const trimmed = name.trim() || MAIL_SIGNATURE_DEFAULT_NAME;
-  return isPresetSignatureName(trimmed)
-    ? { preset: trimmed, custom: "" }
-    : { preset: MAIL_SIGNATURE_CUSTOM_VALUE, custom: trimmed };
-}
 
 export function useSettings(
   userRole: UserRole,
@@ -60,15 +47,8 @@ export function useSettings(
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
-  const [mailSigPreset, setMailSigPreset] = useState<string>(
-    () => (initialData ? presetStateFor(initialData.mailSignatureName).preset : MAIL_SIGNATURE_NAME_PRESETS[0]),
-  );
-  const [mailSigCustom, setMailSigCustom] = useState(
-    () => (initialData ? presetStateFor(initialData.mailSignatureName).custom : ""),
-  );
-  const [mailSigSaving, setMailSigSaving] = useState(false);
 
-  // Seeded from SSR: the three requests below would only re-fetch what we
+  // Seeded from SSR: the two requests below would only re-fetch what we
   // already have, so skip them entirely on first paint.
   const seededRef = useRef(initialData != null);
 
@@ -79,10 +59,9 @@ export function useSettings(
         seededRef.current = false;
         return;
       }
-      const [gmailResponse, mappingResponse, sigResponse] = await Promise.all([
+      const [gmailResponse, mappingResponse] = await Promise.all([
         fetch("/api/gmail/status"),
         fetch("/api/settings/travel-mapping"),
-        fetch("/api/settings/mail-signature"),
       ]);
       if (gmailResponse.ok) {
         const data = (await gmailResponse.json()) as GmailStatus;
@@ -95,17 +74,6 @@ export function useSettings(
           locationColumn: String(mapping.locationColumn ?? ""),
           responsibleColumn: String(mapping.responsibleColumn ?? ""),
         });
-      }
-      if (sigResponse.ok) {
-        const sig = (await sigResponse.json()) as { signature_name?: string };
-        const name = (sig.signature_name ?? "").trim() || MAIL_SIGNATURE_DEFAULT_NAME;
-        if (isPresetSignatureName(name)) {
-          setMailSigPreset(name);
-          setMailSigCustom("");
-        } else {
-          setMailSigPreset(MAIL_SIGNATURE_CUSTOM_VALUE);
-          setMailSigCustom(name);
-        }
       }
     })();
   }, [isSalesOnly]);
@@ -148,36 +116,6 @@ export function useSettings(
       setError((err as Error).message);
     } finally {
       setMappingSaving(false);
-    }
-  }
-
-  async function handleSaveMailSignature() {
-    const effective =
-      mailSigPreset === MAIL_SIGNATURE_CUSTOM_VALUE ? mailSigCustom.trim() : mailSigPreset.trim();
-    if (!effective) {
-      setError("Enter a name for the email signature.");
-      setMessage(null);
-      return;
-    }
-    setMailSigSaving(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const response = await fetch("/api/settings/mail-signature", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signature_name: effective }),
-      });
-      const data = (await response.json()) as { error?: string; signature_name?: string };
-      if (!response.ok) throw new Error(data.error || "Could not save signature name.");
-      setMessage("Mail signature name saved.");
-      window.dispatchEvent(
-        new CustomEvent("mail-signature-saved", { detail: { signature_name: data.signature_name ?? effective } }),
-      );
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setMailSigSaving(false);
     }
   }
 
@@ -316,12 +254,6 @@ export function useSettings(
     mappingSaving,
     handleSaveTravelMapping,
     handleResetTravelMapping,
-    mailSigPreset,
-    setMailSigPreset,
-    mailSigCustom,
-    setMailSigCustom,
-    mailSigSaving,
-    handleSaveMailSignature,
     importing,
     exporting,
     handleImportFile,

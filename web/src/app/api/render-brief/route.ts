@@ -2,7 +2,7 @@ import { renderBriefMail } from "@/lib/mail-engine";
 import { sanitizeNullableText, sanitizeText } from "@/lib/security/input-sanitize";
 import { checkRateLimit, createRateLimitHeaders, getClientIp } from "@/lib/security/rate-limit";
 import { createClient } from "@/lib/supabase/server";
-import { MAIL_SIGNATURE_DEFAULT_NAME } from "@/lib/mail-signature-presets";
+import { displayNameFor } from "@/lib/fleet-queries";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { forbidHeldAccount } from "@/lib/app-access";
@@ -17,7 +17,6 @@ import { forbidHeldAccount } from "@/lib/app-access";
 const renderSchema = z.object({
   language: z.enum(["en", "de", "fr"]),
   recipient_name: z.string().min(1).max(240),
-  signature_name: z.string().max(120).optional(),
   datasets_link: z.string().max(600).optional(),
   prose: z.object({
     subject: z.string().max(400),
@@ -62,7 +61,6 @@ export async function POST(request: Request) {
     }
 
     const recipient_name = sanitizeText(parsed.data.recipient_name, { maxLen: 240 });
-    const signature_name = sanitizeText(parsed.data.signature_name ?? "", { maxLen: 120 }) || undefined;
     const datasets_link = sanitizeNullableText(parsed.data.datasets_link, { maxLen: 600 });
     const language = parsed.data.language;
 
@@ -83,7 +81,7 @@ export async function POST(request: Request) {
         language,
         recipient_name,
         datasets_link,
-        signature_name: signature_name || MAIL_SIGNATURE_DEFAULT_NAME,
+        signature_name: displayNameFor(user),
       },
       { ...prose, selected_change_ids: parsed.data.selected_change_ids },
     );

@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
  *
  * What it does NOT ban is `user_metadata` itself — that bag is the right home
  * for the user's own non-privilege preferences (travel-sheet column mapping,
- * mail signature, appearance theme, Gmail display address). Only the `role`
+ * appearance theme, Gmail display address). Only the `role`
  * field is privileged, so only reads of `role` are flagged.
  *
  * The scan runs over the TypeScript AST rather than raw text, which is why a
@@ -99,7 +99,7 @@ const KNOWN_VIOLATIONS: string[] = [];
  *
  * `app_metadata` reads are never flagged, and neither is any other field of
  * `user_metadata`. `updateUser({ data: … })` without a `role` key is likewise
- * fine — that is how appearance, signature and gmail_email are stored.
+ * fine — that is how appearance and gmail_email are stored.
  */
 export function findRoleReadsFromUserMetadata(fileName: string, source: string): Violation[] {
   const sf = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -223,7 +223,7 @@ const WHY = [
   "  the ANON key in the browser, so it is the user assigning their own role. Post",
   "  to a guarded server route instead; a client can never be trusted with this.",
   "",
-  "  Other `user_metadata` fields (travel-sheet mapping, signature, appearance,",
+  "  Other `user_metadata` fields (travel-sheet mapping, appearance,",
   "  gmail_email) are fine and deliberately not flagged — only `role` is.",
 ].join("\n");
 

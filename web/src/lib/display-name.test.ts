@@ -25,6 +25,33 @@ describe("displayNameFor", () => {
     ).toBe("Emil Wallnöfer");
   });
 
+  it("merges first and last name when the provider splits them", () => {
+    expect(
+      displayNameFor({
+        email: "emil.wallnoefer@flyability.com",
+        identities: [
+          {
+            provider: "google",
+            identity_data: { given_name: " Emil ", family_name: "Wallnöfer", full_name: "Wallnöfer Emil (ext)" },
+          },
+        ],
+      }),
+    ).toBe("Emil Wallnöfer");
+    // Only one half present: the full name wins, then whatever half there is.
+    expect(
+      displayNameFor({
+        email: "x@flyability.com",
+        identities: [{ provider: "google", identity_data: { given_name: "Emil", full_name: "Emil W." } }],
+      }),
+    ).toBe("Emil W.");
+    expect(
+      displayNameFor({
+        email: "x@flyability.com",
+        identities: [{ provider: "google", identity_data: { family_name: "Wallnöfer" } }],
+      }),
+    ).toBe("Wallnöfer");
+  });
+
   it("prefers the Google identity over others", () => {
     expect(
       displayNameFor({

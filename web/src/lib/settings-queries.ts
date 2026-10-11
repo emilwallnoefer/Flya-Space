@@ -1,16 +1,14 @@
 import "server-only";
 
 import { readGmailConnection } from "@/lib/gmail-tokens";
-import { sanitizeColumnLetter, sanitizeText } from "@/lib/security/input-sanitize";
-import { MAIL_SIGNATURE_DEFAULT_NAME } from "@/lib/mail-signature-presets";
+import { sanitizeColumnLetter } from "@/lib/security/input-sanitize";
 
 /**
- * Server-side initial data for the Settings panel, mirroring the three fetches
- * the panel fires on mount (`/api/gmail/status`, `/api/settings/travel-mapping`,
- * `/api/settings/mail-signature`). Prefetching this on the dashboard SSR lets
+ * Server-side initial data for the Settings panel, mirroring the two fetches
+ * the panel fires on mount (`/api/gmail/status`, `/api/settings/travel-mapping`). Prefetching this on the dashboard SSR lets
  * the panel render seeded instead of waterfalling requests on open.
  *
- * The travel-mapping and signature values come straight from the user's JWT
+ * The travel-mapping value comes straight from the user's JWT
  * metadata (already resolved for the request — no extra query); only the Gmail
  * connection needs a service-role read of `gmail_tokens`. Callers must have
  * verified the acting user's session before invoking this (it reads that user's
@@ -26,7 +24,6 @@ export type SettingsTravelMapping = {
 export type InitialSettingsData = {
   gmail: { connected: boolean; gmail_email: string | null };
   travelMapping: SettingsTravelMapping;
-  mailSignatureName: string;
 };
 
 function readTravelMapping(rawMetadata: unknown): SettingsTravelMapping {
@@ -41,16 +38,6 @@ function readTravelMapping(rawMetadata: unknown): SettingsTravelMapping {
     locationColumn: sanitizeColumnLetter(mapping.locationColumn),
     responsibleColumn: sanitizeColumnLetter(mapping.responsibleColumn),
   };
-}
-
-function readSignatureName(rawMetadata: unknown): string {
-  if (!rawMetadata || typeof rawMetadata !== "object" || Array.isArray(rawMetadata)) {
-    return MAIL_SIGNATURE_DEFAULT_NAME;
-  }
-  const metadata = rawMetadata as Record<string, unknown>;
-  const raw = metadata.mail_signature_name;
-  if (typeof raw !== "string" || !raw.trim()) return MAIL_SIGNATURE_DEFAULT_NAME;
-  return sanitizeText(raw, { maxLen: 120 }) || MAIL_SIGNATURE_DEFAULT_NAME;
 }
 
 export async function fetchInitialSettings(
@@ -69,6 +56,5 @@ export async function fetchInitialSettings(
       gmail_email: typeof metadataGmailEmail === "string" ? metadataGmailEmail : null,
     },
     travelMapping: readTravelMapping(userMetadata),
-    mailSignatureName: readSignatureName(userMetadata),
   };
 }

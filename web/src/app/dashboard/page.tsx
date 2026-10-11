@@ -57,7 +57,7 @@ export default async function DashboardPage({
   const userRoleRaw = appMetadata && "role" in appMetadata ? appMetadata.role : null;
 
   // user_metadata is still the right home for the user's own non-privilege
-  // preferences (travel-sheet mapping, signature, appearance) — it is only the
+  // preferences (travel-sheet mapping, appearance) — it is only the
   // ROLE that must never be read from there.
   const userMetadata =
     claims.user_metadata && typeof claims.user_metadata === "object" && !Array.isArray(claims.user_metadata)
@@ -116,7 +116,7 @@ export default async function DashboardPage({
           })
       : Promise.resolve(null);
 
-  // Settings data is cheap: travel mapping + signature come from the JWT metadata
+  // Settings data is cheap: the travel mapping comes from the JWT metadata
   // we already have; only the Gmail connection needs a service-role read.
   const initialSettingsPromise: Promise<InitialSettingsData | null> =
     isPilot && userId

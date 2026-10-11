@@ -3,7 +3,6 @@ import type { UserRole } from "@/lib/user-role";
 export type SettingsSectionId =
   | "gmail"
   | "travel_mapping"
-  | "mail_signature"
   | "time_data"
   | "appearance"
   | "interface_sounds"
@@ -14,7 +13,6 @@ export type SettingsSectionId =
 export const SETTINGS_SECTION_IDS: SettingsSectionId[] = [
   "gmail",
   "travel_mapping",
-  "mail_signature",
   "time_data",
   "appearance",
   "interface_sounds",
@@ -26,7 +24,6 @@ export const SETTINGS_SECTION_IDS: SettingsSectionId[] = [
 export const SETTINGS_NAV: { id: SettingsSectionId; label: string; pilotOnly?: boolean }[] = [
   { id: "gmail", label: "Gmail", pilotOnly: true },
   { id: "travel_mapping", label: "Travel mapping", pilotOnly: true },
-  { id: "mail_signature", label: "Mail signature", pilotOnly: true },
   { id: "time_data", label: "Time data" },
   { id: "appearance", label: "Appearance" },
   { id: "interface_sounds", label: "Interface sounds" },
@@ -41,13 +38,12 @@ export function filterSettingsNav(isSalesOnly: boolean, navFilter: string) {
   return q === "" ? visible : visible.filter((item) => item.label.toLowerCase().includes(q));
 }
 
-/** SSR-prefetched values matching the three fetches the panel fires on mount.
+/** SSR-prefetched values matching the two fetches the panel fires on mount.
  *  Shape mirrors `InitialSettingsData` from `@/lib/settings-queries` (kept
  *  structural so this client module doesn't import the server-only file). */
 export type InitialSettings = {
   gmail: { connected: boolean; gmail_email: string | null };
   travelMapping: TravelMapping;
-  mailSignatureName: string;
 };
 
 export type SettingsPanelProps = {

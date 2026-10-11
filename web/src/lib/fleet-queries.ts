@@ -235,10 +235,16 @@ export function displayNameFor(user: {
     (a, b) => Number(b.provider === "google") - Number(a.provider === "google"),
   );
   for (const identity of identities) {
+    const data = identity.identity_data;
+    // First and last name merged, when the provider splits them (Google does).
+    const given = typeof data?.given_name === "string" ? data.given_name.trim() : "";
+    const family = typeof data?.family_name === "string" ? data.family_name.trim() : "";
+    if (given && family) return `${given} ${family}`;
     for (const key of ["full_name", "name"]) {
-      const value = identity.identity_data?.[key];
+      const value = data?.[key];
       if (typeof value === "string" && value.trim()) return value.trim();
     }
+    if (given || family) return given || family;
   }
   const local = (user.email ?? "").split("@")[0] ?? "";
   if (!local) return "Unknown";
