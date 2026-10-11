@@ -20,6 +20,16 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-11-phone-tiles",
+    date: "Oct 11, 2026",
+    title: "Phone home, as tiles",
+    highlights: [
+      "Overtime, today and new mail in one row; what's with you and the sheets below",
+      "Chat is a floating pill; Time, Mail and Fleet in the bar",
+      "Account and more under your initials, on every screen",
+    ],
+  },
+  {
     version: "2026-10-11-sounds-off",
     date: "Oct 11, 2026",
     title: "Quiet by default",

@@ -1,5 +1,6 @@
 "use client";
 
+import { greetingFromEmail } from "@/lib/greeting";
 import { AnimatePresence, m } from "framer-motion";
 import { type ReactNode, useEffect, useRef } from "react";
 import { lockPageScroll } from "@/lib/scroll-lock";
@@ -46,6 +47,20 @@ export function MobileTopBar({
       <h1 className={cn("min-w-0 flex-1 truncate font-semibold text-ink", large ? "text-2xl" : "text-base")}>{title}</h1>
       {right ? <div className="flex shrink-0 items-center gap-1">{right}</div> : null}
     </header>
+  );
+}
+
+/** The person's initial in a round accent button: opens Account and More. */
+export function MobileAvatar({ email, onClick }: { email: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Account and more"
+      className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-accent-from to-accent-to text-sm font-semibold text-slate-950"
+    >
+      {greetingFromEmail(email).slice(0, 1)}
+    </button>
   );
 }
 

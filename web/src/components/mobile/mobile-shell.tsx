@@ -22,7 +22,7 @@ import { MobileSettingsScreen } from "./settings/mobile-settings-screen";
 import { MobileAdminScreen } from "./admin/mobile-admin-screen";
 import { MobileTeamScreen } from "./team/mobile-team-screen";
 import { useFieldStats } from "./team/use-field-stats";
-import { MobileButton, MobileGroup, MobileRow, MobileSheet, MobileTopBar } from "./primitives";
+import { MobileAvatar, MobileButton, MobileGroup, MobileRow, MobileSheet, MobileTopBar } from "./primitives";
 import { useHomeSummary } from "./use-home-summary";
 
 // Chat pulls supabase-js realtime into the browser; it loads only when opened.
@@ -47,8 +47,8 @@ export type MobileShellProps = DashboardShellProps;
  * DashboardShell when lib/device.ts says the request comes from a phone;
  * takes exactly the same props, so the server does the same work for both.
  *
- * Native-app shaped: a status-screen home, a tab bar, and one module on
- * screen at a time with a back button. Opening a module pushes a history entry, so the
+ * Native-app shaped: a home board of tiles, a tab bar (Time, Mail, Fleet and
+ * a Chat pill), and one module on screen at a time with a back chevron. Opening a module pushes a history entry, so the
  * Back gesture returns home. The module screens reuse the shared hooks; the
  * markup is the phone's own (the modules not yet rebuilt for the phone show
  * their desktop panel inside the phone chrome until their phase lands).
@@ -207,21 +207,15 @@ export function MobileShell({
   }, [activeModule]);
 
   function onTab(tab: MobileTab) {
-    if (tab === "home") return goHome();
     if (tab === "chat") {
       setMoreOpen(false);
       setChatOpen(true);
       return;
     }
-    if (tab === "more") {
-      setMoreOpen((open) => !open);
-      return;
-    }
     openModule(tab);
   }
 
-  const activeTab: MobileTab =
-    activeModule === null ? "home" : activeModule === "mail" || activeModule === "time" || activeModule === "fleet" ? activeModule : "more";
+  const activeTab: MobileTab | null = activeModule === "mail" || activeModule === "time" || activeModule === "fleet" ? activeModule : null;
   const embedOpen = activeModule === "planning" || activeModule === "fleetsheet" || activeModule === "roaddays";
   const embeds = (
     [
@@ -274,6 +268,7 @@ export function MobileShell({
                   : "Fleet"
             }
             onBack={goHome}
+            right={<MobileAvatar email={email} onClick={() => setMoreOpen(true)} />}
           />
           <div>
             {activeModule === "time" ? (

@@ -6,13 +6,15 @@ import { IconClock, IconDrone, IconMail } from "@/components/module-icons";
 import type { ModuleKey } from "@/lib/dashboard-modules";
 import { cn } from "@/lib/cn";
 
-export type MobileTab = "home" | "mail" | "time" | "fleet" | "chat" | "more";
+export type MobileTab = "mail" | "time" | "fleet" | "chat";
 
 /**
- * The phone's navigation: a tab bar along the bottom edge, in thumb reach.
- * Items come from `availableModules` (role-clamped on the server), so the bar
- * never shows a module the role cannot open. The Google sheets and form stay
- * on their home cards, as on desktop; everything else is under More.
+ * The phone's navigation: the three modules as tabs along the bottom edge,
+ * and Chat as a floating pill at the end of the row, since it opens over
+ * whatever is on screen rather than replacing it. Items come from
+ * `availableModules` (role-clamped on the server). There is no Home tab:
+ * every module screen has a back chevron to the home board, and Account and
+ * More sit under the person's initials in the top bar.
  */
 export function MobileTabBar({
   active,
@@ -20,19 +22,16 @@ export function MobileTabBar({
   onSelect,
   hidden = false,
 }: {
-  active: MobileTab;
+  active: MobileTab | null;
   availableModules: ModuleKey[];
   onSelect: (tab: MobileTab) => void;
   hidden?: boolean;
 }) {
   if (hidden) return null;
   const items: Array<{ key: MobileTab; label: string; icon: ReactNode }> = [
-    { key: "home", label: "Home", icon: <HomeIcon className="h-6 w-6" /> },
-    ...(availableModules.includes("mail") ? [{ key: "mail" as const, label: "Mail", icon: <IconMail className="h-6 w-6" /> }] : []),
     { key: "time", label: "Time", icon: <IconClock className="h-6 w-6" /> },
+    ...(availableModules.includes("mail") ? [{ key: "mail" as const, label: "Mail", icon: <IconMail className="h-6 w-6" /> }] : []),
     ...(availableModules.includes("fleet") ? [{ key: "fleet" as const, label: "Fleet", icon: <IconDrone className="h-6 w-6" /> }] : []),
-    { key: "chat", label: "Chat", icon: <ChatBubbleIcon className="h-6 w-6" /> },
-    { key: "more", label: "More", icon: <MoreIcon className="h-6 w-6" /> },
   ];
   return (
     <nav className="m-tabbar fixed inset-x-0 bottom-0 z-[95] flex items-stretch border-t border-glass/10 bg-surface/95 pb-safe backdrop-blur-md" aria-label="Workspace">
@@ -54,24 +53,16 @@ export function MobileTabBar({
           </button>
         );
       })}
+      <div className="flex shrink-0 items-center py-1.5 pl-1 pr-3">
+        <button
+          type="button"
+          onClick={() => onSelect("chat")}
+          className="m-chat-pill flex h-11 items-center gap-1.5 rounded-full bg-gradient-to-br from-accent-from to-accent-to px-4 text-sm font-semibold text-slate-950 shadow-lg shadow-black/20 active:brightness-95"
+        >
+          <ChatBubbleIcon className="h-5 w-5" />
+          Chat
+        </button>
+      </div>
     </nav>
-  );
-}
-
-function HomeIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 11.25 12 4l9 7.25M5.25 9.75V19.5h4.5v-5.25h4.5v5.25h4.5V9.75" />
-    </svg>
-  );
-}
-
-function MoreIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <circle cx="5" cy="12" r="1.75" />
-      <circle cx="12" cy="12" r="1.75" />
-      <circle cx="19" cy="12" r="1.75" />
-    </svg>
   );
 }
