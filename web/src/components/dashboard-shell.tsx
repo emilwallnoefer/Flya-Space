@@ -40,6 +40,8 @@ import { playUiSound } from "@/lib/ui-sounds";
 import type { ModuleKey } from "@/lib/dashboard-modules";
 import { writeViewParams } from "@/lib/view-params";
 import { LATEST_RELEASE } from "@/lib/release-notes";
+import { PhoneTour } from "@/components/phone-tour";
+import { PHONE_TOUR_SEEN_KEY } from "@/lib/phone-tour-steps";
 import { userRoleLabel, type UserRole } from "@/lib/user-role";
 import type { GoogleEmbed } from "@/lib/google-embeds";
 import { todayCell } from "@/lib/google-embed-today-client";
@@ -276,6 +278,9 @@ export function DashboardShell({
     showComposer && (activeModule === "planning" || activeModule === "fleetsheet" || activeModule === "roaddays");
   const [showProgramReadmePrompt, setShowProgramReadmePrompt] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  // The one-time, centred walkthrough of the phone app (components/phone-tour.tsx).
+  // While it is up, the corner popups and the chat pill wait their turn.
+  const [showPhoneTour, setShowPhoneTour] = useState(false);
   // The floating chat pill shares the bottom-right corner with the first-launch
   // and "What's new" popups. Their height varies per release, so measure the
   // visible one and lift the pill just above it instead of guessing a fixed rem.
@@ -401,6 +406,12 @@ export function DashboardShell({
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     try {
+      // The phone walkthrough shows once per browser for everyone, ahead of
+      // the corner popups; `?tour=phone` brings it back on demand.
+      const tourRequested = new URLSearchParams(window.location.search).get("tour") === "phone";
+      if (tourRequested || !window.localStorage.getItem(PHONE_TOUR_SEEN_KEY)) {
+        setShowPhoneTour(true);
+      }
       const firstLaunchSeen = window.localStorage.getItem(PROGRAM_README_PROMPT_SEEN_KEY);
       if (!firstLaunchSeen) {
         // Brand-new user: show the one-time first-launch README prompt, and mark
@@ -793,7 +804,7 @@ export function DashboardShell({
         {/* Hidden while the panel is open, and while a bottom-right popup
             (program readme, what's new) holds that corner. */}
         {/* Also hidden over the full-screen planning sheet, where it would cover the sheet's corner. */}
-        {!chatOpen && !showProgramReadmePrompt && !showWhatsNew && !embedOpen ? (
+        {!chatOpen && !showProgramReadmePrompt && !showWhatsNew && !showPhoneTour && !embedOpen ? (
           <m.button
             key="chat-trigger"
             type="button"
@@ -815,7 +826,10 @@ export function DashboardShell({
         ) : null}
       </AnimatePresence>
       <OfflineGameCard />
-      {showProgramReadmePrompt ? (
+      {showPhoneTour ? (
+        <PhoneTour email={email} availableModules={availableModules} onClose={() => setShowPhoneTour(false)} />
+      ) : null}
+      {showProgramReadmePrompt && !showPhoneTour ? (
         <div
           className="fixed bottom-safe right-4 z-[120] w-[min(92vw,22rem)] rounded-xl border border-glass/20 bg-surface/92 p-3 shadow-xl backdrop-blur-xl"
         >
@@ -849,7 +863,7 @@ export function DashboardShell({
           </button>
         </div>
       ) : null}
-      {showWhatsNew ? (
+      {showWhatsNew && !showPhoneTour ? (
         <div
           className="fixed bottom-safe right-4 z-[120] w-[min(92vw,22rem)] rounded-xl border border-glass/20 bg-surface/92 p-3 shadow-xl backdrop-blur-xl"
         >
