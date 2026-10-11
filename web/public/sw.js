@@ -107,3 +107,56 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
+// ---------------------------------------------------------------------------
+// Phone notifications (Web Push).
+//
+// The server (`src/lib/push/send.ts`) sends a small JSON payload:
+//   { title, body, url, tag? }
+// and this is where it becomes the notification the user sees. Nothing is
+// fetched or cached here: the payload is the whole message, so showing it
+// needs no network and adds nothing to the offline cache above.
+// ---------------------------------------------------------------------------
+
+self.addEventListener("push", (event) => {
+  let payload = null;
+  try {
+    payload = event.data ? event.data.json() : null;
+  } catch {
+    payload = null;
+  }
+  if (!payload || typeof payload.title !== "string") return;
+  const url = typeof payload.url === "string" && payload.url.startsWith("/") ? payload.url : "/dashboard";
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: typeof payload.body === "string" ? payload.body : "",
+      tag: typeof payload.tag === "string" ? payload.tag : undefined,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL((event.notification.data && event.notification.data.url) || "/dashboard", self.location.origin);
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      // Reuse an open Flya Space window (the installed app, if it is running).
+      for (const client of windows) {
+        if (new URL(client.url).origin !== self.location.origin) continue;
+        if ("navigate" in client) {
+          try {
+            await client.navigate(target.href);
+          } catch {
+            // Some browsers refuse navigate(); focusing is still the right thing.
+          }
+        }
+        if ("focus" in client) return client.focus();
+      }
+      return self.clients.openWindow(target.href);
+    })(),
+  );
+});

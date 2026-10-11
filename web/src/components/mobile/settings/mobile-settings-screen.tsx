@@ -4,6 +4,7 @@ import { AppearanceSection } from "@/components/settings/sections/appearance-sec
 import { GmailSection } from "@/components/settings/sections/gmail-section";
 import { InterfaceSoundsSection } from "@/components/settings/sections/interface-sounds-section";
 import { MailSignatureSection } from "@/components/settings/sections/mail-signature-section";
+import { NotificationsSection } from "@/components/settings/sections/notifications-section";
 import { ReadmeSection } from "@/components/settings/sections/readme-section";
 import { SecuritySection } from "@/components/settings/sections/security-section";
 import { TimeDataSection } from "@/components/settings/sections/time-data-section";
@@ -22,6 +23,7 @@ const DETAIL: Record<SettingsSectionId, string> = {
   time_data: "Import or export your hours",
   appearance: "Skin and accent",
   interface_sounds: "Clicks and whooshes",
+  notifications: "Reminders on this phone",
   security: "Delete your account",
   readme: "Guides and help",
 };
@@ -84,6 +86,7 @@ export function MobileSettingsScreen({
         {open === "time_data" ? <TimeDataSection importing={s.importing} exporting={s.exporting} onImportFile={(file) => void s.handleImportFile(file)} onExport={() => void s.handleExportData()} /> : null}
         {open === "appearance" ? <AppearanceSection /> : null}
         {open === "interface_sounds" ? <InterfaceSoundsSection /> : null}
+        {open === "notifications" ? <NotificationsSection /> : null}
         {open === "security" ? <SecuritySection confirmText={s.deleteConfirmText} setConfirmText={s.setDeleteConfirmText} deleting={s.deletingAccount} onDelete={() => void s.handleDeleteAccount()} /> : null}
         {open === "readme" ? <ReadmeSection isSalesOnly={s.isSalesOnly} openReadme={s.openReadme} onToggle={s.toggleReadme} /> : null}
         {s.message ? <p className="mt-6 text-sm text-positive">{s.message}</p> : null}

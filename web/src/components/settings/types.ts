@@ -7,6 +7,7 @@ export type SettingsSectionId =
   | "time_data"
   | "appearance"
   | "interface_sounds"
+  | "notifications"
   | "security"
   | "readme";
 
@@ -17,6 +18,7 @@ export const SETTINGS_SECTION_IDS: SettingsSectionId[] = [
   "time_data",
   "appearance",
   "interface_sounds",
+  "notifications",
   "security",
   "readme",
 ];
@@ -28,6 +30,7 @@ export const SETTINGS_NAV: { id: SettingsSectionId; label: string; pilotOnly?: b
   { id: "time_data", label: "Time data" },
   { id: "appearance", label: "Appearance" },
   { id: "interface_sounds", label: "Interface sounds" },
+  { id: "notifications", label: "Notifications" },
   { id: "security", label: "Account & security" },
   { id: "readme", label: "Help & README" },
 ];
