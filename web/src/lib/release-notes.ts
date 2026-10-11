@@ -22,11 +22,10 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   {
     version: "2026-10-11-phone-sheets-open-in-google",
     date: "Oct 11, 2026",
-    title: "Sheets open in Google on your phone",
+    title: "Sheets on your phone: in the app or in Google",
     highlights: [
-      "Planning, Fleet sheet and Road Days open in the Google Sheets or Forms app, or on Google's site",
-      "They open with your work account, even when a personal one is signed in too",
-      "No more blank screen in Safari",
+      "Tap ↗ on the Planning, Fleet sheet and Road Days tiles to open them in the Google app, with your work account",
+      "Blank sheet in the app? Safari needs \"Prevent Cross-Site Tracking\" off, or use ↗",
     ],
   },
   {

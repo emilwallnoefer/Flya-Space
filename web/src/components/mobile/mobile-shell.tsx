@@ -31,6 +31,14 @@ import { useHomeSummary } from "./use-home-summary";
 
 // Chat pulls supabase-js realtime into the browser; it loads only when opened.
 const MobileChatScreen = dynamic(() => import("./chat/mobile-chat-screen").then((m) => m.MobileChatScreen), { ssr: false });
+const GoogleEmbedPanel = dynamic(() => import("@/components/google-embed-panel").then((m) => m.GoogleEmbedPanel), { ssr: false, loading: PanelLoading });
+
+/**
+ * Shown behind "Not loading?" in the framed sheet on phones. WebKit withholds
+ * the Google session from the frame unless this setting is off; nothing on our
+ * side can change that (lib/google-embeds.ts).
+ */
+const PHONE_FRAME_HELP = "Safari shows a blank sheet until Settings → Safari → \"Prevent Cross-Site Tracking\" is off. Or open it in Google from the tile's ↗.";
 
 // Same keys as the desktop shell, so a release seen on one device is seen on both.
 const PROGRAM_README_PROMPT_SEEN_KEY = "ma_program_readme_prompt_seen_v1";
@@ -56,9 +64,11 @@ export type MobileShellProps = DashboardShellProps;
  * markup is the phone's own (the modules not yet rebuilt for the phone show
  * their desktop panel inside the phone chrome until their phase lands).
  *
- * The Google sheets and form are links out to Google, not framed as on the
- * desktop: WebKit gives a third-party frame no Google session, so a framed
- * sheet is a white screen on every iPhone browser (lib/google-embeds.ts).
+ * The Google sheets and form are framed as on the desktop, but each tile also
+ * carries a link out to Google: WebKit gives a third-party frame no Google
+ * session unless the person has turned off Safari's cross-site tracking
+ * prevention, so for everyone else the frame is a white screen and the link
+ * is the way in (lib/google-embeds.ts).
  */
 export function MobileShell({
   email,
@@ -79,9 +89,12 @@ export function MobileShell({
   // Same role → modules mapping as the desktop shell.
   const availableModules = useMemo<ModuleKey[]>(() => {
     const base: ModuleKey[] = userRole === "sales" || userRole === "hr" ? ["time", "fleet", "settings"] : ["mail", "time", "fleet", "settings"];
+    if (missionPlanning) base.push("planning");
+    if (fleetSheet) base.push("fleetsheet");
+    if (roadDays) base.push("roaddays");
     if (isAdmin || userRole === "hr") base.push("admin");
     return base;
-  }, [userRole, isAdmin]);
+  }, [userRole, isAdmin, missionPlanning, fleetSheet, roadDays]);
 
   const [activeModule, setActiveModule] = useState<ModuleKey | null>(() =>
     initialModule && availableModules.includes(initialModule) ? initialModule : null,
@@ -225,6 +238,7 @@ export function MobileShell({
   }
 
   const activeTab: MobileTab | null = activeModule === "mail" || activeModule === "time" || activeModule === "fleet" ? activeModule : null;
+  const embedOpen = activeModule === "planning" || activeModule === "fleetsheet" || activeModule === "roaddays";
   const screenKey = teamOpen ? "team" : (activeModule ?? "home");
   function openTeam() {
     setNavDir(1);
@@ -235,8 +249,8 @@ export function MobileShell({
     setNavDir(-1);
     setTeamOpen(false);
   }
-  // The two calendar sheets open on today's cell when the server can find it;
-  // the links work without it, so this is a nicety that arrives when it does.
+  // The two calendar sheets' links out open on today's cell when the server
+  // can find it (the frame does its own lookup); the links work without it.
   const [todayCells, setTodayCells] = useState<Partial<Record<EmbedSheet, string | null>>>({});
   const wantsPlanningToday = missionPlanning?.today ?? null;
   const wantsFleetToday = fleetSheet?.today ?? null;
@@ -289,6 +303,12 @@ export function MobileShell({
           onOpenModule={openModule}
           onOpenMore={() => setMoreOpen(true)}
         />
+      ) : activeModule === "planning" && missionPlanning ? (
+        <GoogleEmbedPanel title={HOME_CARDS[3].title} urls={missionPlanning} onBack={goHome} helpNote={PHONE_FRAME_HELP} />
+      ) : activeModule === "fleetsheet" && fleetSheet ? (
+        <GoogleEmbedPanel title={HOME_CARDS[4].title} urls={fleetSheet} onBack={goHome} helpNote={PHONE_FRAME_HELP} />
+      ) : activeModule === "roaddays" && roadDays ? (
+        <GoogleEmbedPanel title={HOME_CARDS[5].title} urls={roadDays} onBack={goHome} helpNote={PHONE_FRAME_HELP} />
       ) : activeModule === "admin" ? (
         <div className="m-screen">
           <Suspense fallback={<PanelLoading />}>
@@ -327,7 +347,7 @@ export function MobileShell({
       )}
       </MobileScreen>
 
-      <MobileTabBar active={activeTab} availableModules={availableModules} onSelect={onTab} hidden={chatOpen} />
+      <MobileTabBar active={activeTab} availableModules={availableModules} onSelect={onTab} hidden={embedOpen || chatOpen} />
 
       <AnimatePresence>{chatOpen ? <MobileChatScreen key="chat" isAdmin={isAdmin} onClose={() => setChatOpen(false)} /> : null}</AnimatePresence>
 

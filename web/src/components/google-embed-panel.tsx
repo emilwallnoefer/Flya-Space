@@ -39,8 +39,8 @@ const COPY: Record<GoogleEmbed["kind"], { hint: string; app: string; frame: stri
 /**
  * One Google Sheet or Form (Mission planning, Fleet management, Road Days), as
  * Google's own UI in a frame. See lib/google-embeds.ts for why it is an iframe
- * and who sees it. Desktop only: the phone shell links out to Google instead,
- * because WebKit gives the frame no Google session (same file).
+ * and who sees it. The phone shell mounts it too, with a `helpNote` on the
+ * Safari setting the frame needs there (same file).
  *
  * It takes over the whole window: a slim bar on top (back, title, and a quiet
  * "Not loading?" that reveals the fixes) and the page below. It is portalled to <body> so no transformed or
@@ -66,10 +66,13 @@ export function GoogleEmbedPanel({
   title,
   urls,
   onBack,
+  helpNote,
 }: {
   title: string;
   urls: GoogleEmbed;
   onBack: () => void;
+  /** An extra line under the fixes when "Not loading?" is opened (the phone's Safari tip). */
+  helpNote?: string;
 }) {
   const [frameKey, setFrameKey] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
@@ -153,6 +156,7 @@ export function GoogleEmbedPanel({
           </button>
         )}
       </div>
+      {showHelp && helpNote ? <p className="px-1 text-[11px] leading-snug text-ink-4">{helpNote}</p> : null}
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-glass/10 bg-white">
         {frameSrc === null ? null : (
           <iframe

@@ -17,14 +17,16 @@
  * withhold the Google session from a third-party frame. The panel's
  * "Sign in to Google" and "Open in Google …" buttons cover both, in a new tab.
  *
- * On phones there is no frame at all. Every iPhone browser is WebKit, and
- * WebKit partitions third-party storage: docs.google.com inside our frame
- * gets an empty cookie jar whatever account the person is signed in with, so
- * Google redirects it to a sign-in page that refuses framing — a white screen,
- * and no sign-in or reload can change that. The phone's tiles are plain links
- * to `open` instead, with `authuser=` set to the work account (`withAuthUser`)
- * so Google does not land on a personal account that is also signed in; iOS
- * hands such a link to the Sheets / Forms app when it is installed.
+ * On iPhones that is the rule, not the exception. Every iPhone browser is
+ * WebKit, and WebKit partitions third-party storage: docs.google.com inside
+ * our frame gets an empty cookie jar whatever account the person is signed in
+ * with, so Google redirects it to a sign-in page that refuses framing — a
+ * white screen, and no sign-in or reload can change that. Only the person
+ * turning off Safari's "Prevent Cross-Site Tracking" lets the frame through.
+ * So each phone tile also links out to `open`, with `authuser=` set to the
+ * work account (`withAuthUser`) so Google does not land on a personal account
+ * that is also signed in; iOS hands such a link to the Sheets / Forms app when
+ * it is installed.
  *
  * Sheets use `rm=embedded` (keeps menus and the format toolbar; `rm=minimal`
  * drops them). Forms use `embedded=true`. The two calendar sheets open scrolled

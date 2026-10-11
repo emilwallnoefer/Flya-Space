@@ -22,9 +22,11 @@ const DAY = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric" 
  * the shortcuts (new mail, the Google sheets) as half-width tiles. One
  * rhythm top to bottom; the wide card is the only deliberate exception.
  *
- * The Google tiles are links that leave the app (the sheet opens in the
- * Sheets app or on Google's site, with the work account): a framed sheet is
- * blank on iPhones, see lib/google-embeds.ts.
+ * The Google tiles are split: the wide left part opens the sheet framed in
+ * the app, the ↗ on the right opens it in Google (the Sheets app or Google's
+ * site, with the work account). The frame is blank on iPhones until Safari's
+ * cross-site tracking prevention is off, see lib/google-embeds.ts, so the
+ * link is the way in for everyone else.
  */
 export function MobileHome({
   email,
@@ -121,7 +123,7 @@ export function MobileHome({
             icon={shortcut.icon}
             label={shortcut.label}
             href={shortcut.href}
-            onClick={shortcut.href ? undefined : () => onOpenModule(shortcut.key)}
+            onClick={() => onOpenModule(shortcut.key)}
             wide={shortcuts.length % 2 === 1 && index === shortcuts.length - 1}
           />
         ))}
@@ -130,13 +132,13 @@ export function MobileHome({
   );
 }
 
-/** A half-width shortcut: a glyph and a name on one line, 56px tall. */
-/** A shortcut: a button into a module, or, with `href`, a link that opens Google in a new tab. */
-function ShortcutTile({ icon, label, onClick, href, wide }: { icon: ReactNode; label: string; onClick?: () => void; href?: string; wide: boolean }) {
-  const className = cn(
-    "m-tile flex min-h-14 min-w-0 items-center gap-3 rounded-2xl border border-glass/10 bg-panel px-4 text-left transition-transform duration-150 ease-out active:scale-[0.97] active:duration-100",
-    wide && "col-span-2",
-  );
+/**
+ * A half-width shortcut: a glyph and a name on one line, 56px tall. With
+ * `href` it splits: the left two thirds open the module in the app, the right
+ * third is a link that opens the same thing in Google, in a new tab.
+ */
+function ShortcutTile({ icon, label, onClick, href, wide }: { icon: ReactNode; label: string; onClick: () => void; href?: string; wide: boolean }) {
+  const PRESS = "transition-transform duration-150 ease-out active:scale-[0.97] active:duration-100";
   const body = (
     <>
       <span className="shrink-0 text-accent-soft">{icon}</span>
@@ -145,16 +147,28 @@ function ShortcutTile({ icon, label, onClick, href, wide }: { icon: ReactNode; l
   );
   if (href) {
     return (
-      <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
-        {body}
-        <span className="ml-auto shrink-0 text-xs text-ink-5" aria-label="Opens in Google">
+      <div className={cn("m-tile flex min-h-14 min-w-0 overflow-hidden rounded-2xl border border-glass/10 bg-panel", wide && "col-span-2")}>
+        <button type="button" onClick={onClick} className={cn("flex min-w-0 flex-[2] items-center gap-3 px-4 text-left", PRESS)}>
+          {body}
+        </button>
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${label}: open in Google`}
+          className={cn("flex flex-1 items-center justify-center border-l border-glass/10 text-sm text-ink-4", PRESS)}
+        >
           ↗
-        </span>
-      </a>
+        </a>
+      </div>
     );
   }
   return (
-    <button type="button" onClick={onClick} className={className}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn("m-tile flex min-h-14 min-w-0 items-center gap-3 rounded-2xl border border-glass/10 bg-panel px-4 text-left", PRESS, wide && "col-span-2")}
+    >
       {body}
     </button>
   );
