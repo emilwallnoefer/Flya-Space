@@ -19,8 +19,8 @@ const DAY = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric" 
 /**
  * The phone's home: a board of tiles, each one thing, each one tap. Top row
  * is the person's own numbers and actions (overtime bank, today, new mail);
- * then the material with them; then the Google sheets. Labels are the
- * tile's name and nothing more: the tiles explain themselves.
+ * then the material with them; then the Google sheets. Only the top row
+ * carries a name; the fleet and Google tiles are their glyph and value alone.
  */
 export function MobileHome({
   email,
@@ -93,7 +93,6 @@ export function MobileHome({
               {myItems.map((item) => (
                 <HomeTile
                   key={item.id}
-                  label={item.status === "picked_up" ? "With you" : "Booked"}
                   icon={<IconDrone className="h-4 w-4" />}
                   value={<span className="block truncate text-lg">{item.name}</span>}
                   sub={item.status === "picked_up" ? `Back ${DAY.format(fromDateKey(item.end_date))}` : `From ${DAY.format(fromDateKey(item.start_date))}`}
@@ -101,7 +100,6 @@ export function MobileHome({
                 />
               ))}
               <HomeTile
-                label={myItems.length === 0 ? "Nothing with you" : "Fleet"}
                 value={<PlusIcon className="h-7 w-7 text-accent-soft" />}
                 sub="Book"
                 onClick={() => onOpenModule("fleet")}
@@ -118,7 +116,7 @@ export function MobileHome({
                 <HomeTile
                   key={embed.key}
                   compact
-                  label={embed.key === "planning" ? "Planning" : embed.key === "fleetsheet" ? "Fleet sheet" : "Road Days"}
+                  aria-label={embed.title}
                   value={embed.key === "roaddays" ? <FormIcon className="h-6 w-6 text-accent-soft" /> : <SheetIcon className="h-6 w-6 text-accent-soft" />}
                   onClick={() => onOpenModule(embed.key)}
                 />
@@ -131,9 +129,10 @@ export function MobileHome({
   );
 }
 
-/** A home tile: a name, one big thing (a number, a word or a glyph), at most one short line under it. */
+/** A home tile: one big thing (a number, a word or a glyph), optionally a name above and one short line under it. */
 function HomeTile({
   label,
+  "aria-label": ariaLabel,
   value,
   sub,
   icon,
@@ -141,7 +140,8 @@ function HomeTile({
   compact = false,
   onClick,
 }: {
-  label: ReactNode;
+  label?: ReactNode;
+  "aria-label"?: string;
   value: ReactNode;
   sub?: ReactNode;
   icon?: ReactNode;
@@ -153,16 +153,19 @@ function HomeTile({
   return (
     <button
       type="button"
+      aria-label={ariaLabel}
       onClick={onClick}
       className={cn(
         "m-tile flex min-w-0 flex-col justify-between rounded-2xl border border-glass/10 bg-panel p-3 text-left transition-transform duration-150 ease-out active:scale-[0.97] active:duration-100",
         compact ? "min-h-[4.75rem] gap-2" : "min-h-[5.75rem] gap-3",
       )}
     >
-      <span className="flex min-w-0 items-center justify-between gap-2 text-xs font-medium text-ink-4">
-        <span className="truncate">{label}</span>
-        {icon ? <span className="shrink-0 text-ink-5">{icon}</span> : null}
-      </span>
+      {label || icon ? (
+        <span className="flex min-w-0 items-center justify-between gap-2 text-xs font-medium text-ink-4">
+          <span className="truncate">{label}</span>
+          {icon ? <span className="shrink-0 text-ink-5">{icon}</span> : null}
+        </span>
+      ) : null}
       <span className="min-w-0">
         <span className={cn("block truncate font-semibold tabular-nums leading-tight", compact ? "text-base" : "text-xl", toneClass)}>{value}</span>
         {sub ? <span className="mt-0.5 block truncate text-xs text-ink-4">{sub}</span> : null}
