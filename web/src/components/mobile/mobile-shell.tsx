@@ -17,6 +17,7 @@ import { playUiSound } from "@/lib/ui-sounds";
 import { pushViewParams, readViewParam, wasPushedByUs, writeViewParams } from "@/lib/view-params";
 import { MOBILE_LOOK } from "./look";
 import { MobileHome } from "./mobile-home";
+import { NotificationsPrompt } from "./notifications-prompt";
 import { MobileScreen, type NavDirection } from "./screen";
 import { MobileTabBar, type MobileTab } from "./mobile-tab-bar";
 import { MobileTimeScreen } from "./time/mobile-time-screen";
@@ -380,6 +381,8 @@ export function MobileShell({
           ))}
         </ul>
       </MobileSheet>
+
+      <NotificationsPrompt held={whatsNewOpen} />
 
       <OfflineGameCard />
     </main>
