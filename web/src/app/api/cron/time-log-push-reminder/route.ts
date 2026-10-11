@@ -41,7 +41,8 @@ export const dynamic = "force-dynamic";
  * Auth as the other crons: `Authorization: Bearer $CRON_SECRET`, or an admin
  * session. `?dry=1` lists who would be reminded without sending or claiming;
  * `?force=1` ignores the time window; `?send_test=1` sends the reminder to
- * the calling admin's own devices, whatever the week looks like.
+ * the calling admin's own devices, whatever the week looks like, with a
+ * `[TEST]` prefix — add `&real=1` to see it exactly as recipients will.
  */
 
 type Outcome = {
@@ -142,6 +143,7 @@ export async function GET(request: Request) {
   const isDryRun = url.searchParams.get("dry") === "1";
   const isForced = url.searchParams.get("force") === "1";
   const isSendTest = url.searchParams.get("send_test") === "1";
+  const testLooksReal = url.searchParams.get("real") === "1";
 
   if (!isDryRun && isCrossSiteRequest(request)) {
     return NextResponse.json({ error: "Cross-site invocation refused for a sending request." }, { status: 403 });
@@ -173,7 +175,11 @@ export async function GET(request: Request) {
     }
     const { data: me } = await admin.auth.admin.getUserById(auth.adminUserId);
     const payload = weekUnloggedPayload(me?.user ? firstNameOf(me.user) : null);
-    const result = await notifyUser(admin, devices, { ...payload, title: `[TEST] ${payload.title}`, tag: `${payload.tag}_test` });
+    const result = await notifyUser(
+      admin,
+      devices,
+      testLooksReal ? payload : { ...payload, title: `[TEST] ${payload.title}`, tag: `${payload.tag}_test` },
+    );
     return NextResponse.json({ ok: result.sent > 0, test: true, devices: devices.length, ...result });
   }
 
