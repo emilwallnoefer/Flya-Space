@@ -7,6 +7,8 @@ import type { DashboardShellProps } from "@/components/dashboard-shell";
 import { useMailComposer } from "@/components/mail-composer/use-mail-composer";
 import { OfflineGameCard } from "@/components/offline-game-card";
 import { PanelLoading } from "@/components/panel-loading";
+import { todayCell } from "@/lib/google-embed-today-client";
+import { withAuthUser, withRange, type EmbedSheet } from "@/lib/google-embeds";
 import type { FleetBoardResponse } from "@/components/fleet/types";
 import { HOME_CARDS } from "@/components/workspace-home-layout";
 import { MODULE_KEYS, type ModuleKey } from "@/lib/dashboard-modules";
@@ -54,6 +56,11 @@ export type MobileShellProps = DashboardShellProps;
  * Back gesture returns home. The module screens reuse the shared hooks; the
  * markup is the phone's own (the modules not yet rebuilt for the phone show
  * their desktop panel inside the phone chrome until their phase lands).
+ *
+ * The Google sheets and form are framed as on the desktop, but each tile also
+ * carries a link out to Google: WebKit gives a third-party frame no Google
+ * session, so on most iPhones the frame is a white screen and the link is the
+ * way in (lib/google-embeds.ts).
  */
 export function MobileShell({
   email,
@@ -234,13 +241,44 @@ export function MobileShell({
     setNavDir(-1);
     setTeamOpen(false);
   }
+  // The two calendar sheets' links out open on today's cell when the server
+  // can find it (the frame does its own lookup); the links work without it.
+  const [todayCells, setTodayCells] = useState<Partial<Record<EmbedSheet, string | null>>>({});
+  const wantsPlanningToday = missionPlanning?.today ?? null;
+  const wantsFleetToday = fleetSheet?.today ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    for (const sheet of [wantsPlanningToday, wantsFleetToday]) {
+      if (!sheet) continue;
+      void todayCell(sheet).then((cell) => {
+        if (!cancelled) setTodayCells((cells) => ({ ...cells, [sheet]: cell }));
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [wantsPlanningToday, wantsFleetToday]);
   const embeds = (
     [
-      missionPlanning ? { key: "planning" as const, title: HOME_CARDS[3].title } : null,
-      fleetSheet ? { key: "fleetsheet" as const, title: HOME_CARDS[4].title } : null,
-      roadDays ? { key: "roaddays" as const, title: HOME_CARDS[5].title } : null,
-    ] as Array<{ key: ModuleKey; title: string } | null>
-  ).filter((embed): embed is { key: ModuleKey; title: string } => embed !== null);
+      missionPlanning
+        ? {
+            key: "planning" as const,
+            title: HOME_CARDS[3].title,
+            href: withAuthUser(withRange(missionPlanning.open, missionPlanning.today && todayCells[missionPlanning.today]), email),
+          }
+        : null,
+      fleetSheet
+        ? {
+            key: "fleetsheet" as const,
+            title: HOME_CARDS[4].title,
+            href: withAuthUser(withRange(fleetSheet.open, fleetSheet.today && todayCells[fleetSheet.today]), email),
+          }
+        : null,
+      roadDays ? { key: "roaddays" as const, title: HOME_CARDS[5].title, href: withAuthUser(roadDays.open, email) } : null,
+    ] as Array<{ key: ModuleKey; title: string; href: string } | null>
+  ).filter((embed): embed is { key: ModuleKey; title: string; href: string } => embed !== null);
+  // The framed view's "Still blank?" card links out to the same URL as the tile's ↗.
+  const hintFor = (key: ModuleKey) => ({ openHref: embeds.find((embed) => embed.key === key)?.href ?? "" });
 
   return (
     <main id="main-content" className="relative min-h-dvh bg-surface text-ink" data-mobile-look={MOBILE_LOOK}>
@@ -260,11 +298,11 @@ export function MobileShell({
           onOpenMore={() => setMoreOpen(true)}
         />
       ) : activeModule === "planning" && missionPlanning ? (
-        <GoogleEmbedPanel title={HOME_CARDS[3].title} urls={missionPlanning} onBack={goHome} />
+        <GoogleEmbedPanel title={HOME_CARDS[3].title} urls={missionPlanning} onBack={goHome} phoneHint={hintFor("planning")} />
       ) : activeModule === "fleetsheet" && fleetSheet ? (
-        <GoogleEmbedPanel title={HOME_CARDS[4].title} urls={fleetSheet} onBack={goHome} />
+        <GoogleEmbedPanel title={HOME_CARDS[4].title} urls={fleetSheet} onBack={goHome} phoneHint={hintFor("fleetsheet")} />
       ) : activeModule === "roaddays" && roadDays ? (
-        <GoogleEmbedPanel title={HOME_CARDS[5].title} urls={roadDays} onBack={goHome} />
+        <GoogleEmbedPanel title={HOME_CARDS[5].title} urls={roadDays} onBack={goHome} phoneHint={hintFor("roaddays")} />
       ) : activeModule === "admin" ? (
         <div className="m-screen">
           <Suspense fallback={<PanelLoading />}>
