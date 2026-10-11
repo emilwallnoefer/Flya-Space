@@ -26,6 +26,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     highlights: [
       "Open flya.space in Safari on your iPhone, share, then \"Add to Home Screen\"",
       "Time, Fleet, Mail and Chat, built for one hand",
+      "The Today tile says Weekend, Vacation, Holiday or Sick when there is nothing to log",
     ],
   },
   {
