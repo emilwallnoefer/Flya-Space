@@ -9,6 +9,7 @@ test("manifest describes a standalone app with its icons", async ({ request }) =
   expect(response.headers()["content-type"]).toContain("application/manifest+json");
   const manifest = await response.json();
   expect(manifest.name).toBe("Flya Space");
+  expect(manifest.short_name).toBe("Flya Space");
   expect(manifest.display).toBe("standalone");
   expect(manifest.scope).toBe("/");
   expect(manifest.start_url).toBe("/dashboard");

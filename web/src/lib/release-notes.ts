@@ -20,6 +20,17 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-11-phone-home",
+    date: "Oct 11, 2026",
+    title: "Your overtime bank at a glance",
+    highlights: [
+      "Phone home is now a status screen: your overtime bank, the material with you, the sheets",
+      "Team in the field moved under More",
+      "New app icon, and the installed app is called Flya Space",
+      "Onboarding stays on the desktop",
+    ],
+  },
+  {
     version: "2026-10-09-phone-layout",
     date: "Oct 9, 2026",
     title: "A phone layout of its own",

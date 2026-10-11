@@ -47,8 +47,8 @@ export type MobileShellProps = DashboardShellProps;
  * DashboardShell when lib/device.ts says the request comes from a phone;
  * takes exactly the same props, so the server does the same work for both.
  *
- * Native-app shaped: a home of tiles, a tab bar, and one module on screen at
- * a time with a back button. Opening a module pushes a history entry, so the
+ * Native-app shaped: a status-screen home, a tab bar, and one module on
+ * screen at a time with a back button. Opening a module pushes a history entry, so the
  * Back gesture returns home. The module screens reuse the shared hooks; the
  * markup is the phone's own (the modules not yet rebuilt for the phone show
  * their desktop panel inside the phone chrome until their phase lands).
@@ -88,9 +88,18 @@ export function MobileShell({
   const [refreshKey, setRefreshKey] = useState(0);
   // "Log today" from Home opens the Time screen straight onto today's sheet.
   const [timeEditToday, setTimeEditToday] = useState(false);
-  // "Team in the field": a screen of its own, not a module (no URL state).
+  // "Team in the field": a screen of its own under More, not a module (no URL state).
   const [teamOpen, setTeamOpen] = useState(false);
   const field = useFieldStats(true);
+  const fieldTotals = useMemo(() => {
+    const all = field.stats?.all;
+    if (!all) return null;
+    return {
+      poc: all.pilots.reduce((n, p) => n + p.poc, 0),
+      training: all.pilots.reduce((n, p) => n + p.training, 0),
+      travel: all.pilots.reduce((n, p) => n + p.travelDays, 0),
+    };
+  }, [field.stats]);
   const [gmailStatus, setGmailStatus] = useState<{ connected: boolean; gmail_email?: string | null }>(
     initialSettings?.gmail ?? { connected: false },
   );
@@ -232,14 +241,11 @@ export function MobileShell({
       ) : activeModule === null ? (
         <MobileHome
           email={email}
-          role={userRole}
           availableModules={availableModules}
           summary={summary}
-          field={field}
           embeds={embeds}
           onOpenModule={openModule}
           onOpenMore={() => setMoreOpen(true)}
-          onOpenTeam={() => setTeamOpen(true)}
         />
       ) : activeModule === "planning" && missionPlanning ? (
         <GoogleEmbedPanel title={HOME_CARDS[3].title} urls={missionPlanning} onBack={goHome} />
@@ -293,7 +299,15 @@ export function MobileShell({
           {availableModules.includes("admin") ? (
             <MobileRow label={adminModuleLabel} detail={isAdmin ? "Team time and users · the rest on desktop" : "Everyone's hours"} chevron onClick={() => openModule("admin")} />
           ) : null}
-          <MobileRow label="Onboarding" detail="Your training checklist" chevron href="/onboarding" />
+          <MobileRow
+            label="Team in the field"
+            detail={fieldTotals ? `${fieldTotals.poc} POCs · ${fieldTotals.training} trainings · ${fieldTotals.travel} travel days this year` : "Regions, POCs and trainings this year"}
+            chevron
+            onClick={() => {
+              setMoreOpen(false);
+              setTeamOpen(true);
+            }}
+          />
           <MobileRow label="What's new" detail={LATEST_RELEASE.title} chevron onClick={() => { setMoreOpen(false); setWhatsNewOpen(true); }} />
         </MobileGroup>
         <p className="mt-4 px-1 text-xs text-ink-5">Signed in as {email}</p>

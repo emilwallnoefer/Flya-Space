@@ -27,8 +27,8 @@ const SOURCE = path.join(ROOT, "src", "brand", "flya-space-icon.svg");
 const ICONS_DIR = path.join(ROOT, "public", "icons");
 const APP_DIR = path.join(ROOT, "src", "app");
 
-/** tokens.css --surface: the dark page colour, so the maskable bleed matches. */
-const SURFACE = "#020617";
+/** The neu skin page colour (tokens.css, data-mode="neu"), the icon plate colour. */
+const SURFACE = "#ebecef";
 
 async function main() {
   const svg = await readFile(SOURCE);

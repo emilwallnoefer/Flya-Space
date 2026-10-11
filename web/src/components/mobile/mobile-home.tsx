@@ -2,58 +2,50 @@
 
 import { IconClock, IconDrone, IconMail } from "@/components/module-icons";
 import { HOME_CARDS } from "@/components/workspace-home-layout";
-import { fmtHM, fmtSignedHM } from "@/components/time-tracker/types";
+import { fmtSignedHM } from "@/components/time-tracker/types";
 import type { ModuleKey } from "@/lib/dashboard-modules";
+import { fromDateKey } from "@/lib/date";
 import { greetingFromEmail, timeGreeting } from "@/lib/greeting";
-import { userRoleLabel, type UserRole } from "@/lib/user-role";
-import { ChevronIcon, MobileGroup, MobileRow, MobileTile, MobileTopBar } from "./primitives";
+import { cn } from "@/lib/cn";
+import { MobileGroup, MobileRow, MobileTopBar } from "./primitives";
 import type { useHomeSummary } from "./use-home-summary";
-import type { useFieldStats } from "./team/use-field-stats";
-import { useOnboardingProgress } from "./use-onboarding-progress";
 
 type Summary = ReturnType<typeof useHomeSummary>;
-type Field = ReturnType<typeof useFieldStats>;
+
+const WEEKDAY = new Intl.DateTimeFormat("en-GB", { weekday: "short" });
+const DAY = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric" });
 
 /**
- * The phone's home: a glance, not a landing page. The greeting is one line,
- * the numbers that matter today are tiles, the things people open on the
- * road are one tap away, and the Google sheets/form keep their cards.
+ * The phone's home: a status screen, not a dashboard. It answers the two
+ * things a pilot checks before leaving the hotel: am I in credit (the
+ * overtime bank, large), and do I have my gear (the material actually with
+ * me, by name). Then the Google sheets, then one action. Everything that is
+ * about the team rather than the person (field stats) lives under More.
  */
 export function MobileHome({
   email,
-  role,
   availableModules,
   summary,
-  field,
   embeds,
   onOpenModule,
   onOpenMore,
-  onOpenTeam,
 }: {
   email: string;
-  role: UserRole | null;
   availableModules: ModuleKey[];
   summary: Summary;
-  field: Field;
   embeds: Array<{ key: ModuleKey; title: string }>;
   onOpenModule: (module: ModuleKey, options?: { editToday?: boolean }) => void;
   onOpenMore: () => void;
-  onOpenTeam: () => void;
 }) {
-  const onboarding = useOnboardingProgress();
-  const { week, today, myLive, myOut } = summary;
-  const all = field.stats?.all ?? null;
-  const totals = all
-    ? {
-        poc: all.pilots.reduce((n, p) => n + p.poc, 0),
-        training: all.pilots.reduce((n, p) => n + p.training, 0),
-        travel: all.pilots.reduce((n, p) => n + p.travelDays, 0),
-      }
-    : null;
+  const { week, myItems } = summary;
   const initials = greetingFromEmail(email).slice(0, 1);
   const hasTime = availableModules.includes("time");
   const hasFleet = availableModules.includes("fleet");
   const hasMail = availableModules.includes("mail");
+
+  const logged = week ? week.days.filter((day) => day.net_mins > 0 || day.holiday || day.public_holiday || day.sick_leave) : [];
+  const lastLogged = logged.length > 0 ? logged[logged.length - 1] : null;
+  const bankMins = week?.overtime_bank_mins ?? null;
 
   return (
     <div className="m-screen">
@@ -78,47 +70,56 @@ export function MobileHome({
       />
 
       <div className="space-y-5 px-4 pt-2">
-        {role ? <p className="text-xs text-ink-4">{userRoleLabel(role)}</p> : null}
-
         {hasTime ? (
-          <div className="grid grid-cols-2 gap-3">
-            <MobileTile
-              label="Today"
-              value={today && today.net_mins > 0 ? fmtHM(today.net_mins) : today?.holiday ? "Vacation" : today?.sick_leave ? "Sick" : today?.public_holiday ? "Holiday" : "—"}
-              detail={today && today.net_mins > 0 ? `${today.start_time}–${today.stop_time}` : "Not logged yet"}
-              tone={today && today.net_mins > 0 ? "positive" : "default"}
-              onClick={() => onOpenModule("time", { editToday: true })}
-              icon={<IconClock className="h-4 w-4" />}
-            />
-            <MobileTile
-              label="This week"
-              value={week ? fmtHM(week.week_hours_mins) : "—"}
-              detail={week ? `of ${fmtHM(week.target_mins * 5)} target` : "Loading…"}
-              onClick={() => onOpenModule("time")}
-            />
-            <MobileTile
-              label="Overtime bank"
-              value={week ? fmtSignedHM(week.overtime_bank_mins) : "—"}
-              tone={week ? (week.overtime_bank_mins >= 0 ? "accent" : "warn") : "default"}
-              onClick={() => onOpenModule("time")}
-            />
-            {hasFleet ? (
-              <MobileTile
-                label="My material"
-                value={myLive.length}
-                detail={myOut.length > 0 ? `${myOut.length} with you now` : myLive.length > 0 ? "Booked, not picked up" : "Nothing booked"}
-                onClick={() => onOpenModule("fleet")}
-                icon={<IconDrone className="h-4 w-4" />}
-              />
-            ) : null}
-          </div>
+          <button
+            type="button"
+            onClick={() => onOpenModule("time")}
+            className="m-tile block w-full rounded-2xl border border-glass/10 bg-panel px-5 py-5 text-left active:bg-glass/8"
+          >
+            <span className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-ink-4">
+              <IconClock className="h-3.5 w-3.5" />
+              Overtime bank
+            </span>
+            <span
+              className={cn(
+                "mt-2 block text-4xl font-semibold tabular-nums leading-none",
+                bankMins === null ? "text-ink-4" : bankMins >= 0 ? "text-accent-soft" : "text-warn",
+              )}
+            >
+              {bankMins === null ? "—" : fmtSignedHM(bankMins)}
+            </span>
+            <span className="mt-2 block text-xs text-ink-4">
+              {!week
+                ? "Loading…"
+                : lastLogged
+                  ? `Logged through ${WEEKDAY.format(fromDateKey(lastLogged.date))} · ${logged.length} of 5 days this week`
+                  : "Nothing logged this week yet"}
+            </span>
+          </button>
         ) : null}
 
-        <MobileGroup title="Quick actions">
-          {hasTime ? <MobileRow icon={<IconClock className="h-4 w-4" />} label="Log today" detail="Start, stop, breaks" chevron onClick={() => onOpenModule("time", { editToday: true })} /> : null}
-          {hasFleet ? <MobileRow icon={<IconDrone className="h-4 w-4" />} label="Book material" detail="Drones and payloads by the day" chevron onClick={() => onOpenModule("fleet")} /> : null}
-          {hasMail ? <MobileRow icon={<IconMail className="h-4 w-4" />} label="New training mail" detail="Draft and hand off to Gmail" chevron onClick={() => onOpenModule("mail")} /> : null}
-        </MobileGroup>
+        {hasFleet ? (
+          <MobileGroup title="With you">
+            {myItems.length > 0 ? (
+              myItems.map((item) => (
+                <MobileRow
+                  key={item.id}
+                  icon={<IconDrone className="h-4 w-4" />}
+                  label={item.name}
+                  detail={
+                    item.status === "picked_up"
+                      ? `With you · back ${DAY.format(fromDateKey(item.end_date))}`
+                      : `Booked ${DAY.format(fromDateKey(item.start_date))} – ${DAY.format(fromDateKey(item.end_date))}`
+                  }
+                  chevron
+                  onClick={() => onOpenModule("fleet")}
+                />
+              ))
+            ) : (
+              <MobileRow icon={<IconDrone className="h-4 w-4" />} label="Nothing booked" detail="Book drones and payloads by the day" chevron onClick={() => onOpenModule("fleet")} />
+            )}
+          </MobileGroup>
+        ) : null}
 
         {embeds.length > 0 ? (
           <MobileGroup title="Google">
@@ -128,26 +129,12 @@ export function MobileHome({
           </MobileGroup>
         ) : null}
 
-        <MobileGroup title="Team">
-          <button type="button" onClick={onOpenTeam} className="flex min-h-12 w-full items-center gap-3 px-4 py-2.5 text-left active:bg-glass/8">
-            <span className="min-w-0 flex-1">
-              <span className="block text-[15px] text-ink">Team in the field</span>
-              <span className="mt-0.5 block text-xs text-ink-4">
-                {totals ? `${totals.poc} POCs · ${totals.training} trainings · ${totals.travel} travel days this year` : field.loading ? "Reading the planning sheet…" : "Regions, POCs and trainings this year"}
-              </span>
-            </span>
-            <ChevronIcon className="h-4 w-4 shrink-0 text-ink-5" />
-          </button>
-        </MobileGroup>
-
-        <MobileGroup title="You">
-          <MobileRow
-            label="Onboarding"
-            detail={onboarding === null ? "Your training checklist" : onboarding.items === 0 ? "Not started yet" : `${onboarding.average}% across ${onboarding.items} item${onboarding.items === 1 ? "" : "s"}`}
-            chevron
-            href="/onboarding"
-          />
-        </MobileGroup>
+        {hasTime || hasMail ? (
+          <MobileGroup title="Actions">
+            {hasTime ? <MobileRow icon={<IconClock className="h-4 w-4" />} label="Log today" detail="Start, stop, breaks" chevron onClick={() => onOpenModule("time", { editToday: true })} /> : null}
+            {hasMail ? <MobileRow icon={<IconMail className="h-4 w-4" />} label="New training mail" detail="Draft and hand off to Gmail" chevron onClick={() => onOpenModule("mail")} /> : null}
+          </MobileGroup>
+        ) : null}
       </div>
     </div>
   );
