@@ -7,7 +7,7 @@ import type { ModuleKey } from "@/lib/dashboard-modules";
 import { fromDateKey } from "@/lib/date";
 import { greetingFromEmail, timeGreeting } from "@/lib/greeting";
 import { cn } from "@/lib/cn";
-import { MobileAvatar, MobileTopBar } from "./primitives";
+import { MobileAvatar, MobileRow, MobileTopBar } from "./primitives";
 import { todayStatus } from "./today-status";
 import type { useHomeSummary } from "./use-home-summary";
 
@@ -17,10 +17,10 @@ const WEEKDAY = new Intl.DateTimeFormat("en-GB", { weekday: "short" });
 const DAY = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric" });
 
 /**
- * The phone's home: a board of tiles, each one thing, each one tap. Top row
- * is the person's own numbers and actions (overtime bank, today, new mail);
- * then the material with them; then the Google sheets. Only the top row
- * carries a name; the fleet and Google tiles are their glyph and value alone.
+ * The phone's home, on one two-column grid: the person's two numbers
+ * (overtime bank, today), a full-width card of the material with them, then
+ * the shortcuts (new mail, the Google sheets) as half-width tiles. One
+ * rhythm top to bottom; the wide card is the only deliberate exception.
  */
 export function MobileHome({
   email,
@@ -47,6 +47,15 @@ export function MobileHome({
   const bankMins = week?.overtime_bank_mins ?? null;
   const todayState = todayStatus(today, todayKey);
 
+  const shortcuts: Array<{ key: ModuleKey; label: string; icon: ReactNode }> = [
+    ...(hasMail ? [{ key: "mail" as const, label: "New mail", icon: <IconMail className="h-5 w-5" /> }] : []),
+    ...embeds.map((embed) => ({
+      key: embed.key,
+      label: embed.key === "planning" ? "Planning" : embed.key === "fleetsheet" ? "Fleet sheet" : "Road Days",
+      icon: embed.key === "roaddays" ? <FormIcon className="h-5 w-5" /> : <SheetIcon className="h-5 w-5" />,
+    })),
+  ];
+
   return (
     <div className="m-screen">
       <MobileTopBar
@@ -60,72 +69,75 @@ export function MobileHome({
         right={<MobileAvatar email={email} onClick={onOpenMore} />}
       />
 
-      <div className="space-y-6 px-4 pt-2">
-        {hasTime || hasMail ? (
-          <div className={cn("grid gap-3", hasTime && hasMail ? "grid-cols-3" : "grid-cols-2")}>
-            {hasTime ? (
-              <HomeTile
-                label="Overtime"
-                value={bankMins === null ? "—" : fmtSignedHM(bankMins)}
-                sub={!week ? "" : lastLogged ? `Through ${WEEKDAY.format(fromDateKey(lastLogged.date))}` : "Nothing yet"}
-                tone={bankMins === null ? "default" : bankMins >= 0 ? "accent" : "warn"}
-                onClick={() => onOpenModule("time")}
-              />
-            ) : null}
-            {hasTime ? (
-              <HomeTile
-                label="Today"
-                icon={<IconClock className="h-4 w-4" />}
-                value={todayState.value}
-                sub={todayState.sub}
-                tone={todayState.tone}
-                onClick={() => onOpenModule("time", { editToday: true })}
-              />
-            ) : null}
-            {hasMail ? <HomeTile label="New mail" icon={<IconMail className="h-4 w-4" />} value={<IconMail className="h-7 w-7 text-accent-soft" />} onClick={() => onOpenModule("mail")} /> : null}
-          </div>
+      <div className="grid grid-cols-2 gap-3 px-4 pt-2">
+        {hasTime ? (
+          <HomeTile
+            label="Overtime"
+            value={bankMins === null ? "—" : fmtSignedHM(bankMins)}
+            sub={!week ? "" : lastLogged ? `Through ${WEEKDAY.format(fromDateKey(lastLogged.date))}` : "Nothing yet"}
+            tone={bankMins === null ? "default" : bankMins >= 0 ? "accent" : "warn"}
+            onClick={() => onOpenModule("time")}
+          />
+        ) : null}
+        {hasTime ? (
+          <HomeTile
+            label="Today"
+            icon={<IconClock className="h-4 w-4" />}
+            value={todayState.value}
+            sub={todayState.sub}
+            tone={todayState.tone}
+            onClick={() => onOpenModule("time", { editToday: true })}
+          />
         ) : null}
 
         {hasFleet ? (
-          <section>
-            <h2 className="mb-2 px-1 text-sm font-semibold text-ink-3">With you</h2>
-            <div className="grid grid-cols-2 gap-3">
-              {myItems.map((item) => (
-                <HomeTile
+          <section className="m-tile col-span-2 overflow-hidden rounded-2xl border border-glass/10 bg-panel">
+            <h2 className="px-4 pt-3 pb-1 text-xs font-medium text-ink-4">With you</h2>
+            {myItems.length > 0 ? (
+              myItems.map((item) => (
+                <MobileRow
                   key={item.id}
                   icon={<IconDrone className="h-4 w-4" />}
-                  value={<span className="block truncate text-lg">{item.name}</span>}
-                  sub={item.status === "picked_up" ? `Back ${DAY.format(fromDateKey(item.end_date))}` : `From ${DAY.format(fromDateKey(item.start_date))}`}
+                  label={item.name}
+                  value={item.status === "picked_up" ? `Back ${DAY.format(fromDateKey(item.end_date))}` : `From ${DAY.format(fromDateKey(item.start_date))}`}
                   onClick={() => onOpenModule("fleet")}
                 />
-              ))}
-              <HomeTile
-                value={<PlusIcon className="h-7 w-7 text-accent-soft" />}
-                sub="Book"
-                onClick={() => onOpenModule("fleet")}
-              />
-            </div>
+              ))
+            ) : (
+              <MobileRow icon={<IconDrone className="h-4 w-4" />} label="Nothing with you" onClick={() => onOpenModule("fleet")} />
+            )}
+            <MobileRow icon={<PlusIcon className="h-4 w-4" />} label="Book material" tone="accent" onClick={() => onOpenModule("fleet")} className="border-t border-glass/10" />
           </section>
         ) : null}
 
-        {embeds.length > 0 ? (
-          <section>
-            <h2 className="mb-2 px-1 text-sm font-semibold text-ink-3">Google</h2>
-            <div className="grid grid-cols-3 gap-3">
-              {embeds.map((embed) => (
-                <HomeTile
-                  key={embed.key}
-                  compact
-                  aria-label={embed.title}
-                  value={embed.key === "roaddays" ? <FormIcon className="h-6 w-6 text-accent-soft" /> : <SheetIcon className="h-6 w-6 text-accent-soft" />}
-                  onClick={() => onOpenModule(embed.key)}
-                />
-              ))}
-            </div>
-          </section>
-        ) : null}
+        {shortcuts.map((shortcut, index) => (
+          <ShortcutTile
+            key={shortcut.key}
+            icon={shortcut.icon}
+            label={shortcut.label}
+            onClick={() => onOpenModule(shortcut.key)}
+            wide={shortcuts.length % 2 === 1 && index === shortcuts.length - 1}
+          />
+        ))}
       </div>
     </div>
+  );
+}
+
+/** A half-width shortcut: a glyph and a name on one line, 56px tall. */
+function ShortcutTile({ icon, label, onClick, wide }: { icon: ReactNode; label: string; onClick: () => void; wide: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "m-tile flex min-h-14 min-w-0 items-center gap-3 rounded-2xl border border-glass/10 bg-panel px-4 text-left transition-transform duration-150 ease-out active:scale-[0.97] active:duration-100",
+        wide && "col-span-2",
+      )}
+    >
+      <span className="shrink-0 text-accent-soft">{icon}</span>
+      <span className="truncate text-[15px] font-medium text-ink">{label}</span>
+    </button>
   );
 }
 
