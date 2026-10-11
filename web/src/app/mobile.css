@@ -29,6 +29,14 @@ html[data-device="phone"] body {
   padding-bottom: calc(var(--m-tabbar) + var(--safe-bottom) + 1rem);
 }
 
+/* Chat action pills (vote / edit / delete / mark done) are desktop-sized
+ * 22px chips; on a phone they are always visible and tapped, not hovered. */
+html[data-device="phone"] .chat-actions-row > button {
+  min-height: 2rem;
+  padding-inline: 0.625rem;
+  font-size: 0.75rem;
+}
+
 /* Native look: matte surfaces; the sticky top bar is a flat band. */
 [data-mobile-look="native"] .m-topbar {
   border-bottom: 1px solid rgb(from var(--glass) r g b / 0.08);

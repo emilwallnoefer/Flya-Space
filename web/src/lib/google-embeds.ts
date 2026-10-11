@@ -17,6 +17,17 @@
  * withhold the Google session from a third-party frame. The panel's
  * "Sign in to Google" and "Open in Google …" buttons cover both, in a new tab.
  *
+ * On iPhones that is the rule, not the exception. Every iPhone browser is
+ * WebKit, and WebKit partitions third-party storage: docs.google.com inside
+ * our frame gets an empty cookie jar whatever account the person is signed in
+ * with, so Google redirects it to a sign-in page that refuses framing — a
+ * white screen, and no sign-in or reload can change that (the one Safari
+ * setting that would is device-wide and we do not point people at it). So
+ * each phone tile also links out to `open`, with `authuser=` set to the
+ * work account (`withAuthUser`) so Google does not land on a personal account
+ * that is also signed in; iOS hands such a link to the Sheets / Forms app when
+ * it is installed.
+ *
  * Sheets use `rm=embedded` (keeps menus and the format toolbar; `rm=minimal`
  * drops them). Forms use `embedded=true`. The two calendar sheets open scrolled
  * to today: the panel asks `/api/google-embeds/today` for the cell and adds it
@@ -75,6 +86,20 @@ const CELL_PATTERN = /^[A-Z]{1,3}[1-9]\d{0,6}$/;
 export function withRange(url: string, cell: string | null | undefined): string {
   if (!cell || !CELL_PATTERN.test(cell)) return url;
   return `${url}${url.includes("#") ? "&" : "#"}range=${cell}`;
+}
+
+/**
+ * The same page with Google asked to use `email`'s account (`authuser=`), for
+ * people signed in to more than one Google account. Goes into the query, ahead
+ * of any `#gid=`/`#range=` fragment. Unchanged without an email.
+ */
+export function withAuthUser(url: string, email: string | null | undefined): string {
+  const account = email?.trim() ?? "";
+  if (!account || /[\s#?&/]/.test(account)) return url;
+  const hash = url.indexOf("#");
+  const base = hash === -1 ? url : url.slice(0, hash);
+  const fragment = hash === -1 ? "" : url.slice(hash);
+  return `${base}${base.includes("?") ? "&" : "?"}authuser=${encodeURIComponent(account)}${fragment}`;
 }
 
 /**

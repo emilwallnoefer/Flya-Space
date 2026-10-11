@@ -79,15 +79,13 @@ export function NotificationsSection() {
             aria-busy={state === "busy"}
             disabled={disabled}
             onClick={() => void toggle()}
-            className={`relative h-7 w-[46px] shrink-0 rounded-full border transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/80 disabled:opacity-50 ${
-              on
-                ? "border-accent-deep/25 bg-accent-deep/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
-                : "border-glass/15 bg-glass/[0.07]"
+            className={`ui-switch relative h-6 w-10 shrink-0 rounded-full border p-0.5 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/80 disabled:opacity-50 ${
+              on ? "border-accent-deep/25 bg-accent-deep/40" : "border-glass/15 bg-glass/[0.08]"
             }`}
           >
             <span
-              className={`absolute top-1 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out ${
-                on ? "translate-x-[22px]" : "translate-x-0"
+              className={`block h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform duration-200 ease-out ${
+                on ? "translate-x-4" : "translate-x-0"
               }`}
               aria-hidden
             />

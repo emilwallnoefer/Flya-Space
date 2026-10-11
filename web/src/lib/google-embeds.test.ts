@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canSeeGoogleEmbeds, formEmbed, sheetEmbed, withRange } from "./google-embeds";
+import { canSeeGoogleEmbeds, formEmbed, sheetEmbed, withAuthUser, withRange } from "./google-embeds";
 
 // Made up: the real ids live in env, and this repo is public.
 const ID = "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcd";
@@ -79,5 +79,26 @@ describe("withRange", () => {
 
   it("carries the calendar kind on a sheet", () => {
     expect(sheetEmbed(ID, "42", "planning")?.today).toBe("planning");
+  });
+});
+
+describe("withAuthUser", () => {
+  const base = `https://docs.google.com/spreadsheets/d/${ID}/edit`;
+
+  it("puts the account in the query, ahead of the fragment", () => {
+    expect(withAuthUser(`${base}#gid=42`, "pilot@flyability.com")).toBe(`${base}?authuser=pilot%40flyability.com#gid=42`);
+    expect(withAuthUser(withRange(`${base}#gid=42`, "A3204"), "pilot@flyability.com")).toBe(
+      `${base}?authuser=pilot%40flyability.com#gid=42&range=A3204`,
+    );
+  });
+
+  it("appends to an existing query", () => {
+    expect(withAuthUser(`${base}?rm=embedded`, "pilot@flyability.com")).toBe(`${base}?rm=embedded&authuser=pilot%40flyability.com`);
+  });
+
+  it("leaves the URL alone without a usable email", () => {
+    expect(withAuthUser(base, null)).toBe(base);
+    expect(withAuthUser(base, "  ")).toBe(base);
+    expect(withAuthUser(base, "a b@x.com")).toBe(base);
   });
 });

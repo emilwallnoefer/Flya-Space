@@ -23,6 +23,14 @@ const SHEET_ZOOM = 0.8;
  */
 const TODAY_GRACE_MS = 800;
 
+/**
+ * Phones only: how long the frame gets before the "Still blank?" card comes
+ * up. The page cannot see whether the frame shows the sheet or Google's
+ * refused sign-in, so the card is timed, not triggered, and stays dismissible.
+ */
+const BLANK_HINT_DELAY_MS = 2500;
+const BLANK_HINT_DISMISSED_KEY = "ma_google_frame_hint_dismissed_v1";
+
 const COPY: Record<GoogleEmbed["kind"], { hint: string; app: string; frame: string }> = {
   sheet: {
     hint: "Edits save to Google under your name. Blank? Sign in to Google, then reload. On Safari, open it in Google Sheets.",
@@ -39,7 +47,12 @@ const COPY: Record<GoogleEmbed["kind"], { hint: string; app: string; frame: stri
 /**
  * One Google Sheet or Form (Mission planning, Fleet management, Road Days), as
  * Google's own UI in a frame. See lib/google-embeds.ts for why it is an iframe
- * and who sees it.
+ * and who sees it. The phone shell mounts it too, with `phoneHint`: WebKit
+ * gives the frame no Google session (same file), so on phones a card that
+ * says so and sends the person to Google comes up after a moment, until it is
+ * dismissed once. It deliberately does not name the Safari setting that would
+ * let the frame through: that is a device-wide privacy setting we do not want
+ * to promote (owner decision, 2026-10-11).
  *
  * It takes over the whole window: a slim bar on top (back, title, and a quiet
  * "Not loading?" that reveals the fixes) and the page below. It is portalled to <body> so no transformed or
@@ -65,13 +78,17 @@ export function GoogleEmbedPanel({
   title,
   urls,
   onBack,
+  phoneHint,
 }: {
   title: string;
   urls: GoogleEmbed;
   onBack: () => void;
+  /** The phone's "Still blank?" card: where the link out goes (the tile's ↗ URL, with the work account). */
+  phoneHint?: { openHref: string };
 }) {
   const [frameKey, setFrameKey] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
+  const [hintOpen, setHintOpen] = useState(false);
   // undefined while today's cell is being looked up; null when there is none.
   const [todayCell, setTodayCell] = useState<string | null | undefined>(urls.today ? undefined : null);
   // What the frame shows. Unset only during the short grace for today's cell.
@@ -117,6 +134,34 @@ export function GoogleEmbedPanel({
   // variant iOS honours; overflow: hidden on <html> is ignored there).
   useEffect(() => lockPageScroll(), []);
 
+  // Phones: the Safari card after a moment, unless dismissed on this device.
+  useEffect(() => {
+    if (!phoneHint) return;
+    let dismissed = false;
+    try {
+      dismissed = window.localStorage.getItem(BLANK_HINT_DISMISSED_KEY) === "1";
+    } catch {
+      // Storage blocked: show it.
+    }
+    if (dismissed) return;
+    const timer = window.setTimeout(() => setHintOpen(true), BLANK_HINT_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [phoneHint]);
+
+  function dismissHint() {
+    setHintOpen(false);
+    try {
+      window.localStorage.setItem(BLANK_HINT_DISMISSED_KEY, "1");
+    } catch {
+      // Ignore.
+    }
+  }
+
+  function revealHelp() {
+    setShowHelp(true);
+    if (phoneHint) setHintOpen(true);
+  }
+
   return createPortal(
     <div className="fixed inset-0 z-[110] flex flex-col gap-1.5 bg-surface p-1.5 pt-[max(0.375rem,var(--safe-top))] pb-[max(0.375rem,var(--safe-bottom))]">
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
@@ -145,7 +190,7 @@ export function GoogleEmbedPanel({
         ) : (
           <button
             type="button"
-            onClick={() => setShowHelp(true)}
+            onClick={revealHelp}
             className="text-[11px] text-ink-5 underline-offset-2 transition hover:text-ink-3 hover:underline"
           >
             Not loading?
@@ -165,6 +210,45 @@ export function GoogleEmbedPanel({
             style={{ width: `${100 / zoom}%`, height: `${100 / zoom}%`, transform: `scale(${zoom})` }}
           />
         )}
+        {phoneHint && hintOpen ? (
+          <div
+            role="dialog"
+            aria-labelledby="google-frame-hint-title"
+            className="absolute inset-x-3 bottom-3 rounded-2xl border border-glass/15 bg-panel p-4 text-ink shadow-lg"
+          >
+            <h2 id="google-frame-hint-title" className="text-[15px] font-semibold">
+              Still blank?
+            </h2>
+            <p className="mt-1 text-[13px] leading-snug text-ink-3">
+              Safari keeps your Google sign-in away from pages shown inside other apps, so the {copy.frame} cannot load here. Open it in{" "}
+              {copy.app} instead: same {copy.frame}, your work account.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a
+                href={phoneHint.openHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-10 items-center justify-center rounded-xl bg-accent px-3.5 text-[14px] font-medium text-slate-950 active:bg-accent-deep"
+              >
+                Open in {copy.app} ↗
+              </a>
+              <button
+                type="button"
+                onClick={reloadFrame}
+                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-glass/15 bg-glass/8 px-3.5 text-[14px] font-medium text-ink-2"
+              >
+                Reload
+              </button>
+              <button
+                type="button"
+                onClick={dismissHint}
+                className="ml-auto inline-flex min-h-10 items-center justify-center px-2 text-[14px] text-ink-4"
+              >
+                Don&apos;t show again
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>,
     document.body,

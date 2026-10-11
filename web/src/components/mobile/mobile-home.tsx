@@ -21,6 +21,11 @@ const DAY = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric" 
  * (overtime bank, today), a full-width card of the material with them, then
  * the shortcuts (new mail, the Google sheets) as half-width tiles. One
  * rhythm top to bottom; the wide card is the only deliberate exception.
+ *
+ * The Google tiles are split: the wide left part opens the sheet framed in
+ * the app, the ↗ on the right opens it in Google (the Sheets app or Google's
+ * site, with the work account). The frame is blank on most iPhones, see
+ * lib/google-embeds.ts, so the link is the way in there.
  */
 export function MobileHome({
   email,
@@ -33,7 +38,7 @@ export function MobileHome({
   email: string;
   availableModules: ModuleKey[];
   summary: Summary;
-  embeds: Array<{ key: ModuleKey; title: string }>;
+  embeds: Array<{ key: ModuleKey; title: string; href: string }>;
   onOpenModule: (module: ModuleKey, options?: { editToday?: boolean }) => void;
   onOpenMore: () => void;
 }) {
@@ -47,12 +52,13 @@ export function MobileHome({
   const bankMins = week?.overtime_bank_mins ?? null;
   const todayState = todayStatus(today, todayKey);
 
-  const shortcuts: Array<{ key: ModuleKey; label: string; icon: ReactNode }> = [
+  const shortcuts: Array<{ key: ModuleKey; label: string; icon: ReactNode; href?: string }> = [
     ...(hasMail ? [{ key: "mail" as const, label: "New mail", icon: <IconMail className="h-5 w-5" /> }] : []),
     ...embeds.map((embed) => ({
       key: embed.key,
       label: embed.key === "planning" ? "Planning" : embed.key === "fleetsheet" ? "Fleet sheet" : "Road Days",
       icon: embed.key === "roaddays" ? <FormIcon className="h-5 w-5" /> : <SheetIcon className="h-5 w-5" />,
+      href: embed.href,
     })),
   ];
 
@@ -115,6 +121,7 @@ export function MobileHome({
             key={shortcut.key}
             icon={shortcut.icon}
             label={shortcut.label}
+            href={shortcut.href}
             onClick={() => onOpenModule(shortcut.key)}
             wide={shortcuts.length % 2 === 1 && index === shortcuts.length - 1}
           />
@@ -124,19 +131,44 @@ export function MobileHome({
   );
 }
 
-/** A half-width shortcut: a glyph and a name on one line, 56px tall. */
-function ShortcutTile({ icon, label, onClick, wide }: { icon: ReactNode; label: string; onClick: () => void; wide: boolean }) {
+/**
+ * A half-width shortcut: a glyph and a name on one line, 56px tall. With
+ * `href` it splits: the left two thirds open the module in the app, the right
+ * third is a link that opens the same thing in Google, in a new tab.
+ */
+function ShortcutTile({ icon, label, onClick, href, wide }: { icon: ReactNode; label: string; onClick: () => void; href?: string; wide: boolean }) {
+  const PRESS = "transition-transform duration-150 ease-out active:scale-[0.97] active:duration-100";
+  const body = (
+    <>
+      <span className="shrink-0 text-accent-soft">{icon}</span>
+      <span className="truncate text-[15px] font-medium text-ink">{label}</span>
+    </>
+  );
+  if (href) {
+    return (
+      <div className={cn("m-tile flex min-h-14 min-w-0 overflow-hidden rounded-2xl border border-glass/10 bg-panel", wide && "col-span-2")}>
+        <button type="button" onClick={onClick} className={cn("flex min-w-0 flex-[2] items-center gap-3 px-4 text-left", PRESS)}>
+          {body}
+        </button>
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${label}: open in Google`}
+          className={cn("flex flex-1 items-center justify-center border-l border-glass/10 text-sm text-ink-4", PRESS)}
+        >
+          ↗
+        </a>
+      </div>
+    );
+  }
   return (
     <button
       type="button"
       onClick={onClick}
-      className={cn(
-        "m-tile flex min-h-14 min-w-0 items-center gap-3 rounded-2xl border border-glass/10 bg-panel px-4 text-left transition-transform duration-150 ease-out active:scale-[0.97] active:duration-100",
-        wide && "col-span-2",
-      )}
+      className={cn("m-tile flex min-h-14 min-w-0 items-center gap-3 rounded-2xl border border-glass/10 bg-panel px-4 text-left", PRESS, wide && "col-span-2")}
     >
-      <span className="shrink-0 text-accent-soft">{icon}</span>
-      <span className="truncate text-[15px] font-medium text-ink">{label}</span>
+      {body}
     </button>
   );
 }
