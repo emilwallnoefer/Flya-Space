@@ -73,7 +73,7 @@ export function MobileSettingsScreen({
   return (
     <MobileScreen screenKey={open} direction={navDir}>
       <MobileTopBar title={title} onBack={() => chooseSection(null)} />
-      <div className="px-4 pt-1 pb-4 [&_input]:min-h-11 [&_select]:min-h-11 [&_button:not([role=switch])]:min-h-10">
+      <div className="px-4 pt-1 pb-4 [&_input]:min-h-11 [&_select]:min-h-11 [&_button:not([role=switch])]:min-h-10 [&_button:not([role=switch])]:text-sm">
         {open === "gmail" ? <GmailSection status={s.gmailStatus} onDisconnect={() => void s.handleDisconnectGmail()} /> : null}
         {open === "mail_signature" ? (
           <MailSignatureSection preset={s.mailSigPreset} custom={s.mailSigCustom} saving={s.mailSigSaving} onPresetChange={s.setMailSigPreset} onCustomChange={s.setMailSigCustom} onSave={() => void s.handleSaveMailSignature()} />
