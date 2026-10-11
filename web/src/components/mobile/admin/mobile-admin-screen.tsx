@@ -7,6 +7,7 @@ import { addDays, fromDateKey, getMonday, toDateKey } from "@/lib/date";
 import { userRoleLabel } from "@/lib/user-role";
 import { cn } from "@/lib/cn";
 import { ChevronIcon, MobileEmpty, MobileGroup, MobileRow, MobileSegmented, MobileTopBar } from "../primitives";
+import { MobileScreen, type NavDirection } from "../screen";
 import { MobileTimeScreen } from "../time/mobile-time-screen";
 import { useAdminTimeOverview, useAdminUsers } from "./use-admin-data";
 
@@ -33,16 +34,21 @@ export function MobileAdminScreen({
   const seededOverview = use(initialOverview);
   const [view, setView] = useState<AdminView>("time");
   const [drill, setDrill] = useState<{ id: string; email: string } | null>(null);
+  const [navDir, setNavDir] = useState<NavDirection>(1);
+  function drillInto(next: { id: string; email: string } | null) {
+    setNavDir(next ? 1 : -1);
+    setDrill(next);
+  }
   const overviewState = useAdminTimeOverview(seededOverview);
   const usersState = useAdminUsers(seededUsers, canManageUsers && view === "users");
 
   if (drill) {
     return (
-      <>
-        <MobileTopBar title={drill.email || "Team member"} onBack={() => setDrill(null)} />
+      <MobileScreen screenKey={drill.id} direction={navDir}>
+        <MobileTopBar title={drill.email || "Team member"} onBack={() => drillInto(null)} />
         <p className="px-4 pb-2 text-xs text-ink-4">Read-only view</p>
         <MobileTimeScreen initialWeek={null} readOnly apiBase={`/api/admin/time-user?user_id=${encodeURIComponent(drill.id)}`} />
-      </>
+      </MobileScreen>
     );
   }
 
@@ -53,7 +59,7 @@ export function MobileAdminScreen({
   const isCurrentWeek = weekStart === toDateKey(getMonday());
 
   return (
-    <>
+    <MobileScreen screenKey="root" direction={navDir}>
       <MobileTopBar title={canManageUsers ? "Admin" : "Team time"} onBack={onBack} />
       <div className="space-y-4 px-4 pt-1">
         {canManageUsers ? (
@@ -90,7 +96,7 @@ export function MobileAdminScreen({
                 <MobileEmpty>No users found.</MobileEmpty>
               ) : (
                 overview.users.map((user) => (
-                  <button key={user.user_id} type="button" onClick={() => setDrill({ id: user.user_id, email: user.email })} className="flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left active:bg-glass/8">
+                  <button key={user.user_id} type="button" onClick={() => drillInto({ id: user.user_id, email: user.email })} className="flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left active:bg-glass/8">
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[15px] text-ink">{user.email || user.user_id}</span>
                       <span className="block text-xs text-ink-4">
@@ -132,6 +138,6 @@ export function MobileAdminScreen({
           </>
         )}
       </div>
-    </>
+    </MobileScreen>
   );
 }
