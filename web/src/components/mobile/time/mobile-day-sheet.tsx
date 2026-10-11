@@ -11,12 +11,22 @@ import { MobileButton, MobileSheet } from "../primitives";
 
 type DayType = "normal" | "holiday" | "public_holiday" | "sick";
 
+// What `handleFillDay` writes; the Standard day toggle reads as "on" when the
+// saved day matches.
+const STANDARD_START = "09:00";
+const STANDARD_STOP = "17:54";
+
+// Both quick fills are toggles: flat until on, then a filled, raised chip.
+// (`aria-pressed` is what the neu skin keys its flat/raised look on.)
+const quickFillClass = "min-h-11 rounded-xl border border-glass/15 bg-glass/8 px-3 text-sm font-medium text-ink-2 transition active:bg-glass/12 disabled:opacity-50";
+const quickFillOnClass = "border-accent/40 bg-accent/15 text-ink";
+
 /**
  * The phone's day editor: a bottom sheet over the week list, driven entirely
  * by the shared hook's form state. Start/Stop as visible boxes that read
  * `--:--` until set (the native picker sits on top, invisible, so a tap still
  * opens it — iOS draws an empty `<input type="time">` as nothing at all), the
- * quick fills (compensate / standard day) for a weekday that is short, a 2×2
+ * quick fills (compensate / standard day) as toggles for a normal weekday, a 2×2
  * day-type grid, the ±15 break counter (or the break list for older weeks),
  * travel info as a collapsed section, Save as the sticky footer.
  */
@@ -62,6 +72,7 @@ export function MobileDaySheet({
     handleSaveDay,
     handleResetDay,
     handleFillMissing,
+    handleFillDay,
   } = state;
 
   const dayType: DayType = formHoliday ? "holiday" : formPublicHoliday ? "public_holiday" : formSickLeave ? "sick" : "normal";
@@ -74,14 +85,20 @@ export function MobileDaySheet({
   const showQuickFill = !readOnly && selectedDay != null && !isWeekendDate(selectedDay.date) && dayType === "normal";
   const dayIsShort = selectedDay != null && Math.max(0, selectedDay.net_mins) + compMins < TARGET_MINS;
 
+  const isStandardDay = selectedDay != null && selectedDay.start_time === STANDARD_START && selectedDay.stop_time === STANDARD_STOP;
+
+  // Saves through the hook like Compensate does (optimistic, with rollback),
+  // and mirrors the values into the form: the form seeds once per opened
+  // date, so the Start/Stop boxes would otherwise keep showing --:--.
   function fillStandardDay() {
-    setFormStart("09:00");
-    setFormStop("17:54");
+    if (!selectedDay) return;
+    setFormStart(STANDARD_START);
+    setFormStop(STANDARD_STOP);
     setFormBreaks([{ name: "Break", mins: 30 }]);
     setFormHoliday(false);
     setFormPublicHoliday(false);
     setFormSickLeave(false);
-    playUiSound("fillSwoosh");
+    void handleFillDay(selectedDay.date);
   }
 
   return (
@@ -118,25 +135,13 @@ export function MobileDaySheet({
           <div>
             <span className="mb-1.5 block text-xs text-ink-4">Fill the day</span>
             <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={saving || (!dayIsShort && compMins === 0)}
-                aria-pressed={compMins > 0}
-                onClick={() => void handleFillMissing(selectedDay.date)}
-                className={cn(
-                  "min-h-11 rounded-xl border px-3 text-sm font-medium transition disabled:opacity-50",
-                  compMins > 0 ? "border-rose-400/40 bg-rose-400/15 text-ink" : "border-glass/15 bg-glass/8 text-ink-2 active:bg-glass/12",
-                )}
-              >
+              <button type="button" disabled={saving || (!dayIsShort && compMins === 0)} aria-pressed={compMins > 0} onClick={() => void handleFillMissing(selectedDay.date)} className={cn(quickFillClass, compMins > 0 && quickFillOnClass)}>
                 {compMins > 0 ? `Compensated · ${fmtHM(compMins)}` : "Compensate day"}
               </button>
-              <button type="button" disabled={saving} onClick={fillStandardDay} className="min-h-11 rounded-xl border border-glass/15 bg-glass/8 px-3 text-sm font-medium text-ink-2 transition active:bg-glass/12 disabled:opacity-50">
+              <button type="button" disabled={saving} aria-pressed={isStandardDay} onClick={fillStandardDay} className={cn(quickFillClass, isStandardDay && quickFillOnClass)}>
                 Standard day
               </button>
             </div>
-            <p className="mt-1.5 text-xs leading-snug text-ink-4">
-              {compMins > 0 ? "Missing hours taken from your overtime bank. Tap again to undo." : "Compensate takes the missing hours from your overtime bank. Standard day fills 09:00–17:54 with a 30 min break — then Save."}
-            </p>
           </div>
         ) : null}
 
