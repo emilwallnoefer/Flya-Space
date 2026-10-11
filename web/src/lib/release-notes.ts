@@ -20,6 +20,16 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-11-phone-sheets-open-in-google",
+    date: "Oct 11, 2026",
+    title: "Sheets open in Google on your phone",
+    highlights: [
+      "Planning, Fleet sheet and Road Days open in the Google Sheets or Forms app, or on Google's site",
+      "They open with your work account, even when a personal one is signed in too",
+      "No more blank screen in Safari",
+    ],
+  },
+  {
     version: "2026-10-11-phone-app",
     date: "Oct 11, 2026",
     title: "Flya Space on your phone",

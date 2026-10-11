@@ -39,7 +39,8 @@ const COPY: Record<GoogleEmbed["kind"], { hint: string; app: string; frame: stri
 /**
  * One Google Sheet or Form (Mission planning, Fleet management, Road Days), as
  * Google's own UI in a frame. See lib/google-embeds.ts for why it is an iframe
- * and who sees it.
+ * and who sees it. Desktop only: the phone shell links out to Google instead,
+ * because WebKit gives the frame no Google session (same file).
  *
  * It takes over the whole window: a slim bar on top (back, title, and a quiet
  * "Not loading?" that reveals the fixes) and the page below. It is portalled to <body> so no transformed or
