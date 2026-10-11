@@ -59,9 +59,8 @@ export type MobileShellProps = DashboardShellProps;
  *
  * The Google sheets and form are framed as on the desktop, but each tile also
  * carries a link out to Google: WebKit gives a third-party frame no Google
- * session unless the person has turned off Safari's cross-site tracking
- * prevention, so for everyone else the frame is a white screen and the link
- * is the way in (lib/google-embeds.ts).
+ * session, so on most iPhones the frame is a white screen and the link is the
+ * way in (lib/google-embeds.ts).
  */
 export function MobileShell({
   email,

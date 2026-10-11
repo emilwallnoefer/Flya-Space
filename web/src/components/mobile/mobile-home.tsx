@@ -24,9 +24,8 @@ const DAY = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric" 
  *
  * The Google tiles are split: the wide left part opens the sheet framed in
  * the app, the ↗ on the right opens it in Google (the Sheets app or Google's
- * site, with the work account). The frame is blank on iPhones until Safari's
- * cross-site tracking prevention is off, see lib/google-embeds.ts, so the
- * link is the way in for everyone else.
+ * site, with the work account). The frame is blank on most iPhones, see
+ * lib/google-embeds.ts, so the link is the way in there.
  */
 export function MobileHome({
   email,

@@ -21,9 +21,9 @@
  * WebKit, and WebKit partitions third-party storage: docs.google.com inside
  * our frame gets an empty cookie jar whatever account the person is signed in
  * with, so Google redirects it to a sign-in page that refuses framing — a
- * white screen, and no sign-in or reload can change that. Only the person
- * turning off Safari's "Prevent Cross-Site Tracking" lets the frame through.
- * So each phone tile also links out to `open`, with `authuser=` set to the
+ * white screen, and no sign-in or reload can change that (the one Safari
+ * setting that would is device-wide and we do not point people at it). So
+ * each phone tile also links out to `open`, with `authuser=` set to the
  * work account (`withAuthUser`) so Google does not land on a personal account
  * that is also signed in; iOS hands such a link to the Sheets / Forms app when
  * it is installed.

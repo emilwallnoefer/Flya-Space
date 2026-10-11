@@ -48,9 +48,11 @@ const COPY: Record<GoogleEmbed["kind"], { hint: string; app: string; frame: stri
  * One Google Sheet or Form (Mission planning, Fleet management, Road Days), as
  * Google's own UI in a frame. See lib/google-embeds.ts for why it is an iframe
  * and who sees it. The phone shell mounts it too, with `phoneHint`: WebKit
- * gives the frame no Google session unless Safari's cross-site tracking
- * prevention is off (same file), so on phones a card with that setting and
- * the way out to Google comes up after a moment, until it is dismissed once.
+ * gives the frame no Google session (same file), so on phones a card that
+ * says so and sends the person to Google comes up after a moment, until it is
+ * dismissed once. It deliberately does not name the Safari setting that would
+ * let the frame through: that is a device-wide privacy setting we do not want
+ * to promote (owner decision, 2026-10-11).
  *
  * It takes over the whole window: a slim bar on top (back, title, and a quiet
  * "Not loading?" that reveals the fixes) and the page below. It is portalled to <body> so no transformed or
@@ -218,10 +220,8 @@ export function GoogleEmbedPanel({
               Still blank?
             </h2>
             <p className="mt-1 text-[13px] leading-snug text-ink-3">
-              Safari keeps your Google sign-in away from pages shown inside other apps. To see the {copy.frame} here, open iPhone{" "}
-              <strong className="font-medium text-ink">Settings → Apps → Safari</strong> and turn off{" "}
-              <strong className="font-medium text-ink">Prevent Cross-Site Tracking</strong>, then tap Reload. It is a device-wide
-              privacy setting: it also lets other websites follow you across sites. Or open it in Google instead.
+              Safari keeps your Google sign-in away from pages shown inside other apps, so the {copy.frame} cannot load here. Open it in{" "}
+              {copy.app} instead: same {copy.frame}, your work account.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <a
