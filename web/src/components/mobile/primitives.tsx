@@ -272,9 +272,16 @@ export function MobileButton({
 /* ------------------------------------------------------------------ sheet */
 
 /**
- * Bottom sheet. Slides up, pins the page behind it, follows the visual
- * viewport so its footer stays above the keyboard, closes on the scrim, the
- * grab handle or Back (the caller pushes history and listens to popstate).
+ * Bottom sheet. Slides up on the iOS sheet curve, pins the page behind it,
+ * follows the visual viewport while the keyboard is up so its footer stays
+ * above the keys, closes on the scrim, the grab handle, a downward drag or
+ * Back (the caller pushes history and listens to popstate).
+ *
+ * The panel is its own component so that everything tied to "open" (the
+ * viewport box, the scroll lock, the focus trap, the Escape key) lives as
+ * long as the panel is on screen, exit animation included. Tying them to the
+ * `open` prop instead released them the moment the close began: the pinned
+ * height vanished mid-slide and the sheet jumped away.
  */
 export function MobileSheet({
   open,
@@ -292,75 +299,78 @@ export function MobileSheet({
   /** Take the whole screen (an editor) instead of hugging the content. */
   full?: boolean;
 }) {
+  return (
+    <AnimatePresence>
+      {open ? (
+        <m.div
+          key="scrim"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+          className="fixed inset-0 z-[140] bg-overlay/60"
+          onClick={onClose}
+          aria-hidden
+        />
+      ) : null}
+      {open ? (
+        <SheetPanel key="sheet" onClose={onClose} title={title} footer={footer} full={full}>
+          {children}
+        </SheetPanel>
+      ) : null}
+    </AnimatePresence>
+  );
+}
+
+function SheetPanel({ onClose, title, children, footer, full }: { onClose: () => void; title?: ReactNode; children: ReactNode; footer?: ReactNode; full: boolean }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const viewport = useVisualViewport(open);
-  useFocusTrap(panelRef, open);
+  const viewport = useVisualViewport(true);
+  useFocusTrap(panelRef, true);
+  useEffect(() => lockPageScroll(), []);
   useEffect(() => {
-    if (!open) return;
-    return lockPageScroll();
-  }, [open]);
-  useEffect(() => {
-    if (!open) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [onClose]);
 
   return (
-    <AnimatePresence>
-      {open ? (
-        <>
-          <m.div
-            key="scrim"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0, transition: { duration: 0.25, ease: "easeOut" } }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
-            className="fixed inset-0 z-[140] bg-overlay/60"
-            onClick={onClose}
-            aria-hidden
-          />
-          <m.div
-            key="sheet"
-            ref={panelRef}
-            role="dialog"
-            aria-modal="true"
-            tabIndex={-1}
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%", transition: { duration: 0.3, ease: SHEET_EASE } }}
-            transition={{ duration: 0.5, ease: SHEET_EASE }}
-            drag="y"
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.4 }}
-            onDragEnd={(_event, info) => {
-              if (info.offset.y > 90 || info.velocity.y > 600) onClose();
-            }}
-            style={viewport ? { top: viewport.top, height: viewport.height, bottom: "auto" } : undefined}
-            className={cn(
-              "m-sheet fixed inset-x-0 bottom-0 z-[141] flex flex-col rounded-t-3xl border-t border-glass/10 bg-panel shadow-[0_-20px_60px_-20px_rgba(0,0,0,0.6)]",
-              full ? "top-[max(0.75rem,var(--safe-top))]" : "max-h-[88dvh]",
-            )}
-          >
-            <div className="flex shrink-0 items-center px-4 pb-1 pt-2" onClick={onClose} role="presentation">
-              <span className="mx-auto h-1.5 w-10 rounded-full bg-glass/25" aria-hidden />
-            </div>
-            {title ? (
-              <div className="flex shrink-0 items-center justify-between gap-2 px-4 pb-2">
-                <h2 className="text-base font-semibold text-ink">{title}</h2>
-                <button type="button" onClick={onClose} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-lg text-ink-4 active:bg-glass/10">
-                  <XIcon className="h-4 w-4" />
-                </button>
-              </div>
-            ) : null}
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 [touch-action:pan-y]">{children}</div>
-            {footer ? <div className="shrink-0 border-t border-glass/10 px-4 pt-3 pb-[max(0.75rem,var(--safe-bottom))]">{footer}</div> : null}
-          </m.div>
-        </>
+    <m.div
+      ref={panelRef}
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
+      initial={{ y: "100%" }}
+      animate={{ y: 0 }}
+      exit={{ y: "100%", transition: { duration: 0.3, ease: SHEET_EASE } }}
+      transition={{ duration: 0.5, ease: SHEET_EASE }}
+      drag="y"
+      dragConstraints={{ top: 0, bottom: 0 }}
+      dragElastic={{ top: 0, bottom: 0.4 }}
+      onDragEnd={(_event, info) => {
+        if (info.offset.y > 90 || info.velocity.y > 600) onClose();
+      }}
+      style={viewport ? { top: viewport.top, height: viewport.height, bottom: "auto" } : undefined}
+      className={cn(
+        "m-sheet fixed inset-x-0 bottom-0 z-[141] flex flex-col rounded-t-3xl border-t border-glass/10 bg-panel shadow-[0_-20px_60px_-20px_rgba(0,0,0,0.6)]",
+        full ? "top-[max(0.75rem,var(--safe-top))]" : "max-h-[88dvh]",
+      )}
+    >
+      <div className="flex shrink-0 items-center px-4 pb-1 pt-2" onClick={onClose} role="presentation">
+        <span className="mx-auto h-1.5 w-10 rounded-full bg-glass/25" aria-hidden />
+      </div>
+      {title ? (
+        <div className="flex shrink-0 items-center justify-between gap-2 px-4 pb-2">
+          <h2 className="text-base font-semibold text-ink">{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-lg text-ink-4 active:bg-glass/10">
+            <XIcon className="h-4 w-4" />
+          </button>
+        </div>
       ) : null}
-    </AnimatePresence>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 [touch-action:pan-y]">{children}</div>
+      {footer ? <div className="shrink-0 border-t border-glass/10 px-4 pt-3 pb-[max(0.75rem,var(--safe-bottom))]">{footer}</div> : null}
+    </m.div>
   );
 }
 

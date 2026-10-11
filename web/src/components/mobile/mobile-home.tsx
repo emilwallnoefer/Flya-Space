@@ -52,9 +52,9 @@ export function MobileHome({
       <MobileTopBar
         large
         title={
-          <span className="block">
-            <span className="block text-xs font-medium text-ink-4">{timeGreeting()}</span>
-            <span className="block">{greetingFromEmail(email)}</span>
+          <span className="block pt-1 pb-1">
+            <span className="block text-base font-medium text-ink-3">{timeGreeting()}</span>
+            <span className="block text-[2rem] font-bold leading-[1.1] tracking-tight text-ink">{greetingFromEmail(email)}</span>
           </span>
         }
         right={<MobileAvatar email={email} onClick={onOpenMore} />}

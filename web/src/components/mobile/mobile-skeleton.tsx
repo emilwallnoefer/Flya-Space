@@ -14,8 +14,8 @@ export function MobileSkeleton() {
         <header className="flex items-center gap-2 px-3 pb-2 pt-[max(0.5rem,var(--safe-top))]">
           <span className="w-1" />
           <span className="min-w-0 flex-1">
-            <span className="block h-3 w-24 rounded bg-glass/10" />
-            <span className="mt-1.5 block h-7 w-32 rounded bg-glass/10" />
+            <span className="mt-1 block h-4 w-28 rounded bg-glass/10" />
+            <span className="mt-1.5 mb-1 block h-9 w-40 rounded bg-glass/10" />
           </span>
           <span className="h-10 w-10 rounded-full bg-glass/10" />
         </header>
