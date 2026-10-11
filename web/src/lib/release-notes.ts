@@ -20,6 +20,15 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-12-phone-notifications-prompt",
+    date: "Oct 12, 2026",
+    title: "One tap to notifications",
+    highlights: [
+      "The phone app now offers to turn notifications on when you open it",
+      "Already allowed them? They stay on by themselves, even after a reinstall",
+    ],
+  },
+  {
     version: "2026-10-12-phone-day-sheet",
     date: "Oct 12, 2026",
     title: "Phone time tracker: a cleaner week, a clearer day",
