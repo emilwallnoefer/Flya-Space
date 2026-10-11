@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, m } from "framer-motion";
+import { SHEET_EASE } from "../screen";
 import { type ReactNode, useEffect, useRef } from "react";
 import { CertificateRequestModal } from "@/components/chat/certificate-request-modal";
 import { ArrowDownIcon, ArrowUpIcon, PaperclipIcon, SendIcon, SpinnerIcon, XMarkIcon } from "@/components/chat/icons";
@@ -89,7 +90,8 @@ export function MobileChatScreen({ isAdmin, onClose }: { isAdmin: boolean; onClo
         aria-label="Team chat"
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
-        transition={{ type: "spring", stiffness: 360, damping: 34 }}
+        exit={{ y: "100%", transition: { duration: 0.3, ease: SHEET_EASE } }}
+        transition={{ duration: 0.45, ease: SHEET_EASE }}
         style={viewport ? { top: viewport.top, height: viewport.height, bottom: "auto" } : undefined}
         className="m-sheet fixed inset-0 z-[141] flex flex-col bg-surface text-ink"
       >
@@ -144,7 +146,7 @@ export function MobileChatScreen({ isAdmin, onClose }: { isAdmin: boolean; onClo
                       previous.kind !== msg.kind ||
                       new Date(msg.created_at).getTime() - new Date(previous.created_at).getTime() > 5 * 60 * 1000;
                     items.push(
-                      <m.div key={msg.id} className="chat-msg-row" layout="position" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18, ease: "easeOut" }}>
+                      <m.div key={msg.id} className="chat-msg-row" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18, ease: "easeOut" }}>
                         <MessageRow
                           message={msg}
                           isMe={msg.sender_id === currentUserId}

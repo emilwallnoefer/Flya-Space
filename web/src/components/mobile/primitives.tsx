@@ -2,6 +2,7 @@
 
 import { greetingFromEmail } from "@/lib/greeting";
 import { AnimatePresence, m } from "framer-motion";
+import { SHEET_EASE } from "./screen";
 import { type ReactNode, useEffect, useRef } from "react";
 import { lockPageScroll } from "@/lib/scroll-lock";
 import { useFocusTrap } from "@/lib/use-focus-trap";
@@ -31,7 +32,7 @@ export function MobileTopBar({
   large?: boolean;
 }) {
   return (
-    <header className="m-topbar sticky top-0 z-30 flex items-center gap-2 bg-surface/95 px-3 pb-2 pt-[max(0.5rem,var(--safe-top))] backdrop-blur-md">
+    <header className="m-topbar sticky top-0 z-30 flex items-center gap-2 bg-surface px-3 pb-2 pt-[max(0.5rem,var(--safe-top))]">
       {onBack ? (
         <button
           type="button"
@@ -315,8 +316,8 @@ export function MobileSheet({
             key="scrim"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
+            exit={{ opacity: 0, transition: { duration: 0.25, ease: "easeOut" } }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
             className="fixed inset-0 z-[140] bg-overlay/60"
             onClick={onClose}
             aria-hidden
@@ -329,8 +330,8 @@ export function MobileSheet({
             tabIndex={-1}
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 380, damping: 36 }}
+            exit={{ y: "100%", transition: { duration: 0.3, ease: SHEET_EASE } }}
+            transition={{ duration: 0.5, ease: SHEET_EASE }}
             drag="y"
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.4 }}

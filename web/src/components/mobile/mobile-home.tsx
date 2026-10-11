@@ -155,7 +155,7 @@ function HomeTile({
       type="button"
       onClick={onClick}
       className={cn(
-        "m-tile flex min-w-0 flex-col justify-between rounded-2xl border border-glass/10 bg-panel p-3 text-left active:bg-glass/8",
+        "m-tile flex min-w-0 flex-col justify-between rounded-2xl border border-glass/10 bg-panel p-3 text-left transition-transform duration-150 ease-out active:scale-[0.97] active:duration-100",
         compact ? "min-h-[4.75rem] gap-2" : "min-h-[5.75rem] gap-3",
       )}
     >

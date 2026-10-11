@@ -43,7 +43,7 @@ export function MobileSkeleton() {
           </div>
         </div>
       </div>
-      <nav className="m-tabbar fixed inset-x-0 bottom-0 z-[95] flex items-stretch border-t border-glass/10 bg-surface/95 pb-safe" aria-hidden>
+      <nav className="m-tabbar fixed inset-x-0 bottom-0 z-[95] flex items-stretch border-t border-glass/10 bg-surface pb-safe" aria-hidden>
         {["Time", "Mail", "Fleet"].map((label) => (
           <span key={label} className="flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[10.5px] text-transparent">
             <span className="h-6 w-6 rounded-md bg-glass/10" />

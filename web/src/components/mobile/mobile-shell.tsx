@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { AnimatePresence } from "framer-motion";
 import { Suspense, use, useCallback, useEffect, useMemo, useState } from "react";
 import type { DashboardShellProps } from "@/components/dashboard-shell";
 import { useMailComposer } from "@/components/mail-composer/use-mail-composer";
@@ -14,6 +15,7 @@ import { playUiSound } from "@/lib/ui-sounds";
 import { pushViewParams, readViewParam, wasPushedByUs, writeViewParams } from "@/lib/view-params";
 import { MOBILE_LOOK } from "./look";
 import { MobileHome } from "./mobile-home";
+import { MobileScreen, type NavDirection } from "./screen";
 import { MobileTabBar, type MobileTab } from "./mobile-tab-bar";
 import { MobileTimeScreen } from "./time/mobile-time-screen";
 import { MobileFleetScreen } from "./fleet/mobile-fleet-screen";
@@ -48,7 +50,7 @@ export type MobileShellProps = DashboardShellProps;
  * takes exactly the same props, so the server does the same work for both.
  *
  * Native-app shaped: a home board of tiles, a tab bar (Time, Mail, Fleet and
- * a Chat pill), and one module on screen at a time with a back chevron. Opening a module pushes a history entry, so the
+ * Chat), and one module on screen at a time with a back chevron. Opening a module pushes a history entry, so the
  * Back gesture returns home. The module screens reuse the shared hooks; the
  * markup is the phone's own (the modules not yet rebuilt for the phone show
  * their desktop panel inside the phone chrome until their phase lands).
@@ -90,6 +92,8 @@ export function MobileShell({
   const [timeEditToday, setTimeEditToday] = useState(false);
   // "Team in the field": a screen of its own under More, not a module (no URL state).
   const [teamOpen, setTeamOpen] = useState(false);
+  // Which way the next screen change moves: deeper (1) or back (-1).
+  const [navDir, setNavDir] = useState<NavDirection>(1);
   const field = useFieldStats(true);
   const fieldTotals = useMemo(() => {
     const all = field.stats?.all;
@@ -172,6 +176,7 @@ export function MobileShell({
   }, [activeModule]);
   useEffect(() => {
     function onPopState() {
+      setNavDir(-1);
       const restored = readViewParam("module", MODULE_KEYS);
       setActiveModule(restored && availableModules.includes(restored) ? restored : null);
       setMoreOpen(false);
@@ -186,6 +191,7 @@ export function MobileShell({
       setMoreOpen(false);
       setTimeEditToday(module === "time" && Boolean(options?.editToday));
       if (module === activeModule) return;
+      setNavDir(1);
       playUiSound("switchWhoosh");
       if (activeModule === null) pushViewParams({ module, section: null });
       else writeViewParams({ section: null });
@@ -197,6 +203,7 @@ export function MobileShell({
   const goHome = useCallback(() => {
     setMoreOpen(false);
     if (activeModule === null) return;
+    setNavDir(-1);
     playUiSound("switchWhoosh");
     setRefreshKey((key) => key + 1);
     if (wasPushedByUs()) {
@@ -217,6 +224,16 @@ export function MobileShell({
 
   const activeTab: MobileTab | null = activeModule === "mail" || activeModule === "time" || activeModule === "fleet" ? activeModule : null;
   const embedOpen = activeModule === "planning" || activeModule === "fleetsheet" || activeModule === "roaddays";
+  const screenKey = teamOpen ? "team" : (activeModule ?? "home");
+  function openTeam() {
+    setNavDir(1);
+    setMoreOpen(false);
+    setTeamOpen(true);
+  }
+  function closeTeam() {
+    setNavDir(-1);
+    setTeamOpen(false);
+  }
   const embeds = (
     [
       missionPlanning ? { key: "planning" as const, title: HOME_CARDS[3].title } : null,
@@ -228,9 +245,10 @@ export function MobileShell({
   return (
     <main id="main-content" className="relative min-h-dvh bg-surface text-ink" data-mobile-look={MOBILE_LOOK}>
       {MOBILE_LOOK === "skin" ? <div className="fixed inset-0 -z-10 aurora-bg" aria-hidden /> : null}
+      <MobileScreen screenKey={screenKey} direction={navDir}>
       {teamOpen ? (
         <div className="m-screen">
-          <MobileTeamScreen field={field} onBack={() => setTeamOpen(false)} />
+          <MobileTeamScreen field={field} onBack={closeTeam} />
         </div>
       ) : activeModule === null ? (
         <MobileHome
@@ -283,10 +301,11 @@ export function MobileShell({
           </div>
         </div>
       )}
+      </MobileScreen>
 
       <MobileTabBar active={activeTab} availableModules={availableModules} onSelect={onTab} hidden={embedOpen || chatOpen} />
 
-      {chatOpen ? <MobileChatScreen isAdmin={isAdmin} onClose={() => setChatOpen(false)} /> : null}
+      <AnimatePresence>{chatOpen ? <MobileChatScreen key="chat" isAdmin={isAdmin} onClose={() => setChatOpen(false)} /> : null}</AnimatePresence>
 
       <MobileSheet open={moreOpen} onClose={() => setMoreOpen(false)} title="More">
         <MobileGroup>
@@ -298,10 +317,7 @@ export function MobileShell({
             label="Team in the field"
             detail={fieldTotals ? `${fieldTotals.poc} POCs · ${fieldTotals.training} trainings · ${fieldTotals.travel} travel days this year` : "Regions, POCs and trainings this year"}
             chevron
-            onClick={() => {
-              setMoreOpen(false);
-              setTeamOpen(true);
-            }}
+            onClick={openTeam}
           />
           <MobileRow label="What's new" detail={LATEST_RELEASE.title} chevron onClick={() => { setMoreOpen(false); setWhatsNewOpen(true); }} />
         </MobileGroup>

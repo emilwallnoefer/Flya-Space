@@ -25,7 +25,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     title: "Phone home, as tiles",
     highlights: [
       "Overtime, today and new mail in one row; what's with you and the sheets below",
-      "Chat is a floating pill; Time, Mail and Fleet in the bar",
+      "Time, Mail, Fleet and Chat in the bar; nothing else",
       "Account and more under your initials, on every screen",
     ],
   },

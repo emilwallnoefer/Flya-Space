@@ -13,6 +13,7 @@ import { useSettings } from "@/components/settings/use-settings";
 import type { UserRole } from "@/lib/user-role";
 import { useState } from "react";
 import { MobileGroup, MobileRow, MobileTopBar } from "../primitives";
+import { MobileScreen, type NavDirection } from "../screen";
 
 const DETAIL: Record<SettingsSectionId, string> = {
   gmail: "Save drafts to Gmail",
@@ -45,16 +46,18 @@ export function MobileSettingsScreen({
   // The list comes first on a phone; the hook always holds a section, so
   // "which one is open" is this screen's own state.
   const [chosen, setChosen] = useState<SettingsSectionId | null>(null);
+  const [navDir, setNavDir] = useState<NavDirection>(1);
   const open = chosen && items.some((item) => item.id === chosen) ? chosen : null;
   const title = SETTINGS_NAV.find((n) => n.id === open)?.label ?? "Settings";
   function chooseSection(id: SettingsSectionId | null) {
+    setNavDir(id ? 1 : -1);
     setChosen(id);
     if (id) s.setActiveSection(id);
   }
 
   if (open === null) {
     return (
-      <>
+      <MobileScreen screenKey="list" direction={navDir}>
         <MobileTopBar title="Settings" onBack={onBack} />
         <div className="space-y-5 px-4 pt-2">
           <MobileGroup>
@@ -63,12 +66,12 @@ export function MobileSettingsScreen({
             ))}
           </MobileGroup>
         </div>
-      </>
+      </MobileScreen>
     );
   }
 
   return (
-    <>
+    <MobileScreen screenKey={open} direction={navDir}>
       <MobileTopBar title={title} onBack={() => chooseSection(null)} />
       <div className="px-4 pt-1 pb-4 [&_input]:min-h-11 [&_select]:min-h-11 [&_button]:min-h-10">
         {open === "gmail" ? <GmailSection status={s.gmailStatus} onDisconnect={() => void s.handleDisconnectGmail()} /> : null}
@@ -86,6 +89,6 @@ export function MobileSettingsScreen({
         {s.message ? <p className="mt-6 text-sm text-positive">{s.message}</p> : null}
         {s.error ? <p className="mt-2 text-sm text-danger">{s.error}</p> : null}
       </div>
-    </>
+    </MobileScreen>
   );
 }
