@@ -2,12 +2,13 @@
 
 import type { ReactNode } from "react";
 import { IconClock, IconDrone, IconMail } from "@/components/module-icons";
-import { fmtHM, fmtSignedHM } from "@/components/time-tracker/types";
+import { fmtSignedHM } from "@/components/time-tracker/types";
 import type { ModuleKey } from "@/lib/dashboard-modules";
 import { fromDateKey } from "@/lib/date";
 import { greetingFromEmail, timeGreeting } from "@/lib/greeting";
 import { cn } from "@/lib/cn";
 import { MobileAvatar, MobileTopBar } from "./primitives";
+import { todayStatus } from "./today-status";
 import type { useHomeSummary } from "./use-home-summary";
 
 type Summary = ReturnType<typeof useHomeSummary>;
@@ -36,7 +37,7 @@ export function MobileHome({
   onOpenModule: (module: ModuleKey, options?: { editToday?: boolean }) => void;
   onOpenMore: () => void;
 }) {
-  const { week, today, myItems } = summary;
+  const { week, today, todayKey, myItems } = summary;
   const hasTime = availableModules.includes("time");
   const hasFleet = availableModules.includes("fleet");
   const hasMail = availableModules.includes("mail");
@@ -44,8 +45,7 @@ export function MobileHome({
   const logged = week ? week.days.filter((day) => day.net_mins > 0 || day.holiday || day.public_holiday || day.sick_leave) : [];
   const lastLogged = logged.length > 0 ? logged[logged.length - 1] : null;
   const bankMins = week?.overtime_bank_mins ?? null;
-  const todayValue =
-    today && today.net_mins > 0 ? fmtHM(today.net_mins) : today?.holiday ? "Vacation" : today?.sick_leave ? "Sick" : today?.public_holiday ? "Holiday" : null;
+  const todayState = todayStatus(today, todayKey);
 
   return (
     <div className="m-screen">
@@ -76,9 +76,9 @@ export function MobileHome({
               <HomeTile
                 label="Today"
                 icon={<IconClock className="h-4 w-4" />}
-                value={todayValue ?? "—"}
-                sub={today && today.net_mins > 0 ? `${today.start_time}–${today.stop_time}` : "Log"}
-                tone={todayValue ? "positive" : "default"}
+                value={todayState.value}
+                sub={todayState.sub}
+                tone={todayState.tone}
                 onClick={() => onOpenModule("time", { editToday: true })}
               />
             ) : null}

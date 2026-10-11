@@ -73,7 +73,7 @@ export function useHomeSummary({
     end_date: r.end_date,
   }));
 
-  return { week, today, board, myLive, myOut, myItems };
+  return { week, today, todayKey, board, myLive, myOut, myItems };
 }
 
 function mondayOfToday(): Date {
