@@ -10,8 +10,8 @@ import { MobileDaySheet } from "./mobile-day-sheet";
 import { MobileWeekPicker } from "./mobile-week-picker";
 
 /**
- * The phone's Time Tracker: a week as a list of seven rows, two stat chips,
- * and a bottom sheet to log a day. Same hook as the desktop (`useTimeTracker`),
+ * The phone's Time Tracker: a week as a plain list of seven rows, two stat
+ * chips, and a bottom sheet to log a day (where the quick fills live too). Same hook as the desktop (`useTimeTracker`),
  * so saves, rollbacks, travel lookups and the overtime bank behave the same.
  */
 export function MobileTimeScreen({
@@ -101,11 +101,10 @@ function StatChip({ label, value, detail, tone = "default" }: { label: string; v
 }
 
 function DayRow({ day, state, isToday }: { day: DayData; state: TimeTrackerState; isToday: boolean }) {
-  const { handleEditDay, handleFillMissing, handleFillDay, readOnly, saving } = state;
+  const { handleEditDay } = state;
   const date = fromDateKey(day.date);
   const weekend = isWeekendDate(day.date);
   const excused = day.holiday || day.public_holiday;
-  const relax = weekend || excused || day.sick_leave;
   const logged = day.net_mins > 0;
   const premium = !day.sick_leave && isPremiumOvertimeDay(day.date, day.net_mins, excused);
   const base = premium ? 0 : Math.min(day.net_mins, TARGET_MINS);
@@ -113,45 +112,35 @@ function DayRow({ day, state, isToday }: { day: DayData; state: TimeTrackerState
   const comp = Math.max(0, day.comp_mins);
   const total = Math.max(TARGET_MINS, base + overtime + comp);
   const pct = (mins: number) => `${(mins / total) * 100}%`;
-  const missing = !relax && day.net_mins + day.comp_mins < TARGET_MINS;
   const badge = day.holiday ? "Vacation" : day.public_holiday ? "Public holiday" : day.sick_leave ? "Sick leave" : null;
   const breakMins = (day.breaks ?? []).reduce((sum, b) => sum + Math.max(0, b.mins || 0), 0);
+  const status = badge ?? (logged ? `${day.start_time}–${day.stop_time}` : comp > 0 ? "Compensated" : weekend ? "Weekend" : "Not logged");
 
+  // A plain row: the day, what was logged, the total. Filling a day
+  // (compensate / standard day) lives in the day sheet, not here.
   return (
-    <div className={cn("px-4 py-2.5", isToday && "bg-accent/[0.06]")}>
-      <button type="button" onClick={() => handleEditDay(day.date)} className="flex w-full items-center gap-3 text-left">
-        <span className="w-11 shrink-0">
-          <span className={cn("block text-[11px] font-semibold uppercase tracking-wide", isToday ? "text-accent-soft" : weekend ? "text-ink-5" : "text-ink-4")}>
-            {date.toLocaleDateString(undefined, { weekday: "short" })}
-          </span>
-          <span className={cn("block text-xl font-semibold leading-tight tabular-nums", isToday ? "text-accent-soft" : "text-ink")}>{date.getDate()}</span>
+    <button type="button" onClick={() => handleEditDay(day.date)} className={cn("flex w-full items-center gap-3 px-4 py-2.5 text-left", isToday && "bg-accent/[0.06]")}>
+      <span className="w-11 shrink-0">
+        <span className={cn("block text-[11px] font-semibold uppercase tracking-wide", isToday ? "text-accent-soft" : weekend ? "text-ink-5" : "text-ink-4")}>
+          {date.toLocaleDateString(undefined, { weekday: "short" })}
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-baseline justify-between gap-2">
-            <span className="truncate text-[15px] text-ink">
-              {badge ?? (logged ? `${day.start_time}–${day.stop_time}` : weekend ? "Weekend" : "Not logged")}
-              {logged && breakMins > 0 ? <span className="text-ink-4"> · break {breakMins}m</span> : null}
-            </span>
-            <span className={cn("shrink-0 text-sm font-semibold tabular-nums", logged ? "text-ink" : "text-ink-5")}>{logged ? fmtHM(day.net_mins) : comp > 0 ? fmtHM(comp) : "—"}</span>
+        <span className={cn("block text-xl font-semibold leading-tight tabular-nums", isToday ? "text-accent-soft" : "text-ink")}>{date.getDate()}</span>
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline justify-between gap-2">
+          <span className="truncate text-[15px] text-ink">
+            {status}
+            {logged && breakMins > 0 ? <span className="text-ink-4"> · break {breakMins}m</span> : null}
           </span>
-          <span className="mt-1.5 flex h-1.5 w-full overflow-hidden rounded-full bg-glass/10" aria-hidden>
-            {base > 0 ? <span className="h-full bg-emerald-400/80" style={{ width: pct(base) }} /> : null}
-            {overtime > 0 ? <span className="h-full bg-accent" style={{ width: pct(overtime) }} /> : null}
-            {comp > 0 ? <span className="h-full bg-rose-400/80" style={{ width: pct(comp) }} /> : null}
-          </span>
+          <span className={cn("shrink-0 text-sm font-semibold tabular-nums", logged ? "text-ink" : "text-ink-5")}>{logged ? fmtHM(day.net_mins) : comp > 0 ? fmtHM(comp) : "—"}</span>
         </span>
-        <ChevronIcon className="h-4 w-4 shrink-0 text-ink-5" />
-      </button>
-      {!readOnly && missing ? (
-        <div className="mt-2 flex gap-2 pl-14">
-          <button type="button" disabled={saving} onClick={() => void handleFillMissing(day.date)} className="min-h-9 flex-1 rounded-lg border border-glass/15 bg-glass/8 text-xs font-medium text-ink-2 active:bg-glass/12 disabled:opacity-50">
-            Compensate day
-          </button>
-          <button type="button" disabled={saving} onClick={() => void handleFillDay(day.date)} className="min-h-9 flex-1 rounded-lg border border-glass/15 bg-glass/8 text-xs font-medium text-ink-2 active:bg-glass/12 disabled:opacity-50">
-            Standard day
-          </button>
-        </div>
-      ) : null}
-    </div>
+        <span className="mt-1.5 flex h-1.5 w-full overflow-hidden rounded-full bg-glass/10" aria-hidden>
+          {base > 0 ? <span className="h-full bg-emerald-400/80" style={{ width: pct(base) }} /> : null}
+          {overtime > 0 ? <span className="h-full bg-accent" style={{ width: pct(overtime) }} /> : null}
+          {comp > 0 ? <span className="h-full bg-rose-400/80" style={{ width: pct(comp) }} /> : null}
+        </span>
+      </span>
+      <ChevronIcon className="h-4 w-4 shrink-0 text-ink-5" />
+    </button>
   );
 }
