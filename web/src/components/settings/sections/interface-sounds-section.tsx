@@ -11,7 +11,7 @@ function subscribeUiSounds(onChange: () => void) {
 }
 
 export function InterfaceSoundsSection() {
-  const uiSoundsOn = useSyncExternalStore(subscribeUiSounds, getUiSoundsEnabled, () => true);
+  const uiSoundsOn = useSyncExternalStore(subscribeUiSounds, getUiSoundsEnabled, () => false);
 
   return (
     <div className="mt-5">

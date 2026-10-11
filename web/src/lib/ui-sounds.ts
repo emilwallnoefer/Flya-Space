@@ -2,25 +2,29 @@
 
 const UI_SOUNDS_STORAGE_KEY = "ma_ui_sounds_enabled";
 
+// Sounds are opt-in: nothing plays until the user switches them on in
+// Settings → Interface sounds (the choice is stored on the device).
+const UI_SOUNDS_DEFAULT = false;
+
 function readStoredUiSoundsEnabled(): boolean {
-  if (typeof window === "undefined") return true;
+  if (typeof window === "undefined") return UI_SOUNDS_DEFAULT;
   try {
     const v = window.localStorage.getItem(UI_SOUNDS_STORAGE_KEY);
-    if (v === null) return true;
+    if (v === null) return UI_SOUNDS_DEFAULT;
     return v === "1" || v === "true";
   } catch {
-    return true;
+    return UI_SOUNDS_DEFAULT;
   }
 }
 
 let soundsEnabledCache: boolean | null = null;
 
-/** Whether UI sounds are allowed (default on). Synced with localStorage. */
+/** Whether UI sounds are allowed (default off). Synced with localStorage. */
 export function getUiSoundsEnabled(): boolean {
   if (soundsEnabledCache === null && typeof window !== "undefined") {
     soundsEnabledCache = readStoredUiSoundsEnabled();
   }
-  if (soundsEnabledCache === null) return true;
+  if (soundsEnabledCache === null) return UI_SOUNDS_DEFAULT;
   return soundsEnabledCache;
 }
 
