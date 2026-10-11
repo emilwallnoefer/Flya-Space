@@ -20,13 +20,12 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: "2026-10-11-phone-tiles",
+    version: "2026-10-11-phone-app",
     date: "Oct 11, 2026",
-    title: "Phone home, as tiles",
+    title: "Flya Space on your phone",
     highlights: [
-      "Overtime, today and new mail in one row; what's with you and the sheets below",
-      "Time, Mail, Fleet and Chat in the bar; nothing else",
-      "Account and more under your initials, on every screen",
+      "Open flya.space in Safari on your iPhone, share, then \"Add to Home Screen\"",
+      "Time, Fleet, Mail and Chat, built for one hand",
     ],
   },
   {
