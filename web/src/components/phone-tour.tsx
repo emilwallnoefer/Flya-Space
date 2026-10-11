@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, m } from "framer-motion";
+import { m } from "framer-motion";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChatBubbleIcon } from "@/components/chat/icons";
 import { IconClock, IconDrone, IconMail } from "@/components/module-icons";
@@ -13,16 +13,17 @@ import { useFocusTrap } from "@/lib/use-focus-trap";
 import { cn } from "@/lib/cn";
 
 /**
- * A centred, one-time walkthrough of the phone app, shown on the desktop the
- * first time someone signs in after it shipped: a mock iPhone whose screen
- * changes per step (home board, the tabs, logging a day, installing from
- * Safari), a spotlight ring with an arrow on the part that matters, and a
- * caption beside it. Step through with Next/Back or the arrow keys.
+ * A one-time walkthrough of the phone app, shown on the desktop the first
+ * time someone signs in after it shipped. A mock iPhone sits in the middle
+ * of the window; each step draws a spotlight ring on one part of its
+ * screen and a callout card beside the phone, level with the ring and
+ * joined to it by a line, with the title, the explanation and Back/Next.
+ * Arrow keys step too; Escape closes.
  *
- * The phone on screen is a drawing, not the real mobile shell: the desktop
- * tree must not import `components/mobile/**` (see lib/desktop-tree.test.ts),
- * and a mock needs no data. It shows the signed-in person's own first name,
- * the way the real home board does.
+ * The phone is a drawing, not the real mobile shell: the desktop tree must
+ * not import `components/mobile/**` (see lib/desktop-tree.test.ts), and a
+ * mock needs no data. It shows the signed-in person's own first name, the
+ * way the real home board does, and only the modules their role has.
  *
  * Storage: `PHONE_TOUR_SEEN_KEY` once dismissed; `?tour=phone` re-opens it.
  */
@@ -65,7 +66,7 @@ export function PhoneTour({
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") finish();
-      else if (event.key === "ArrowRight" || event.key === "Enter") next();
+      else if (event.key === "ArrowRight") next();
       else if (event.key === "ArrowLeft") back();
       else return;
       event.preventDefault();
@@ -75,76 +76,9 @@ export function PhoneTour({
   }, [back, finish, next]);
 
   return (
-    <div className="fixed inset-0 z-[130] grid place-items-center overflow-y-auto bg-overlay/70 p-4 backdrop-blur-sm" role="presentation">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="phone-tour-title"
-        tabIndex={-1}
-        className="flex w-[min(96vw,52rem)] flex-col items-center gap-6 rounded-2xl border border-glass/20 bg-surface/95 p-5 shadow-2xl outline-none backdrop-blur-xl sm:flex-row sm:items-stretch sm:gap-8 sm:p-8"
-      >
-        <PhoneMock email={email} step={step} availableModules={availableModules} />
-
-        <div className="flex min-w-0 flex-1 flex-col justify-center">
-          <p className="text-[11px] uppercase tracking-[0.15em] text-accent-soft/75">
-            Flya Space on your phone · {index + 1} of {steps.length}
-          </p>
-          <AnimatePresence mode="wait" initial={false}>
-            <m.div
-              key={step.key}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.18 }}
-            >
-              <h2 id="phone-tour-title" className="mt-2 text-xl font-semibold text-ink">
-                {step.title}
-              </h2>
-              <p className="mt-2 text-sm leading-relaxed text-ink-3/90">{step.body}</p>
-            </m.div>
-          </AnimatePresence>
-
-          <ol className="mt-5 flex flex-wrap gap-1.5" aria-label="Steps">
-            {steps.map((item, itemIndex) => (
-              <li key={item.key}>
-                <button
-                  type="button"
-                  aria-label={`Step ${itemIndex + 1}: ${item.title}`}
-                  aria-current={itemIndex === index ? "step" : undefined}
-                  onClick={() => setIndex(itemIndex)}
-                  className={cn(
-                    "block h-1.5 rounded-full transition-all",
-                    itemIndex === index ? "w-5 bg-accent" : itemIndex < index ? "w-1.5 bg-accent/50" : "w-1.5 bg-glass/25",
-                  )}
-                />
-              </li>
-            ))}
-          </ol>
-
-          <div className="mt-5 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={back}
-              disabled={index === 0}
-              className="rounded-lg border border-glass/15 bg-glass/10 px-3 py-2 text-xs font-medium text-ink-2 transition hover:bg-glass/15 disabled:opacity-40"
-            >
-              Back
-            </button>
-            <button
-              type="button"
-              onClick={next}
-              className="rounded-lg bg-accent/90 px-4 py-2 text-xs font-semibold text-slate-900 transition hover:-translate-y-px hover:bg-accent"
-            >
-              {last ? "Done" : "Next"}
-            </button>
-            {!last ? (
-              <button type="button" onClick={finish} className="ml-auto px-2 py-2 text-xs text-ink-4 transition hover:text-ink-2">
-                Skip
-              </button>
-            ) : null}
-          </div>
-        </div>
+    <div className="fixed inset-0 z-[130] grid place-items-center overflow-auto bg-overlay/80 p-6 backdrop-blur-sm" role="presentation">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="phone-tour-title" tabIndex={-1} className="outline-none">
+        <PhoneMock email={email} step={step} availableModules={availableModules} first={index === 0} last={last} onBack={back} onNext={next} />
       </div>
     </div>
   );
@@ -154,140 +88,155 @@ export function PhoneTour({
 
 const SCREEN_W = 268;
 const SCREEN_H = 580;
+const BEZEL = 12; // frame padding + border, screen-to-frame-edge
+const FRAME_W = SCREEN_W + BEZEL * 2;
+const FRAME_H = SCREEN_H + BEZEL * 2;
+const GAP = 36; // frame edge to callout card
+const CARD_W = 272;
 
 type Rect = { x: number; y: number; w: number; h: number };
 
 /**
- * The iPhone drawing: a dark frame with a dynamic island, the status bar,
- * the mock screen for the step, and, measured from the element carrying
- * `data-spot`, a spotlight ring that dims everything else plus an arrow with
- * a short hint. The ring springs from one spot to the next between steps.
+ * The iPhone drawing with the step's screen inside, the spotlight ring on
+ * the spot (measured from the `data-spot` elements after the screen has
+ * rendered, so it is always where this step's screen puts it), and the
+ * callout card beside the frame, on the side away from the spot, level
+ * with it, joined by a short line.
  */
-function PhoneMock({ email, step, availableModules }: { email: string; step: PhoneTourStep; availableModules: ModuleKey[] }) {
+function PhoneMock({
+  email,
+  step,
+  availableModules,
+  first,
+  last,
+  onBack,
+  onNext,
+}: {
+  email: string;
+  step: PhoneTourStep;
+  availableModules: ModuleKey[];
+  first: boolean;
+  last: boolean;
+  onBack: () => void;
+  onNext: () => void;
+}) {
   const screenRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const [rect, setRect] = useState<Rect | null>(null);
+  const [cardH, setCardH] = useState(0);
 
-  // Measure the spot's box inside the screen. Runs on every step change
-  // (same screen: the ring springs to the new spot) and again when a new
-  // screen has finished entering (`mode="wait"` mounts it only after the old
-  // one has left, so at step-change time there is nothing to measure yet).
-  const measure = useCallback(() => {
-    const screen = screenRef.current;
-    const target = screen && step.spot ? screen.querySelector<HTMLElement>(`[data-spot="${step.spot}"]`) : null;
-    if (!screen || !target) {
-      setRect(null);
-      return;
-    }
-    const base = screen.getBoundingClientRect();
-    const box = target.getBoundingClientRect();
-    const pad = 4;
-    setRect({ x: box.left - base.left - pad, y: box.top - base.top - pad, w: box.width + pad * 2, h: box.height + pad * 2 });
-  }, [step.spot]);
-  // A layout measurement has to happen after commit, so the rule against
+  // The screen for this step is in the DOM in the same commit (no exit
+  // animation to wait for), so this reads the right boxes every time. A
+  // layout measurement has to happen after commit, so the rule against
   // setState in an effect is suppressed for this one effect only.
   /* eslint-disable react-hooks/set-state-in-effect */
   useLayoutEffect(() => {
-    measure();
-  }, [measure]);
+    const screen = screenRef.current;
+    const targets = screen ? Array.from(screen.querySelectorAll<HTMLElement>(`[data-spot="${step.spot}"]`)) : [];
+    if (!screen || targets.length === 0) {
+      setRect(null);
+    } else {
+      const base = screen.getBoundingClientRect();
+      const boxes = targets.map((target) => target.getBoundingClientRect());
+      const left = Math.min(...boxes.map((box) => box.left));
+      const top = Math.min(...boxes.map((box) => box.top));
+      const right = Math.max(...boxes.map((box) => box.right));
+      const bottom = Math.max(...boxes.map((box) => box.bottom));
+      const pad = 4;
+      setRect({ x: left - base.left - pad, y: top - base.top - pad, w: right - left + pad * 2, h: bottom - top + pad * 2 });
+    }
+    setCardH(cardRef.current?.offsetHeight ?? 0);
+  }, [step]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  // The arrow sits above the spot pointing down; a spot near the top gets it
-  // beside (pointing left) when there is room, else below pointing up. The
-  // hint rides with it.
-  const placement: "above" | "below" | "side" = !rect ? "above" : rect.y > 96 ? "above" : rect.x + rect.w < SCREEN_W - 100 ? "side" : "below";
+  // The card goes on the side with more room next to the spot, level with
+  // its centre, kept within the phone's height.
+  const side: "left" | "right" = rect && rect.x + rect.w / 2 > SCREEN_W / 2 ? "left" : "right";
+  const centerY = rect ? BEZEL + rect.y + rect.h / 2 : FRAME_H / 2;
+  const cardTop = Math.min(Math.max(centerY - cardH / 2, 0), Math.max(FRAME_H - cardH, 0));
 
   return (
-    <div className="shrink-0 select-none" aria-hidden>
+    <div className="relative" style={{ width: FRAME_W, height: FRAME_H, marginLeft: CARD_W + GAP, marginRight: CARD_W + GAP }}>
       <div
-        className="relative rounded-[3rem] border-[3px] border-slate-700/80 bg-slate-950 p-[9px] shadow-[0_30px_60px_-20px_rgb(0_0_0/0.7)]"
-        style={{ width: SCREEN_W + 24, height: SCREEN_H + 24 }}
+        className="absolute inset-0 rounded-[3rem] border-[3px] border-slate-600/70 bg-slate-950 p-[9px] shadow-[0_30px_60px_-20px_rgb(0_0_0/0.7)]"
+        aria-hidden
       >
-        <div className="absolute -left-[5px] top-24 h-7 w-[3px] rounded-l bg-slate-700/80" />
-        <div className="absolute -left-[5px] top-36 h-12 w-[3px] rounded-l bg-slate-700/80" />
-        <div className="absolute -left-[5px] top-52 h-12 w-[3px] rounded-l bg-slate-700/80" />
-        <div className="absolute -right-[5px] top-40 h-16 w-[3px] rounded-r bg-slate-700/80" />
-        <div
-          ref={screenRef}
-          className="relative overflow-hidden rounded-[2.4rem] bg-surface text-ink"
-          style={{ width: SCREEN_W, height: SCREEN_H }}
-        >
+        <div className="absolute -left-[5px] top-24 h-7 w-[3px] rounded-l bg-slate-600/70" />
+        <div className="absolute -left-[5px] top-36 h-12 w-[3px] rounded-l bg-slate-600/70" />
+        <div className="absolute -left-[5px] top-52 h-12 w-[3px] rounded-l bg-slate-600/70" />
+        <div className="absolute -right-[5px] top-40 h-16 w-[3px] rounded-r bg-slate-600/70" />
+        <div ref={screenRef} className="relative overflow-hidden rounded-[2.4rem] bg-surface text-ink" style={{ width: SCREEN_W, height: SCREEN_H }}>
           <StatusBar light={step.screen === "home-screen"} />
           <div className="absolute left-1/2 top-2.5 z-40 h-[22px] w-[76px] -translate-x-1/2 rounded-full bg-black" />
 
-          <AnimatePresence mode="wait" initial={false}>
-            <m.div
-              key={step.screen}
-              className="absolute inset-0 pt-11"
-              initial={{ opacity: 0, x: 14 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -14 }}
-              transition={{ duration: 0.18 }}
-              onAnimationComplete={(definition) => {
-                if (definition === "exit") return;
-                measure();
-              }}
-            >
-              <Screen name={step.screen} email={email} activeTab={step.activeTab} availableModules={availableModules} />
-            </m.div>
-          </AnimatePresence>
+          <m.div key={step.screen} className="absolute inset-0 pt-11" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
+            <Screen name={step.screen} email={email} activeTab={step.activeTab} availableModules={availableModules} />
+          </m.div>
 
-          <AnimatePresence>
-            {rect ? (
-              <m.div
-                key="spot"
-                className="pointer-events-none absolute z-50 rounded-xl border-2 border-accent"
-                style={{ boxShadow: "0 0 0 9999px rgb(0 0 0 / 0.5), 0 0 24px 0 rgb(34 211 238 / 0.45)" }}
-                initial={{ opacity: 0, left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
-                animate={{ opacity: 1, left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
-                exit={{ opacity: 0 }}
-                transition={{ type: "spring", stiffness: 320, damping: 32 }}
-              />
-            ) : null}
-          </AnimatePresence>
-          <AnimatePresence>
-            {rect ? (
-              <m.div
-                key={`arrow-${step.key}`}
-                className="pointer-events-none absolute z-50"
-                style={{ left: 0, top: 0 }}
-                initial={{ opacity: 0, ...arrowOrigin(rect, placement, 8) }}
-                animate={{ opacity: 1, ...arrowOrigin(rect, placement, 0) }}
-                exit={{ opacity: 0 }}
-                transition={{ type: "spring", stiffness: 320, damping: 32 }}
-              >
-                <div
-                  className={cn(
-                    "flex items-center",
-                    placement === "above" && "-translate-x-1/2 flex-col",
-                    placement === "below" && "-translate-x-1/2 flex-col-reverse",
-                    placement === "side" && "-translate-y-1/2 flex-row-reverse",
-                  )}
-                >
-                  <span className="whitespace-nowrap rounded-full bg-accent px-2.5 py-1 text-[11px] font-semibold text-slate-900 shadow-lg">{step.hint}</span>
-                  <svg
-                    viewBox="0 0 24 28"
-                    className={cn("h-7 w-6 text-accent drop-shadow", placement === "below" && "rotate-180", placement === "side" && "rotate-90")}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.6"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v22M5 17l7 7 7-7" />
-                  </svg>
-                </div>
-              </m.div>
-            ) : null}
-          </AnimatePresence>
+          {rect ? (
+            <m.div
+              key={step.key}
+              className="pointer-events-none absolute z-50 rounded-xl border-2 border-accent"
+              style={{
+                left: rect.x,
+                top: rect.y,
+                width: rect.w,
+                height: rect.h,
+                boxShadow: "0 0 0 9999px rgb(0 0 0 / 0.55), 0 0 24px 0 rgb(34 211 238 / 0.45)",
+              }}
+              initial={{ opacity: 0, scale: 1.06 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+            />
+          ) : null}
         </div>
       </div>
+
+      {/* Connector: from the frame edge to the card, level with the spot. */}
+      {rect ? (
+        <m.div
+          key={`line-${step.key}`}
+          className="pointer-events-none absolute h-[2px] bg-accent"
+          style={{ top: centerY - 1, width: GAP - 2, ...(side === "right" ? { left: FRAME_W + 1 } : { right: FRAME_W + 1 }) }}
+          initial={{ opacity: 0, scaleX: 0 }}
+          animate={{ opacity: 1, scaleX: 1 }}
+          transition={{ duration: 0.22, ease: "easeOut" }}
+        />
+      ) : null}
+
+      <m.div
+        key={`card-${step.key}`}
+        ref={cardRef}
+        className="absolute rounded-2xl border border-glass/20 bg-surface/95 p-4 shadow-2xl backdrop-blur-xl"
+        style={{ width: CARD_W, top: cardTop, ...(side === "right" ? { left: FRAME_W + GAP } : { right: FRAME_W + GAP }) }}
+        initial={{ opacity: 0, x: side === "right" ? -8 : 8 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.22, ease: "easeOut" }}
+      >
+        <h2 id="phone-tour-title" className="text-base font-semibold leading-snug text-ink">
+          {step.title}
+        </h2>
+        <p className="mt-2 text-[13px] leading-relaxed text-ink-3/90">{step.body}</p>
+        <div className="mt-4 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onBack}
+            disabled={first}
+            className="rounded-lg border border-glass/15 bg-glass/10 px-3 py-2 text-xs font-medium text-ink-2 transition hover:bg-glass/15 disabled:opacity-40"
+          >
+            Back
+          </button>
+          <button
+            type="button"
+            onClick={onNext}
+            className="rounded-lg bg-accent/90 px-4 py-2 text-xs font-semibold text-slate-900 transition hover:-translate-y-px hover:bg-accent"
+          >
+            {last ? "Done" : "Next"}
+          </button>
+        </div>
+      </m.div>
     </div>
   );
-}
-
-/** Where the arrow group anchors for a spot: its centre above, below, or at the right edge. */
-function arrowOrigin(rect: Rect, placement: "above" | "below" | "side", offset: number): { x: number; y: number } {
-  if (placement === "side") return { x: rect.x + rect.w + 6 + offset, y: rect.y + rect.h / 2 };
-  if (placement === "below") return { x: rect.x + rect.w / 2, y: rect.y + rect.h + 6 + offset };
-  return { x: rect.x + rect.w / 2, y: rect.y - 62 - offset };
 }
 
 function StatusBar({ light }: { light: boolean }) {
@@ -426,7 +375,13 @@ function Row({ icon, label, value, accent, last }: { icon?: ReactNode; label: st
 }
 
 function HomeBoard({ first, availableModules, activeTab }: { first: string; availableModules: ModuleKey[]; activeTab: PhoneTourStep["activeTab"] }) {
-  const hasMail = availableModules.includes("mail");
+  const has = (key: ModuleKey) => availableModules.includes(key);
+  const shortcuts: Array<{ key: ModuleKey; label: string; icon: ReactNode; link: boolean; spot: PhoneSpot }> = [
+    ...(has("mail") ? [{ key: "mail" as const, label: "New mail", icon: <IconMail className="h-4 w-4" />, link: false, spot: "tile-mail" as const }] : []),
+    ...(has("planning") ? [{ key: "planning" as const, label: "Planning", icon: <SheetGlyph />, link: true, spot: "tiles-sheets" as const }] : []),
+    ...(has("fleetsheet") ? [{ key: "fleetsheet" as const, label: "Fleet sheet", icon: <SheetGlyph />, link: true, spot: "tiles-sheets" as const }] : []),
+    ...(has("roaddays") ? [{ key: "roaddays" as const, label: "Road Days", icon: <FormGlyph />, link: true, spot: "tiles-sheets" as const }] : []),
+  ];
   return (
     <div className="h-full">
       <div className="flex items-start justify-between px-4 pb-2 pt-1">
@@ -434,28 +389,34 @@ function HomeBoard({ first, availableModules, activeTab }: { first: string; avai
           <p className="text-[12px] font-medium text-ink-3">{timeGreeting()}</p>
           <p className="text-[24px] font-bold leading-[1.1] tracking-tight text-ink">{first}</p>
         </Spot>
-        <Avatar first={first} />
+        <Spot id="avatar">
+          <Avatar first={first} />
+        </Spot>
       </div>
       <div className="grid grid-cols-2 gap-2.5 px-3 pt-1">
-        <Tile label="Overtime" value="+6:30" sub="Through Thu" tone="accent" />
-        <Tile label="Today" value="--:--" sub="Not logged yet" />
-        <div className="col-span-2 rounded-2xl border border-glass/10 bg-panel">
-          <p className="px-3 pb-0.5 pt-2 text-[10px] font-medium text-ink-4">With you</p>
-          <Row icon={<IconDrone className="h-3.5 w-3.5" />} label="Elios 3" value="Back Fri 17" />
-          <Row icon={<span className="text-[14px] leading-none">+</span>} label="Book material" accent last />
-        </div>
-        {hasMail ? <ShortTile icon={<IconMail className="h-4 w-4" />} label="New mail" /> : null}
-        <ShortTile icon={<SheetGlyph />} label="Planning" link />
-        <ShortTile icon={<SheetGlyph />} label="Fleet sheet" link wide={!hasMail} />
+        <Tile label="Overtime" value="+6:30" sub="Through Thu" tone="accent" spot="tile-overtime" />
+        <Tile label="Today" value="--:--" sub="Not logged yet" spot="tile-today" />
+        {has("fleet") ? (
+          <Spot id="card-with-you" className="col-span-2 rounded-2xl border border-glass/10 bg-panel">
+            <p className="px-3 pb-0.5 pt-2 text-[10px] font-medium text-ink-4">With you</p>
+            <Row icon={<IconDrone className="h-3.5 w-3.5" />} label="Elios 3" value="Back Fri 17" />
+            <Row icon={<span className="text-[14px] leading-none">+</span>} label="Book material" accent last />
+          </Spot>
+        ) : null}
+        {shortcuts.map((shortcut, index) => (
+          <Spot key={shortcut.key} id={shortcut.spot} className={cn(shortcuts.length % 2 === 1 && index === shortcuts.length - 1 && "col-span-2")}>
+            <ShortTile icon={shortcut.icon} label={shortcut.label} link={shortcut.link} />
+          </Spot>
+        ))}
       </div>
       <TabBar activeTab={activeTab} availableModules={availableModules} />
     </div>
   );
 }
 
-function ShortTile({ icon, label, link, wide }: { icon: ReactNode; label: string; link?: boolean; wide?: boolean }) {
+function ShortTile({ icon, label, link }: { icon: ReactNode; label: string; link?: boolean }) {
   return (
-    <div className={cn("flex h-11 overflow-hidden rounded-2xl border border-glass/10 bg-panel", wide && "col-span-2")}>
+    <div className="flex h-11 overflow-hidden rounded-2xl border border-glass/10 bg-panel">
       <div className="flex min-w-0 flex-[2] items-center gap-2 px-3">
         <span className="shrink-0 text-accent-soft">{icon}</span>
         <span className="truncate text-[12px] font-medium text-ink">{label}</span>
@@ -470,6 +431,15 @@ function SheetGlyph() {
     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
       <rect x="4" y="3" width="16" height="18" rx="2" />
       <path d="M4 9h16M4 15h16M10 9v12" />
+    </svg>
+  );
+}
+
+function FormGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M8 8h8M8 12h8M8 16h5" />
     </svg>
   );
 }
@@ -539,7 +509,7 @@ function DaySheet({ filled }: { filled: boolean }) {
           <span className="text-[15px] font-semibold text-ink">Friday, 10 Oct</span>
           <span className="text-[12px] text-ink-4">Close</span>
         </div>
-        <div className="flex-1 space-y-4 px-4">
+        <div className="flex-1 space-y-3.5 px-4">
           <Spot id="start-stop" className="grid grid-cols-2 gap-2.5">
             <div>
               <p className="mb-1 text-[10px] text-ink-4">Start</p>
@@ -560,28 +530,30 @@ function DaySheet({ filled }: { filled: boolean }) {
           </div>
           <div>
             <p className="mb-1 text-[10px] text-ink-4">Day type</p>
-            <div className="grid grid-cols-2 gap-2">
-              {["Normal", "Vacation", "Public holiday", "Sick"].map((label, index) => (
-                <div key={label} className={cn("rounded-xl border px-2 py-2 text-center text-[11px] font-medium", index === 0 ? "border-accent/40 bg-accent/15 text-ink" : "border-glass/15 bg-glass/8 text-ink-2")}>
+            <Spot id="day-type" className="grid grid-cols-2 gap-1.5 rounded-xl bg-glass/8 p-1.5">
+              {["Normal", "Vacation", "Public holiday", "Sick leave"].map((label, index) => (
+                <div key={label} className={cn("rounded-lg px-2 py-2 text-center text-[11px] font-medium", index === 0 ? "bg-raised text-ink shadow-sm" : "text-ink-4")}>
                   {label}
                 </div>
               ))}
-            </div>
+            </Spot>
           </div>
           <div>
-            <p className="mb-1 text-[10px] text-ink-4">Break</p>
-            <div className="flex items-center justify-between rounded-xl border border-glass/15 bg-glass/8 px-3 py-2 text-[12px] text-ink">
-              <span className="text-ink-3">−</span>
-              <span className="tabular-nums">{filled ? "30 min" : "0 min"}</span>
-              <span className="text-ink-3">+</span>
+            <p className="mb-1 text-[10px] text-ink-4">Breaks</p>
+            <div className="flex items-center gap-2 text-[12px]">
+              <div className="grid h-9 w-11 place-items-center rounded-xl border border-glass/15 bg-glass/8 font-semibold text-ink">−</div>
+              <div className="flex h-9 flex-1 items-center justify-center rounded-xl border border-glass/10 bg-panel font-semibold tabular-nums text-ink">{filled ? "30 min" : "0 min"}</div>
+              <div className="grid h-9 w-11 place-items-center rounded-xl border border-glass/15 bg-glass/8 font-semibold text-ink">+</div>
             </div>
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-glass/10 bg-panel px-3 py-2.5 text-[12px] text-ink">
+            Travel info
+            <span className="text-[10px] text-ink-4">None</span>
           </div>
         </div>
         <div className="flex gap-2 border-t border-glass/10 px-4 pb-6 pt-3">
           <div className="rounded-xl border border-glass/15 bg-glass/8 px-4 py-2.5 text-[12px] font-medium text-ink-2">Reset</div>
-          <Spot id="save" className="flex-1">
-            <div className="rounded-xl bg-accent px-4 py-2.5 text-center text-[12px] font-semibold text-slate-900">Save · {filled ? "8:24" : "0:00"}</div>
-          </Spot>
+          <div className="flex-1 rounded-xl bg-accent px-4 py-2.5 text-center text-[12px] font-semibold text-slate-900">Save · {filled ? "8:24" : "0:00"}</div>
         </div>
       </div>
     </div>
@@ -666,7 +638,7 @@ function ChatScreen({ first, availableModules, activeTab }: { first: string; ava
 function Bubble({ who, text, mine }: { who: string; text: string; mine?: boolean }) {
   return (
     <div className={cn("flex", mine && "justify-end")}>
-      <div className={cn("max-w-[82%] rounded-2xl px-3 py-2", mine ? "rounded-br-md bg-accent/20" : "rounded-bl-md bg-panel border border-glass/10")}>
+      <div className={cn("max-w-[82%] rounded-2xl px-3 py-2", mine ? "rounded-br-md bg-accent/20" : "rounded-bl-md border border-glass/10 bg-panel")}>
         <p className={cn("text-[9px] font-semibold", mine ? "text-accent-soft" : "text-ink-4")}>{who}</p>
         <p className="text-[11px] leading-snug text-ink">{text}</p>
       </div>
@@ -747,17 +719,27 @@ function ShareSheet() {
           ))}
         </div>
         <div className="mx-4 mt-3 overflow-hidden rounded-xl bg-[#2c2c2e]">
-          <div className={cn(row, "border-b border-white/10")}>Copy <span className="text-white/50">⧉</span></div>
-          <div className={cn(row, "border-b border-white/10")}>Add to Reading List <span className="text-white/50">☰</span></div>
-          <div className={cn(row, "border-b border-white/10")}>Add Bookmark <span className="text-white/50">📖</span></div>
+          <div className={cn(row, "border-b border-white/10")}>
+            Copy <span className="text-white/50">⧉</span>
+          </div>
+          <div className={cn(row, "border-b border-white/10")}>
+            Add to Reading List <span className="text-white/50">☰</span>
+          </div>
+          <div className={cn(row, "border-b border-white/10")}>
+            Add Bookmark <span className="text-white/50">📖</span>
+          </div>
           <Spot id="add-to-home" className={row}>
             <span className="font-medium">Add to Home Screen</span>
             <span className="grid h-5 w-5 place-items-center rounded border border-white/60 text-[12px] leading-none text-white">+</span>
           </Spot>
         </div>
         <div className="mx-4 mt-3 overflow-hidden rounded-xl bg-[#2c2c2e]">
-          <div className={cn(row, "border-b border-white/10")}>Markup <span className="text-white/50">✎</span></div>
-          <div className={row}>Print <span className="text-white/50">⎙</span></div>
+          <div className={cn(row, "border-b border-white/10")}>
+            Markup <span className="text-white/50">✎</span>
+          </div>
+          <div className={row}>
+            Print <span className="text-white/50">⎙</span>
+          </div>
         </div>
       </div>
     </div>
