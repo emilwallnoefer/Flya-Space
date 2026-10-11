@@ -9,6 +9,7 @@ import { TravelMappingSection } from "./sections/travel-mapping-section";
 import { TimeDataSection } from "./sections/time-data-section";
 import { AppearanceSection } from "./sections/appearance-section";
 import { InterfaceSoundsSection } from "./sections/interface-sounds-section";
+import { NotificationsSection } from "./sections/notifications-section";
 import { SecuritySection } from "./sections/security-section";
 import { ReadmeSection } from "./sections/readme-section";
 
@@ -80,6 +81,8 @@ export function SettingsPanel({
                 {s.activeSection === "appearance" ? <AppearanceSection /> : null}
 
                 {s.activeSection === "interface_sounds" ? <InterfaceSoundsSection /> : null}
+
+                {s.activeSection === "notifications" ? <NotificationsSection /> : null}
 
                 {s.activeSection === "security" ? (
                   <SecuritySection

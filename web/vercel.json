@@ -12,6 +12,14 @@
     {
       "path": "/api/cron/fleet-return-reminder",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/time-log-push-reminder",
+      "schedule": "0 17 * * 5"
+    },
+    {
+      "path": "/api/cron/time-log-push-reminder",
+      "schedule": "0 18 * * 5"
     }
   ]
 }

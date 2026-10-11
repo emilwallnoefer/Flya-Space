@@ -20,6 +20,16 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-12-phone-notifications",
+    date: "Oct 12, 2026",
+    title: "Notifications on your phone",
+    highlights: [
+      "Settings → Notifications switches them on for the device you are holding",
+      "Friday at 19:00: a reminder if none of this week's days is logged yet",
+      "On iPhone, open Flya Space from the Home Screen for this to work",
+    ],
+  },
+  {
     version: "2026-10-11-phone-app",
     date: "Oct 11, 2026",
     title: "Flya Space on your phone",
