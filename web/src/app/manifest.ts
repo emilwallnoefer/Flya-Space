@@ -18,7 +18,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
     name: "Flya Space",
-    short_name: "Flya",
+    short_name: "Flya Space",
     description: "Flyability's internal workspace: time tracking, team chat, fleet and mail.",
     start_url: "/dashboard",
     scope: "/",

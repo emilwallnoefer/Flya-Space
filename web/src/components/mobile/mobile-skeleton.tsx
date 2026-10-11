@@ -3,7 +3,7 @@ import { MOBILE_LOOK } from "./look";
 /**
  * Route-level skeleton for the phone dashboard, returned by
  * app/dashboard/loading.tsx when the request comes from a phone. Drawn to the
- * same shape as MobileHome (top bar, four tiles, two groups) and the tab bar,
+ * same shape as MobileHome (top bar, the overtime-bank card, three groups) and the tab bar,
  * so the page lands where the placeholders were. Keep it in step with
  * mobile-home.tsx and mobile-tab-bar.tsx.
  */
@@ -20,19 +20,18 @@ export function MobileSkeleton() {
           <span className="h-10 w-10 rounded-full bg-glass/10" />
         </header>
         <div className="space-y-5 px-4 pt-2">
-          <span className="block h-3 w-14 rounded bg-glass/10" />
-          <div className="grid grid-cols-2 gap-3">
-            {[0, 1, 2, 3].map((i) => (
-              <span key={i} className="block min-h-[5.5rem] rounded-2xl border border-glass/10 bg-panel" />
-            ))}
+          <span className="block h-28 rounded-2xl border border-glass/10 bg-panel" />
+          <div>
+            <span className="mb-1.5 ml-1 block h-3 w-16 rounded bg-glass/10" />
+            <span className="block h-12 rounded-2xl border border-glass/10 bg-panel" />
           </div>
           <div>
-            <span className="mb-1.5 ml-1 block h-3 w-24 rounded bg-glass/10" />
+            <span className="mb-1.5 ml-1 block h-3 w-14 rounded bg-glass/10" />
             <span className="block h-36 rounded-2xl border border-glass/10 bg-panel" />
           </div>
           <div>
             <span className="mb-1.5 ml-1 block h-3 w-16 rounded bg-glass/10" />
-            <span className="block h-[8.5rem] rounded-2xl border border-glass/10 bg-panel" />
+            <span className="block h-24 rounded-2xl border border-glass/10 bg-panel" />
           </div>
         </div>
       </div>

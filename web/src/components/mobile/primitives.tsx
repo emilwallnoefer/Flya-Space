@@ -95,7 +95,7 @@ export function MobileRow({
   value?: ReactNode;
   chevron?: boolean;
   onClick?: () => void;
-  /** A full navigation to another page (onboarding), as a real link. */
+  /** A full navigation to another page, as a real link. */
   href?: string;
   tone?: "accent" | "danger";
   disabled?: boolean;

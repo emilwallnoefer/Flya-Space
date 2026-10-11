@@ -6,8 +6,8 @@ import type { WeekResponse } from "@/components/time-tracker/types";
 import { toDateKey } from "@/lib/date";
 
 /**
- * The numbers on the phone's home tiles: this week's time log and the
- * user's live material bookings. Same endpoints the modules use, read once
+ * The numbers on the phone's home: this week's time log (for the overtime
+ * bank) and the user's live material bookings. Same endpoints the modules use, read once
  * on load and again whenever the shell says the data may have changed
  * (`refreshKey`), so a day logged in the Time screen shows on the tile
  * when the user comes back to Home.
@@ -64,8 +64,16 @@ export function useHomeSummary({
   const today = week?.days.find((day) => day.date === todayKey) ?? null;
   const myLive = board?.reservations.filter((r) => r.is_mine && (r.status === "reserved" || r.status === "picked_up")) ?? [];
   const myOut = myLive.filter((r) => r.status === "picked_up");
+  // The home lists material by name: each live booking joined to its asset.
+  const myItems = myLive.map((r) => ({
+    id: r.id,
+    name: board?.assets.find((asset) => asset.id === r.asset_id)?.name ?? "Material",
+    status: r.status,
+    start_date: r.start_date,
+    end_date: r.end_date,
+  }));
 
-  return { week, today, board, myLive, myOut };
+  return { week, today, board, myLive, myOut, myItems };
 }
 
 function mondayOfToday(): Date {
