@@ -9,8 +9,9 @@ import { cn } from "@/lib/cn";
 export type MobileTab = "mail" | "time" | "fleet" | "chat";
 
 /**
- * The phone's navigation: Time, Mail, Fleet and Chat as tabs along the
- * bottom edge, in thumb reach. Module items come from `availableModules`
+ * The phone's navigation: Time, Mail, Fleet and Chat as icon-only tabs along
+ * the bottom edge, in thumb reach (the name is the button's accessible label,
+ * not shown). Module items come from `availableModules`
  * (role-clamped on the server). There is no Home tab: every module screen
  * has a back chevron to the home board, and Account and More sit under the
  * person's initials in the top bar.
@@ -42,14 +43,14 @@ export function MobileTabBar({
             key={item.key}
             type="button"
             onClick={() => onSelect(item.key)}
+            aria-label={item.label}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[10.5px] font-medium leading-none transition",
+              "flex min-h-14 min-w-0 flex-1 items-center justify-center px-1 transition",
               isActive ? "text-accent-soft" : "text-ink-4 active:text-ink-2",
             )}
           >
             {item.icon}
-            {item.label}
           </button>
         );
       })}
