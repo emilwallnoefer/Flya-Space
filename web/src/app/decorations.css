@@ -1186,21 +1186,36 @@ html[data-mode="neu"] :is(input, textarea, select):focus-visible {
  * *base* bg-glass / bg-accent utility only, not `hover:bg-…` on ghost buttons,
  * which stay flat so the surface stays calm. Home cards and menu items have
  * their own treatment below. */
-html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]) {
+html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]):not([role="switch"]) {
   border-color: transparent;
   background-color: rgb(var(--paper-3));
   background-image: none;
   color: var(--ink);
   box-shadow: var(--neu-raised-sm);
 }
-html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]):hover {
+html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]):not([role="switch"]):hover {
   background-color: rgb(var(--paper-3));
   color: var(--ink);
 }
-html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]):active:not(:disabled) {
+html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]):not([role="switch"]):active:not(:disabled) {
   box-shadow: var(--neu-inset);
   transform: none;
   filter: none;
+}
+
+/* Switches are a small inset well with a raised knob, not a raised block:
+ * the raised-button rule above skips [role="switch"] for this. */
+html[data-mode="neu"] .ui-switch {
+  border-color: transparent;
+  background-color: rgb(var(--paper-2));
+  box-shadow: var(--neu-inset);
+}
+html[data-mode="neu"] .ui-switch[aria-checked="true"] {
+  background-color: rgb(from var(--accent) r g b / 0.35);
+}
+html[data-mode="neu"] .ui-switch > span {
+  background-color: rgb(var(--paper-3));
+  box-shadow: var(--neu-raised-sm);
 }
 
 /* Home cards: one raised block each, no tint, no hover glow; the icon sits in
