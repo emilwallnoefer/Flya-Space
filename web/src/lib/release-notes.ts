@@ -20,6 +20,15 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-11-sounds-off",
+    date: "Oct 11, 2026",
+    title: "Quiet by default",
+    highlights: [
+      "Interface sounds are now off until you switch them on in Settings → Interface sounds",
+      "If you had already chosen a setting on this device, it stays as it was",
+    ],
+  },
+  {
     version: "2026-10-11-phone-home",
     date: "Oct 11, 2026",
     title: "Your overtime bank at a glance",
