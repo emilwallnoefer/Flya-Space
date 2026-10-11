@@ -25,7 +25,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     title: "Sheets on your phone: in the app or in Google",
     highlights: [
       "Tap ↗ on the Planning, Fleet sheet and Road Days tiles to open them in the Google app, with your work account",
-      "Blank sheet in the app? Safari needs \"Prevent Cross-Site Tracking\" off, or use ↗",
+      "Blank sheet in the app? A card explains the Safari setting that fixes it, or sends you to Google",
     ],
   },
   {

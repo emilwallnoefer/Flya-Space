@@ -33,13 +33,6 @@ import { useHomeSummary } from "./use-home-summary";
 const MobileChatScreen = dynamic(() => import("./chat/mobile-chat-screen").then((m) => m.MobileChatScreen), { ssr: false });
 const GoogleEmbedPanel = dynamic(() => import("@/components/google-embed-panel").then((m) => m.GoogleEmbedPanel), { ssr: false, loading: PanelLoading });
 
-/**
- * Shown behind "Not loading?" in the framed sheet on phones. WebKit withholds
- * the Google session from the frame unless this setting is off; nothing on our
- * side can change that (lib/google-embeds.ts).
- */
-const PHONE_FRAME_HELP = "Safari shows a blank sheet until Settings → Safari → \"Prevent Cross-Site Tracking\" is off. Or open it in Google from the tile's ↗.";
-
 // Same keys as the desktop shell, so a release seen on one device is seen on both.
 const PROGRAM_README_PROMPT_SEEN_KEY = "ma_program_readme_prompt_seen_v1";
 const WHATS_NEW_SEEN_VERSION_KEY = "ma_whats_new_seen_version_v1";
@@ -285,6 +278,8 @@ export function MobileShell({
       roadDays ? { key: "roaddays" as const, title: HOME_CARDS[5].title, href: withAuthUser(roadDays.open, email) } : null,
     ] as Array<{ key: ModuleKey; title: string; href: string } | null>
   ).filter((embed): embed is { key: ModuleKey; title: string; href: string } => embed !== null);
+  // The framed view's "Still blank?" card links out to the same URL as the tile's ↗.
+  const hintFor = (key: ModuleKey) => ({ openHref: embeds.find((embed) => embed.key === key)?.href ?? "" });
 
   return (
     <main id="main-content" className="relative min-h-dvh bg-surface text-ink" data-mobile-look={MOBILE_LOOK}>
@@ -304,11 +299,11 @@ export function MobileShell({
           onOpenMore={() => setMoreOpen(true)}
         />
       ) : activeModule === "planning" && missionPlanning ? (
-        <GoogleEmbedPanel title={HOME_CARDS[3].title} urls={missionPlanning} onBack={goHome} helpNote={PHONE_FRAME_HELP} />
+        <GoogleEmbedPanel title={HOME_CARDS[3].title} urls={missionPlanning} onBack={goHome} phoneHint={hintFor("planning")} />
       ) : activeModule === "fleetsheet" && fleetSheet ? (
-        <GoogleEmbedPanel title={HOME_CARDS[4].title} urls={fleetSheet} onBack={goHome} helpNote={PHONE_FRAME_HELP} />
+        <GoogleEmbedPanel title={HOME_CARDS[4].title} urls={fleetSheet} onBack={goHome} phoneHint={hintFor("fleetsheet")} />
       ) : activeModule === "roaddays" && roadDays ? (
-        <GoogleEmbedPanel title={HOME_CARDS[5].title} urls={roadDays} onBack={goHome} helpNote={PHONE_FRAME_HELP} />
+        <GoogleEmbedPanel title={HOME_CARDS[5].title} urls={roadDays} onBack={goHome} phoneHint={hintFor("roaddays")} />
       ) : activeModule === "admin" ? (
         <div className="m-screen">
           <Suspense fallback={<PanelLoading />}>
