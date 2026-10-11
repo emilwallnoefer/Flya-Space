@@ -100,7 +100,7 @@ type Rect = { x: number; y: number; w: number; h: number };
  * The iPhone drawing with the step's screen inside, the spotlight ring on
  * the spot (measured from the `data-spot` elements after the screen has
  * rendered, so it is always where this step's screen puts it), and the
- * callout card beside the frame, on the side away from the spot, level
+ * callout card beside the frame, on the spot's side, level
  * with it, joined by a short line.
  */
 function PhoneMock({
@@ -149,9 +149,9 @@ function PhoneMock({
   }, [step]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  // The card goes on the side with more room next to the spot, level with
+  // The card goes on the same side as the spot, level with
   // its centre, kept within the phone's height.
-  const side: "left" | "right" = rect && rect.x + rect.w / 2 > SCREEN_W / 2 ? "left" : "right";
+  const side: "left" | "right" = rect && rect.x + rect.w / 2 < SCREEN_W / 2 ? "left" : "right";
   const centerY = rect ? BEZEL + rect.y + rect.h / 2 : FRAME_H / 2;
   const cardTop = Math.min(Math.max(centerY - cardH / 2, 0), Math.max(FRAME_H - cardH, 0));
 
