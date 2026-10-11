@@ -55,6 +55,9 @@ export function PhoneTour({
 
   const next = useCallback(() => {
     if (last) {
+      // Done on the last step: tell the admins, once per person (the server
+      // claims a row before sending). Fire and forget — nothing here waits.
+      void fetch("/api/phone-tour/complete", { method: "POST" }).catch(() => {});
       finish();
       return;
     }
