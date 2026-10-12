@@ -1,11 +1,21 @@
 import type { CSSProperties } from "react";
-import { NAVBAR_TITLE, NAVBAR_TITLE_CLASS } from "@/components/workspace-home-layout";
+import Image from "next/image";
 import {
-  MOBILE_HOME_BRAND_CLASS,
-  MOBILE_HOME_BRAND_ROW_CLASS,
+  NAVBAR_EYEBROW_CLASS,
+  NAVBAR_LOGO_CLASS,
+  NAVBAR_LOGO_SRC,
+  NAVBAR_TITLE,
+  NAVBAR_TITLE_CLASS,
+} from "@/components/workspace-home-layout";
+import {
+  MOBILE_HOME_EYEBROW_CLASS,
   MOBILE_HOME_GREETING_CLASS,
-  MOBILE_HOME_HEADER_CLASS,
-  MOBILE_HOME_NAME_CLASS,
+  MOBILE_HOME_INTRO_CLASS,
+  MOBILE_HOME_NAVBAR_BRAND_CLASS,
+  MOBILE_HOME_NAVBAR_CLASS,
+  MOBILE_HOME_NAVBAR_ROW_CLASS,
+  MOBILE_HOME_NAVBAR_SURFACE_CLASS,
+  MOBILE_HOME_SCREEN_TOP_CLASS,
 } from "./home-layout";
 import { MOBILE_LOOK } from "./look";
 
@@ -19,22 +29,33 @@ import { MOBILE_LOOK } from "./look";
 export function MobileSkeleton() {
   return (
     <main className="relative min-h-dvh bg-surface text-ink" aria-busy="true" data-mobile-look={MOBILE_LOOK}>
-      <div className="m-screen motion-safe:animate-pulse">
-        <header className={MOBILE_HOME_HEADER_CLASS}>
-          <div className={MOBILE_HOME_BRAND_ROW_CLASS}>
-            <span className={MOBILE_HOME_BRAND_CLASS}>
-              {/* The real title, so the launch camera has its target while the home streams in. */}
-              <span className={NAVBAR_TITLE_CLASS} data-launch-target>
-                {NAVBAR_TITLE}
-              </span>
-            </span>
-            <span className="h-10 w-10 rounded-full bg-glass/10" data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties} />
+      <div className={`m-screen motion-safe:animate-pulse ${MOBILE_HOME_SCREEN_TOP_CLASS}`}>
+        <header>
+          <div className={MOBILE_HOME_NAVBAR_CLASS}>
+            <div className={MOBILE_HOME_NAVBAR_SURFACE_CLASS} data-launch-reveal="surface" style={{ "--reveal-i": 0 } as CSSProperties} aria-hidden />
+            <div className={MOBILE_HOME_NAVBAR_ROW_CLASS}>
+              <div className={MOBILE_HOME_NAVBAR_BRAND_CLASS}>
+                <Image src={NAVBAR_LOGO_SRC} alt="" width={28} height={28} className={NAVBAR_LOGO_CLASS} priority data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties} />
+                <div className="min-w-0">
+                  <p className={NAVBAR_EYEBROW_CLASS} data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>
+                    Flyability Internal
+                  </p>
+                  {/* The real title, so the launch camera has its target while the home streams in. */}
+                  <p className={NAVBAR_TITLE_CLASS} data-launch-target>
+                    {NAVBAR_TITLE}
+                  </p>
+                </div>
+              </div>
+              <span className="h-10 w-10 rounded-full bg-glass/10" data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties} />
+            </div>
           </div>
-          {/* The greeting and name boxes, at the real lines' heights (15px/20px and 34px × 1.1). */}
-          <span className={`${MOBILE_HOME_GREETING_CLASS} h-5 w-28 rounded bg-glass/10`} data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties} />
-          <span className={`${MOBILE_HOME_NAME_CLASS} h-[2.3375rem] w-40 rounded bg-glass/10`} data-launch-reveal style={{ "--reveal-i": 1 } as CSSProperties} />
+          <div className={MOBILE_HOME_INTRO_CLASS} data-launch-reveal style={{ "--reveal-i": 1 } as CSSProperties}>
+            <p className={MOBILE_HOME_EYEBROW_CLASS}>Workspace</p>
+            {/* One greeting line at the real line height (28px × 1.15). */}
+            <span className={`${MOBILE_HOME_GREETING_CLASS} block h-[2.0125rem] w-56 rounded bg-glass/10`} />
+          </div>
         </header>
-        <div className="grid grid-cols-2 gap-3 px-4 pt-1">
+        <div className="grid grid-cols-2 gap-3 px-4 pt-2">
           {[0, 1].map((i) => (
             <span key={i} className="block min-h-[5.75rem] rounded-2xl border border-glass/10 bg-panel" data-launch-reveal style={{ "--reveal-i": 2 + i } as CSSProperties} />
           ))}

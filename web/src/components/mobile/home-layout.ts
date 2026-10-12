@@ -4,13 +4,20 @@
  * page lands where the placeholders were drawn. No "use client" here: the
  * skeleton is a server component and must read these as plain strings.
  *
- * Shape: a brand row (the wordmark on the left, the avatar on the right,
- * centred on each other), then the greeting and the name as the page's
- * large title. Change the header's layout here, never inline.
+ * Shape, after the desktop (workspace-home-layout.ts): a navbar card (the
+ * app icon, the eyebrow over the wordmark, the avatar on the right), some
+ * air, then the greeting block (its eyebrow, "Good afternoon, Emil"). The
+ * card sticks to the top like the desktop's; the greeting scrolls away.
+ * Change the header's layout here, never inline.
  */
-export const MOBILE_HOME_HEADER_CLASS = "px-4 pb-3 pt-[max(0.75rem,var(--safe-top))]";
-export const MOBILE_HOME_BRAND_ROW_CLASS = "flex h-10 items-center justify-between gap-3";
-/** The wordmark class carries mt-1 (its navbar offset); the bottom padding balances it. */
-export const MOBILE_HOME_BRAND_CLASS = "flex min-w-0 items-center pb-1";
-export const MOBILE_HOME_GREETING_CLASS = "mt-4 block text-[15px] font-medium leading-5 text-ink-3";
-export const MOBILE_HOME_NAME_CLASS = "mt-0.5 block truncate text-[2.125rem] font-bold leading-[1.1] tracking-[-0.02em] text-ink";
+export const MOBILE_HOME_NAVBAR_CLASS = "sticky top-[max(0.75rem,var(--safe-top))] z-30 mx-4 isolate";
+/* The card itself, a sibling under the row so the launch camera can hold it
+ * back while the title stands alone (a "surface" reveal, like the desktop). */
+export const MOBILE_HOME_NAVBAR_SURFACE_CLASS = "m-tile absolute inset-0 -z-1 rounded-2xl border border-glass/10 bg-panel";
+export const MOBILE_HOME_NAVBAR_ROW_CLASS = "flex items-center justify-between gap-3 p-2.5";
+export const MOBILE_HOME_NAVBAR_BRAND_CLASS = "flex min-w-0 items-center gap-2.5";
+export const MOBILE_HOME_INTRO_CLASS = "px-4 pb-2 pt-7";
+export const MOBILE_HOME_EYEBROW_CLASS = "text-[11px] font-medium uppercase tracking-[0.28em] text-accent-soft/65";
+export const MOBILE_HOME_GREETING_CLASS = "mt-2 text-balance text-[1.75rem] font-semibold leading-[1.15] tracking-tight text-ink";
+/* Space above the navbar card, matching the page's safe top. */
+export const MOBILE_HOME_SCREEN_TOP_CLASS = "pt-[max(0.75rem,var(--safe-top))]";
