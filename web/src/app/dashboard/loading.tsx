@@ -60,7 +60,7 @@ export default async function DashboardLoading() {
   if (isPhoneRequest(await headers())) return <MobileSkeleton />;
   return (
     <main className="relative min-h-dvh overflow-x-hidden bg-surface text-ink" aria-busy="true">
-      <div className="absolute inset-0 aurora-bg" />
+      <div className="absolute inset-0 aurora-bg" data-launch-reveal="surface" style={{ "--reveal-i": 0 } as CSSProperties} />
       <section className="page-shell">
         {/* Navbar and hero are direct children of the page shell, like on the
             real page, so the shell's flex gap spaces them the same way. */}
@@ -82,8 +82,8 @@ export default async function DashboardLoading() {
         </div>
 
         <div className={`${HOME_HERO_CLASS} motion-safe:animate-pulse`}>
-          <div className="dashboard-mesh" aria-hidden />
-          <div className="dashboard-mesh-fade" aria-hidden />
+          <div className="dashboard-mesh" aria-hidden data-launch-reveal="surface" style={{ "--reveal-i": 1 } as CSSProperties} />
+          <div className="dashboard-mesh-fade" aria-hidden data-launch-reveal="surface" style={{ "--reveal-i": 1 } as CSSProperties} />
           <div className={HOME_CONTENT_CLASS}>
             <div className={HOME_INTRO_CLASS} data-launch-reveal style={{ "--reveal-i": 1 } as CSSProperties}>
               <p className={HOME_EYEBROW_CLASS}>

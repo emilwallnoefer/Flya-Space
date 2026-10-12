@@ -517,7 +517,7 @@ export function DashboardShell({
 
   return (
     <main id="main-content" className="relative min-h-dvh overflow-x-hidden bg-surface text-ink">
-      <div className="absolute inset-0 aurora-bg" />
+      <div className="absolute inset-0 aurora-bg" data-launch-reveal="surface" style={{ "--reveal-i": 0 } as CSSProperties} />
       <section className="page-shell">
         <AuthNavbar
           activeModule={activeModule}
@@ -576,8 +576,8 @@ export function DashboardShell({
             transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
             className={HOME_HERO_CLASS}
           >
-            <div className="dashboard-mesh" aria-hidden />
-            <div className="dashboard-mesh-fade" aria-hidden />
+            <div className="dashboard-mesh" aria-hidden data-launch-reveal="surface" style={{ "--reveal-i": 1 } as CSSProperties} />
+            <div className="dashboard-mesh-fade" aria-hidden data-launch-reveal="surface" style={{ "--reveal-i": 1 } as CSSProperties} />
             <div className={HOME_CONTENT_CLASS}>
               <div className={HOME_INTRO_CLASS} data-launch-reveal style={{ "--reveal-i": 1 } as CSSProperties}>
                 <p className={HOME_EYEBROW_CLASS}>Workspace</p>

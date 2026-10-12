@@ -33,7 +33,7 @@ describe("launch camera markup", () => {
   it("keeps the static launch page in step with the splash's at-rest frame", () => {
     const page = read("public/launch.html");
     const css = read("src/app/animations.css");
-    for (const rule of ["clamp(17px, 3.4vw, 56px)", "letter-spacing: 0.22em", "margin-right: -0.22em", "scaleX(1.18)"]) {
+    for (const rule of ["clamp(17px, 3.4vw, 56px)", "letter-spacing: 0.22em", "margin-right: -0.22em", "scaleX(1.28)"]) {
       expect(page).toContain(rule);
       expect(css).toContain(rule);
     }

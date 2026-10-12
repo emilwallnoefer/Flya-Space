@@ -288,7 +288,7 @@ export function MobileShell({
 
   return (
     <main id="main-content" className="relative min-h-dvh bg-surface text-ink" data-mobile-look={MOBILE_LOOK}>
-      {MOBILE_LOOK === "skin" ? <div className="fixed inset-0 -z-10 aurora-bg" aria-hidden /> : null}
+      {MOBILE_LOOK === "skin" ? <div className="fixed inset-0 -z-10 aurora-bg" aria-hidden data-launch-late /> : null}
       <MobileScreen screenKey={screenKey} direction={navDir}>
       {teamOpen ? (
         <div className="m-screen">

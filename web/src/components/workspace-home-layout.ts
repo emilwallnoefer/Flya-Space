@@ -18,7 +18,10 @@
  * hold the surface back while the title is on screen alone, and so the menu
  * dropdown escapes the card's overflow without an override. */
 export const NAVBAR_CLASS = "relative isolate sticky top-3 z-[90] p-2.5 md:p-3";
-export const NAVBAR_SURFACE_CLASS = "glass-card absolute inset-0 -z-1";
+/* `absolute!`: .glass-card sets position: relative in unlayered CSS, which
+ * beats a plain utility; without the override the surface collapses to a
+ * zero-size box and the navbar has no card at all. */
+export const NAVBAR_SURFACE_CLASS = "glass-card absolute! inset-0 -z-1";
 /* The brand title, everywhere it appears: navbar, phone home, login card and
  * the launch splash (which the camera lines up with it, so one class, one
  * copy of the text). The face is .brand-wordmark in app/animations.css. */

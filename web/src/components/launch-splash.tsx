@@ -32,8 +32,9 @@ import { NAVBAR_TITLE } from "@/components/workspace-home-layout";
  * (`.launch-stage`, app/layout.tsx) is transformed so the header title sits
  * exactly under the overlay's, at the same size (lib/launch-camera.ts).
  * That frame is painted once under the opaque overlay, so the page is
- * rastered at the zoomed scale; next frame the overlay lets go and the
- * stage animates to identity. Elements marked data-launch-reveal fade in
+ * rastered at the zoomed scale; next frame the overlay is removed (a hard
+ * cut: the page shows the same title on the same colour, every decoration
+ * being a reveal still hidden) and the stage animates to identity. Elements marked data-launch-reveal fade in
  * on a stagger keyed on html[data-launch-zoom]; fixed chrome marked
  * data-launch-late waits for html[data-launch-settle], once the transform
  * is gone (a fixed element inside a transformed ancestor is mispositioned).
@@ -50,8 +51,7 @@ export const SPLASH_MIN_MS = 1000;
 export const LAUNCH_READY_CAP_MS = 3000;
 /** Never cover the page longer than this, whatever happens. */
 export const SPLASH_MAX_MS = 6000;
-/** In step with the exit animations in app/animations.css. */
-const SCRIM_MS = 240;
+/** In step with the plain-fade animation in app/animations.css. */
 const FADE_MS = 200;
 /** Post-apply tolerance between the two titles, in CSS px. */
 const SWAP_TOLERANCE_PX = 2;
@@ -91,7 +91,7 @@ function highestRevealIndex(): number {
   return max;
 }
 
-type Phase = "in" | "out" | "fade" | "done";
+type Phase = "in" | "fade" | "done";
 
 export function LaunchSplash() {
   const [phase, setPhase] = useState<Phase>("in");
@@ -181,8 +181,11 @@ export function LaunchSplash() {
             easing: MOVE_EASING,
             fill: "both",
           });
-          setPhase("out");
-          after(SCRIM_MS, () => setPhase("done"));
+          // A hard cut: the page under the overlay is the same title on the
+          // same page colour (decorations are reveals, still hidden), so
+          // removing the overlay changes no pixel; a fade would only dim the
+          // page's title through the scrim for a moment.
+          setPhase("done");
           after(choreographyEnd(highestRevealIndex()) + 50, letGo);
           animation.finished
             .then(() => {

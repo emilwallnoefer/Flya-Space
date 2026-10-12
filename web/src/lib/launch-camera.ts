@@ -5,7 +5,7 @@
  * header's wordmark sits exactly where the splash title is, at the same
  * size; the camera then pulls back to identity. Both rects are measured
  * with `getBoundingClientRect` at scroll 0, each including its element's own
- * `scaleX(1.18)`, which cancels in the ratio. The stage's transform-origin
+ * `scaleX(1.28)`, which cancels in the ratio. The stage's transform-origin
  * is 0 0, so a page point p maps to s·p + t.
  *
  * Scale follows a geometric path (s^(1-p)) rather than a linear one: a

@@ -272,7 +272,7 @@
  * "The Flya Space" as set in the navbar, the phone home, the login card and
  * the launch splash: one class, so the launch camera can put the page's own
  * title exactly under the splash's. Inline-block so its box is the text run
- * (the camera's scale is a ratio of widths); the 18 % stretch grows from the
+ * (the camera's scale is a ratio of widths); the 28 % stretch grows from the
  * left edge, never into what sits before it. */
 .brand-wordmark {
   display: inline-block;
@@ -282,7 +282,7 @@
   letter-spacing: 0.22em;
   line-height: 1;
   white-space: nowrap;
-  transform: scaleX(1.18);
+  transform: scaleX(1.28);
   transform-origin: 0 50%;
 }
 
@@ -341,24 +341,14 @@ html[data-appearance-set] .launch-splash {
 html[data-launch-warm] .launch-splash-word {
   animation: none;
 }
-/* Letting go, camera style: the title fades in 80 ms (the page's own title is
- * already exactly under it, so this only covers sub-pixel drift) and the
- * scrim lets go of its colour over 240 ms, so the skin emerges under the
- * title instead of cutting. In step with SCRIM_MS in the component. */
-.launch-splash[data-phase="out"] {
-  animation: launchSplashScrim 240ms cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-.launch-splash[data-phase="out"] .launch-splash-word {
-  animation: launchSplashFade 80ms linear both;
-}
+/* Letting go, camera style, is a hard cut: the page under the overlay is
+ * the same title on the same page colour (every decoration is a reveal,
+ * still hidden), so removing the overlay changes no pixel. Any fade here
+ * would dim the page's title through the scrim for a moment. */
 /* Letting go without a camera (no target on the page, Reduce Motion, a
  * scrolled reload): a plain fade. In step with FADE_MS. */
 .launch-splash[data-phase="fade"] {
   animation: launchSplashFade 200ms ease-out both;
-}
-@keyframes launchSplashScrim {
-  from { background-color: var(--splash-bg); }
-  to { background-color: transparent; }
 }
 @keyframes launchSplashFade {
   from { opacity: 1; }
@@ -447,8 +437,6 @@ html[data-launch-settle] [data-launch-late] {
   .launch-splash-word {
     animation: none;
   }
-  .launch-splash[data-phase="out"],
-  .launch-splash[data-phase="out"] .launch-splash-word,
   .launch-splash[data-phase="fade"] {
     animation-duration: 150ms;
   }

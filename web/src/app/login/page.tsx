@@ -76,8 +76,10 @@ export default function LoginPage() {
 
   return (
     <main id="main-content" className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-surface px-4 py-8 text-ink">
-      <div className="absolute inset-0 aurora-bg" />
-      <div className="absolute inset-0 bg-overlay/30 backdrop-blur-xl" />
+      {/* Background decoration: in with the launch camera, so the opening
+          frame is the title on the plain page colour. */}
+      <div className="absolute inset-0 aurora-bg" data-launch-reveal="surface" style={{ "--reveal-i": 0 } as CSSProperties} />
+      <div className="absolute inset-0 bg-overlay/30 backdrop-blur-xl" data-launch-reveal="surface" style={{ "--reveal-i": 0 } as CSSProperties} />
       <m.section
         // No entrance of its own: the launch camera is the entrance, and it
         // measures the title while this would still be moving.
@@ -87,7 +89,7 @@ export default function LoginPage() {
       >
         <div className="relative isolate w-full p-5 md:p-6">
           {/* The card itself; a launch reveal so the title can stand alone first. */}
-          <div className="glass-card hourlogger-surface absolute inset-0 -z-1" data-launch-reveal="surface" style={{ "--reveal-i": 0 } as CSSProperties} aria-hidden />
+          <div className="glass-card hourlogger-surface absolute! inset-0 -z-1" data-launch-reveal="surface" style={{ "--reveal-i": 0 } as CSSProperties} aria-hidden />
           <div className="mb-7">
             {/* The launch camera's target: the splash title is this, zoomed in. */}
             <p className={`${NAVBAR_TITLE_CLASS} mb-2`} data-launch-target>{NAVBAR_TITLE}</p>
