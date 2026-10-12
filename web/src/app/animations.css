@@ -398,8 +398,11 @@ html[data-launch-zoom] [data-launch-reveal] {
 html[data-launch-zoom] [data-launch-reveal="surface"] {
   animation-name: launchRevealFade;
 }
-/* Fixed chrome (chat pill, phone tab bar, popups): a fixed element inside a
- * transformed ancestor is mispositioned, so it waits for the settle. */
+/* Fixed chrome (phone tab bar, backgrounds): a fixed element inside a
+ * transformed ancestor is mispositioned, so it waits for the settle. Only for
+ * chrome that stacks under the splash (z-index 100); anything above it (the
+ * desktop chat pill, z 125) is instead mounted once the opening is over
+ * (lib/launch-ready.ts), or its own entrance would play over the wordmark. */
 html[data-launch-zoom] [data-launch-late] {
   opacity: 0;
 }
