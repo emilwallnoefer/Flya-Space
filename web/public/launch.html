@@ -11,8 +11,11 @@
   app is opened, before any server function has booted. It shows the same
   wordmark as components/launch-splash.tsx, in the skin cached on this device,
   then moves on to /dashboard; the browser keeps this page on screen until the
-  dashboard's first paint, where the app's own splash takes over at rest
-  (data-launch-warm, set by the theme bootstrap in app/layout.tsx).
+  dashboard's first paint, where the app's own splash takes over and resumes
+  the wordmark's entrance from the point reached here (data-launch-warm and
+  --launch-elapsed, set by the theme bootstrap in app/layout.tsx from the
+  stamp launch-boot.js leaves). The entrance keyframes below are therefore a
+  copy of launchSplashWord in app/animations.css, same duration and curve.
 
   Nothing here is personal and nothing is fetched: it reads localStorage for the
   skin and writes one sessionStorage flag. Colours are the page / ink /

@@ -41,6 +41,27 @@ describe("launch camera markup", () => {
     expect(read("src/components/launch-splash.tsx")).not.toContain("launch-splash-sub");
   });
 
+  it("resumes the wordmark entrance across the launch page hand-over", () => {
+    const page = read("public/launch.html");
+    const css = read("src/app/animations.css");
+    const boot = read("public/launch-boot.js");
+    const layout = read("src/app/layout.tsx");
+    // The same entrance in both documents, so a point in one is the same point in the other.
+    const entrance = "launchSplashWord 900ms cubic-bezier(0.16, 1, 0.3, 1) both";
+    expect(page).toContain(entrance);
+    expect(css).toContain(entrance);
+    const keyframes = (src: string) => src.match(/@keyframes launchSplashWord \{[^}]*\}[^}]*\}[^}]*\}[^}]*\}/)?.[0].replace(/\s+/g, " ");
+    expect(keyframes(page)).toBeDefined();
+    expect(keyframes(page)).toBe(keyframes(css));
+    // The launch page stamps the entrance's start, the app reads it into
+    // --launch-elapsed, and the warm splash resumes from there rather than
+    // starting over or resting.
+    expect(boot).toContain('addEventListener("animationstart", stamp');
+    expect(layout).toContain('d.style.setProperty("--launch-elapsed",el+"ms")');
+    expect(layout).toContain("el<900");
+    expect(css).toMatch(/html\[data-launch-warm\] \.launch-splash-word \{\s*animation-delay: calc\(-1 \* var\(--launch-elapsed, 900ms\)\);\s*\}/);
+  });
+
   it("marks fixed chrome as late, never as a plain reveal", () => {
     for (const rel of ["src/components/mobile/mobile-tab-bar.tsx", "src/components/offline-game-card.tsx"]) {
       expect(read(rel)).toContain("data-launch-late");

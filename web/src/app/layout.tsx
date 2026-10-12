@@ -68,11 +68,16 @@ export async function generateViewport(): Promise<Viewport> {
 // the launch splash (animations.css) uses that to tell "chose dark" from "never
 // chose", which the attributes alone cannot, since dark is their absence.
 // Last, data-launch-warm: the launch page at "/" (public/launch.html) leaves a
-// sessionStorage flag when it hands over, and the splash then starts at rest
-// instead of fading in a second time. Only read here; the splash component
+// sessionStorage stamp of when its wordmark entrance started, and the splash
+// then resumes that entrance from the same point (--launch-elapsed, read by
+// animations.css as a negative animation-delay) instead of starting over or
+// snapping to rest. While the entrance is still running (under its 900 ms,
+// in step with the keyframes) the cross-document view transition is skipped
+// too: its old frame would be a frozen copy of the moving title, and the
+// crossfade would show two of them. Only read here; the splash component
 // clears it once it has actually shown, so a redirect hop in between (the
 // proxy's /dashboard → /login, say) cannot use it up first.
-const themeBootstrapScript = `try{var d=document.documentElement;if(d.getAttribute("data-appearance-source")==="server"){var m=d.dataset.mode,t=d.dataset.theme==="light"?(m==="blue"||m==="neu"?m:"light"):"dark";localStorage.setItem("ma_theme",t);if(d.dataset.accent)localStorage.setItem("ma_accent_light",d.dataset.accent);d.dataset.appearanceSet="1";}else{var s=localStorage.getItem("ma_theme");if(s==="glacier"||s==="sky")s="blue";if(s==="light"){d.dataset.theme="light";}else if(s==="blue"||s==="neu"){d.dataset.theme="light";d.dataset.mode=s;}else if(s!=="dark"){d.dataset.theme="light";d.dataset.mode="neu";}if(s==="dark"||s==="light"||s==="blue"||s==="neu")d.dataset.appearanceSet="1";var a=localStorage.getItem("ma_accent_light");d.dataset.accent=(a==="blue")?"blue":"amber";}var w=sessionStorage.getItem("ma_launch");if(w&&Date.now()-Number(w)<15000)d.dataset.launchWarm="1";}catch(e){}`;
+const themeBootstrapScript = `try{var d=document.documentElement;if(d.getAttribute("data-appearance-source")==="server"){var m=d.dataset.mode,t=d.dataset.theme==="light"?(m==="blue"||m==="neu"?m:"light"):"dark";localStorage.setItem("ma_theme",t);if(d.dataset.accent)localStorage.setItem("ma_accent_light",d.dataset.accent);d.dataset.appearanceSet="1";}else{var s=localStorage.getItem("ma_theme");if(s==="glacier"||s==="sky")s="blue";if(s==="light"){d.dataset.theme="light";}else if(s==="blue"||s==="neu"){d.dataset.theme="light";d.dataset.mode=s;}else if(s!=="dark"){d.dataset.theme="light";d.dataset.mode="neu";}if(s==="dark"||s==="light"||s==="blue"||s==="neu")d.dataset.appearanceSet="1";var a=localStorage.getItem("ma_accent_light");d.dataset.accent=(a==="blue")?"blue":"amber";}var w=sessionStorage.getItem("ma_launch"),el=w?Date.now()-Number(w):-1;if(el>=0&&el<15000){d.dataset.launchWarm="1";d.style.setProperty("--launch-elapsed",el+"ms");if(el<900)addEventListener("pagereveal",function(ev){if(ev.viewTransition)ev.viewTransition.skipTransition();},{once:true});}}catch(e){}`;
 
 type Appearance = { theme: ThemeValue | null; accent: "amber" | "blue" };
 
