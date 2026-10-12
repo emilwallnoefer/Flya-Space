@@ -68,8 +68,12 @@ export function MobileHome({
         large
         title={
           <span className="block pt-1 pb-1">
+            {/* Where the launch splash's title lands (data-launch-target). */}
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-4" data-launch-target>
+              Flya Space
+            </span>
             <span className="block text-base font-medium text-ink-3">{timeGreeting()}</span>
-            <span className="block text-[2rem] font-bold leading-[1.1] tracking-tight text-ink" data-launch-target>{greetingFromEmail(email)}</span>
+            <span className="block text-[2rem] font-bold leading-[1.1] tracking-tight text-ink">{greetingFromEmail(email)}</span>
           </span>
         }
         right={<MobileAvatar email={email} onClick={onOpenMore} />}

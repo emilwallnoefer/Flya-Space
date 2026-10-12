@@ -323,6 +323,10 @@ html[data-appearance-set] .launch-splash {
 .launch-splash-sub {
   font-weight: 400;
   font-size: clamp(9px, 1.1vw, 13px);
+  /* A fixed line box: this weight arrives after the bold one, and with the
+   * fallback's metrics the line was taller, so the title shifted up when
+   * the face landed. */
+  line-height: 1;
   letter-spacing: 0.6em;
   margin-right: -0.6em;
   color: var(--splash-accent);
@@ -355,12 +359,37 @@ html[data-appearance-set] .launch-splash {
     transform: translate(0, 0) scale(1) scaleX(1.18);
     opacity: 1;
   }
-  60% {
+  80% {
     opacity: 1;
   }
   to {
     transform: translate(var(--merge-x, 0px), var(--merge-y, 0px)) scale(var(--merge-scale, 0.3)) scaleX(1.18);
     opacity: 0;
+  }
+}
+/* While the title shrinks into the page's name, the page itself pulls back
+ * from slightly enlarged to its true size (html[data-launch-out], set by the
+ * component for the 500 ms and removed after, so no transform outlives it
+ * and fixed elements are untouched once it is over). `.launch-stage` is the
+ * root layout's wrapper around the page. */
+html[data-launch-out] .launch-stage {
+  transform-origin: 50% 30vh;
+  animation: launchStageZoom 500ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+/* The enlarged page would overflow the viewport and grow the scrollable area;
+ * on phones that resizes the viewport mid-animation and re-centres the title
+ * by a dozen pixels. Clip for the duration; it is 500 ms with nothing to
+ * scroll to yet. */
+html[data-launch-out],
+html[data-launch-out] body {
+  overflow: hidden;
+}
+@keyframes launchStageZoom {
+  from {
+    transform: scale(1.08);
+  }
+  to {
+    transform: scale(1);
   }
 }
 /* Arriving from the launch page at "/" is a cross-document navigation; with
@@ -422,5 +451,8 @@ html[data-launch-warm] .launch-splash-sub {
   }
   @view-transition {
     navigation: none;
+  }
+  html[data-launch-out] .launch-stage {
+    animation: none;
   }
 }

@@ -89,11 +89,17 @@ export function LaunchSplash() {
       timers.push(
         window.setTimeout(() => {
           aimAtTarget();
+          // The page pulls back from slightly enlarged while the title
+          // shrinks (animations.css, html[data-launch-out] .launch-stage).
+          document.documentElement.dataset.launchOut = "";
           setPhase("out");
         }, wait),
       );
       timers.push(
-        window.setTimeout(() => setPhase("done"), wait + SPLASH_OUT_MS),
+        window.setTimeout(() => {
+          delete document.documentElement.dataset.launchOut;
+          setPhase("done");
+        }, wait + SPLASH_OUT_MS),
       );
     };
 
@@ -104,6 +110,7 @@ export function LaunchSplash() {
     return () => {
       window.removeEventListener("load", release);
       timers.forEach((t) => window.clearTimeout(t));
+      delete document.documentElement.dataset.launchOut;
     };
   }, []);
 

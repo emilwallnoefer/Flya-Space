@@ -153,6 +153,13 @@ export default async function RootLayout({
           type="font/woff2"
           crossOrigin="anonymous"
         />
+        <link
+          rel="preload"
+          href="/fonts/syncopate-400.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
         {nonce ? (
           <script
             nonce={nonce}
@@ -168,7 +175,11 @@ export default async function RootLayout({
           Skip to content
         </a>
         <LaunchSplash />
-        <MotionProvider>{children}</MotionProvider>
+        {/* .launch-stage: what the launch splash zooms out as it lets go
+            (animations.css). A plain block, invisible to layout otherwise. */}
+        <MotionProvider>
+          <div className="launch-stage">{children}</div>
+        </MotionProvider>
         <ServiceWorkerRegistrar />
       </body>
     </html>
