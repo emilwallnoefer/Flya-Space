@@ -9,6 +9,13 @@ import { lockPageScroll } from "@/lib/scroll-lock";
 import { useFocusTrap } from "@/lib/use-focus-trap";
 import { useVisualViewport } from "@/lib/use-visual-viewport";
 import { cn } from "@/lib/cn";
+import {
+  MOBILE_HOME_BRAND_CLASS,
+  MOBILE_HOME_BRAND_ROW_CLASS,
+  MOBILE_HOME_GREETING_CLASS,
+  MOBILE_HOME_HEADER_CLASS,
+  MOBILE_HOME_NAME_CLASS,
+} from "./home-layout";
 
 /**
  * The phone UI's building blocks. Native-app shaped: a top bar with a back
@@ -24,13 +31,10 @@ export function MobileTopBar({
   title,
   onBack,
   right,
-  large = false,
 }: {
   title: ReactNode;
   onBack?: () => void;
   right?: ReactNode;
-  /** Home-style: a bigger title with room for a subtitle under it. */
-  large?: boolean;
 }) {
   return (
     <header className="m-topbar sticky top-0 z-30 flex items-center gap-2 bg-surface px-3 pb-2 pt-[max(0.5rem,var(--safe-top))]">
@@ -46,15 +50,54 @@ export function MobileTopBar({
       ) : (
         <span className="w-1" aria-hidden />
       )}
-      <h1 className={cn("min-w-0 flex-1 truncate font-semibold text-ink", large ? "text-2xl" : "text-base")}>{title}</h1>
-      {right ? (
-        <div
-          className="flex shrink-0 items-center gap-1"
-          {...(large ? { "data-launch-reveal": "", style: { "--reveal-i": 0 } as CSSProperties } : {})}
-        >
-          {right}
-        </div>
-      ) : null}
+      <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-ink">{title}</h1>
+      {right ? <div className="flex shrink-0 items-center gap-1">{right}</div> : null}
+    </header>
+  );
+}
+
+/* --------------------------------------------------------------- home header */
+
+/**
+ * The home's header: a brand row (the wordmark on the left, the avatar on
+ * the right, centred on each other) and the greeting under it as the page's
+ * large title. It scrolls with the page rather than sticking: the home's
+ * fixed chrome is the tab bar. The launch camera targets the wordmark (the
+ * caller passes it in carrying data-launch-target, so the markup test's
+ * one-target rule stays per page), and the avatar, greeting and name ride the
+ * first two reveal slots. The skeleton (mobile-skeleton.tsx) draws the same
+ * boxes from the same class constants, so the page lands where it was drawn.
+ */
+export function MobileHomeHeader({
+  brand,
+  greeting,
+  name,
+  right,
+}: {
+  /** The wordmark, carrying data-launch-target. */
+  brand: ReactNode;
+  greeting: ReactNode;
+  name: ReactNode;
+  right?: ReactNode;
+}) {
+  return (
+    <header className={MOBILE_HOME_HEADER_CLASS}>
+      <div className={MOBILE_HOME_BRAND_ROW_CLASS}>
+        <span className={MOBILE_HOME_BRAND_CLASS}>{brand}</span>
+        {right ? (
+          <div className="flex shrink-0 items-center" data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>
+            {right}
+          </div>
+        ) : null}
+      </div>
+      <h1 className="min-w-0">
+        <span className={MOBILE_HOME_GREETING_CLASS} data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>
+          {greeting}
+        </span>
+        <span className={MOBILE_HOME_NAME_CLASS} data-launch-reveal style={{ "--reveal-i": 1 } as CSSProperties}>
+          {name}
+        </span>
+      </h1>
     </header>
   );
 }

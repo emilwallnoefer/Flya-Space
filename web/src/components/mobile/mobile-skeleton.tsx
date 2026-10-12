@@ -1,5 +1,12 @@
 import type { CSSProperties } from "react";
 import { NAVBAR_TITLE, NAVBAR_TITLE_CLASS } from "@/components/workspace-home-layout";
+import {
+  MOBILE_HOME_BRAND_CLASS,
+  MOBILE_HOME_BRAND_ROW_CLASS,
+  MOBILE_HOME_GREETING_CLASS,
+  MOBILE_HOME_HEADER_CLASS,
+  MOBILE_HOME_NAME_CLASS,
+} from "./home-layout";
 import { MOBILE_LOOK } from "./look";
 
 /**
@@ -13,19 +20,21 @@ export function MobileSkeleton() {
   return (
     <main className="relative min-h-dvh bg-surface text-ink" aria-busy="true" data-mobile-look={MOBILE_LOOK}>
       <div className="m-screen motion-safe:animate-pulse">
-        <header className="flex items-center gap-2 px-3 pb-2 pt-[max(0.5rem,var(--safe-top))]">
-          <span className="w-1" />
-          <span className="min-w-0 flex-1 pt-1 pb-1">
-            {/* The real title, so the launch camera has its target while the home streams in. */}
-            <span className={NAVBAR_TITLE_CLASS} data-launch-target>
-              {NAVBAR_TITLE}
+        <header className={MOBILE_HOME_HEADER_CLASS}>
+          <div className={MOBILE_HOME_BRAND_ROW_CLASS}>
+            <span className={MOBILE_HOME_BRAND_CLASS}>
+              {/* The real title, so the launch camera has its target while the home streams in. */}
+              <span className={NAVBAR_TITLE_CLASS} data-launch-target>
+                {NAVBAR_TITLE}
+              </span>
             </span>
-            <span className="block h-4 w-28 rounded bg-glass/10" data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties} />
-            <span className="mt-1.5 block h-9 w-40 rounded bg-glass/10" data-launch-reveal style={{ "--reveal-i": 1 } as CSSProperties} />
-          </span>
-          <span className="h-10 w-10 rounded-full bg-glass/10" data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties} />
+            <span className="h-10 w-10 rounded-full bg-glass/10" data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties} />
+          </div>
+          {/* The greeting and name boxes, at the real lines' heights (15px/20px and 34px × 1.1). */}
+          <span className={`${MOBILE_HOME_GREETING_CLASS} h-5 w-28 rounded bg-glass/10`} data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties} />
+          <span className={`${MOBILE_HOME_NAME_CLASS} h-[2.3375rem] w-40 rounded bg-glass/10`} data-launch-reveal style={{ "--reveal-i": 1 } as CSSProperties} />
         </header>
-        <div className="grid grid-cols-2 gap-3 px-4 pt-2">
+        <div className="grid grid-cols-2 gap-3 px-4 pt-1">
           {[0, 1].map((i) => (
             <span key={i} className="block min-h-[5.75rem] rounded-2xl border border-glass/10 bg-panel" data-launch-reveal style={{ "--reveal-i": 2 + i } as CSSProperties} />
           ))}
