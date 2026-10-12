@@ -33,7 +33,6 @@ export function TimeTrackerPanel({ readOnly = false, apiBase, viewingLabel, init
   const {
     weekStart,
     setWeekStart,
-    loading,
     calendarOpen,
     setCalendarOpen,
     editorPortalReady,
@@ -119,7 +118,7 @@ export function TimeTrackerPanel({ readOnly = false, apiBase, viewingLabel, init
                   {(value) => fmtHM(Math.round(value))}
                 </AnimatedNumber>
               ) : (
-                <span className="inline-block h-4 w-16 animate-pulse rounded bg-glass/20" aria-hidden="true" />
+                <span className="text-ink-4">—</span>
               )}
             </span>
           </span>
@@ -131,7 +130,7 @@ export function TimeTrackerPanel({ readOnly = false, apiBase, viewingLabel, init
                   {(value) => fmtSignedHM(Math.round(value))}
                 </AnimatedNumber>
               ) : (
-                <span className="inline-block h-4 w-20 animate-pulse rounded bg-glass/20" aria-hidden="true" />
+                <span className="text-ink-4">—</span>
               )}
             </span>
           </span>
@@ -159,7 +158,6 @@ export function TimeTrackerPanel({ readOnly = false, apiBase, viewingLabel, init
             </>
           ) : null}
         </div>
-        {loading && !hasActiveWeekData ? <p className="mt-3 text-sm text-ink-2/80">Loading tracker week...</p> : null}
         </div>
         <WeekPickerCalendar state={state} />
       </div>

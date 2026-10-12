@@ -29,7 +29,7 @@ export function MobileTimeScreen({
   viewingLabel?: string;
 }) {
   const state = useTimeTracker({ readOnly, apiBase, initialWeek, manageEditorChrome: false });
-  const { weekStart, setWeekStart, loading, data, activeWeekData, calendarTodayKey, handleEditDay, editorOpen, returnToWeekdays } = state;
+  const { weekStart, setWeekStart, loading, data, activeWeekData, calendarTodayKey, handleEditDay, editorOpen, returnToWeekdays, revealedDayCount } = state;
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // "Log today" from Home: open today's sheet once the week has loaded.
@@ -78,10 +78,13 @@ export function MobileTimeScreen({
         </button>
       ) : null}
 
+      {/* No placeholder rows while the week loads: the group stays empty and the
+          real rows fade in one after another, on the same reveal cadence as the
+          desktop day cards (the hook's revealedDayCount). */}
       <MobileGroup title={loading && !activeWeekData ? "Loading…" : "Days"}>
-        {days.length === 0
-          ? Array.from({ length: 7 }, (_, i) => <div key={i} className="h-16 animate-pulse bg-glass/5" aria-hidden />)
-          : days.map((day) => <DayRow key={day.date} day={day} state={state} isToday={day.date === calendarTodayKey} />)}
+        {days.map((day, i) => (
+          <DayRow key={day.date} day={day} state={state} isToday={day.date === calendarTodayKey} revealed={i < revealedDayCount} />
+        ))}
       </MobileGroup>
 
       <MobileDaySheet state={state} open={editorOpen} onClose={returnToWeekdays} travelDebug={data?.travel_debug} />
@@ -100,7 +103,7 @@ function StatChip({ label, value, detail, tone = "default" }: { label: string; v
   );
 }
 
-function DayRow({ day, state, isToday }: { day: DayData; state: TimeTrackerState; isToday: boolean }) {
+function DayRow({ day, state, isToday, revealed }: { day: DayData; state: TimeTrackerState; isToday: boolean; revealed: boolean }) {
   const { handleEditDay } = state;
   const date = fromDateKey(day.date);
   const weekend = isWeekendDate(day.date);
@@ -119,7 +122,7 @@ function DayRow({ day, state, isToday }: { day: DayData; state: TimeTrackerState
   // A plain row: the day, what was logged, the total. Filling a day
   // (compensate / standard day) lives in the day sheet, not here.
   return (
-    <button type="button" onClick={() => handleEditDay(day.date)} className={cn("flex w-full items-center gap-3 px-4 py-2.5 text-left", isToday && "bg-accent/[0.06]")}>
+    <button type="button" onClick={() => handleEditDay(day.date)} className={cn("flex w-full items-center gap-3 px-4 py-2.5 text-left transition-opacity duration-300 ease-out", isToday && "bg-accent/[0.06]", revealed ? "opacity-100" : "pointer-events-none opacity-0")}>
       <span className="w-11 shrink-0">
         <span className={cn("block text-[11px] font-semibold uppercase tracking-wide", isToday ? "text-accent-soft" : weekend ? "text-ink-5" : "text-ink-4")}>
           {date.toLocaleDateString(undefined, { weekday: "short" })}
