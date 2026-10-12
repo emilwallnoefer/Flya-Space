@@ -43,9 +43,9 @@ afterEach(() => {
 });
 
 describe("reading the stored theme", () => {
-  it("defaults to dark when nothing is stored", async () => {
+  it("defaults to Neumorphism when nothing is stored", async () => {
     const { getTheme } = await load();
-    expect(getTheme()).toBe("dark");
+    expect(getTheme()).toBe("neu");
   });
 
   it("returns a stored theme", async () => {
@@ -64,27 +64,27 @@ describe("reading the stored theme", () => {
     }
   });
 
-  it("falls back to dark for a value it does not recognise", async () => {
+  it("falls back to Neumorphism for a value it does not recognise", async () => {
     for (const junk of ["", "solarized", "glass", "BLUE", "null"]) {
       window.localStorage.setItem(STORAGE_KEY, junk);
       const { getTheme } = await load();
-      expect(getTheme(), junk).toBe("dark");
+      expect(getTheme(), junk).toBe("neu");
     }
   });
 
-  it("falls back to dark when localStorage is unavailable (private mode)", async () => {
+  it("falls back to Neumorphism when localStorage is unavailable (private mode)", async () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("blocked");
     });
     const { getTheme } = await load();
-    expect(getTheme()).toBe("dark");
+    expect(getTheme()).toBe("neu");
   });
 
   it("caches the first read, so a later external write does not leak in", async () => {
     const { getTheme } = await load();
-    expect(getTheme()).toBe("dark");
+    expect(getTheme()).toBe("neu");
     window.localStorage.setItem(STORAGE_KEY, "light");
-    expect(getTheme()).toBe("dark");
+    expect(getTheme()).toBe("neu");
   });
 });
 
@@ -145,7 +145,7 @@ describe("another tab changing the theme", () => {
   // the announced values are compared as a set rather than by count.
   it("adopts the new value and announces it", async () => {
     const { getTheme } = await load();
-    expect(getTheme()).toBe("dark"); // prime the cache before the other tab writes
+    expect(getTheme()).toBe("neu"); // prime the cache before the other tab writes
     window.localStorage.setItem(STORAGE_KEY, "blue");
     window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY, newValue: "blue" }));
     expect(getTheme()).toBe("blue");
@@ -156,10 +156,10 @@ describe("another tab changing the theme", () => {
 
   it("ignores a write to any other key", async () => {
     const { getTheme } = await load();
-    expect(getTheme()).toBe("dark");
+    expect(getTheme()).toBe("neu");
     window.localStorage.setItem(STORAGE_KEY, "blue");
     window.dispatchEvent(new StorageEvent("storage", { key: "something_else", newValue: "blue" }));
-    expect(getTheme()).toBe("dark");
+    expect(getTheme()).toBe("neu");
     expect(changes()).toEqual([]);
   });
 });

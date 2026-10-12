@@ -63,20 +63,21 @@ export async function generateViewport(): Promise<Viewport> {
     // 100dvh sheets keep their composer visible. iOS ignores it (handled by
     // the visualViewport listener in the chat sheet).
     interactiveWidget: "resizes-content",
-    themeColor: THEME_COLORS[theme ?? "dark"],
+    themeColor: THEME_COLORS[theme ?? "neu"],
   };
 }
 
 // Pre-hydration fallback for signed-out pages (and signed-in users who never saved
 // a preference): read the device-local cache and apply before first paint so light
-// users don't flash dark. When the server already applied the account preference
+// users don't flash dark. Nothing cached means Neumorphism, the default in
+// lib/theme.ts (dark is only what the bare tokens hold, never a default). When the server already applied the account preference
 // (data-appearance-source="server"), this instead syncs the localStorage cache to
 // the server truth so the two never drift. The theme → attribute mapping is
 // themeAttributes() from lib/theme-attrs.ts, hand-inlined: keep the two in step.
 // It also sets data-appearance-set whenever a skin is known from either source;
 // the launch splash (animations.css) uses that to tell "chose dark" from "never
 // chose", which the attributes alone cannot, since dark is their absence.
-const themeBootstrapScript = `try{var d=document.documentElement;if(d.getAttribute("data-appearance-source")==="server"){var m=d.dataset.mode,t=d.dataset.theme==="light"?(m==="blue"||m==="neu"?m:"light"):"dark";localStorage.setItem("ma_theme",t);if(d.dataset.accent)localStorage.setItem("ma_accent_light",d.dataset.accent);d.dataset.appearanceSet="1";}else{var s=localStorage.getItem("ma_theme");if(s==="glacier"||s==="sky")s="blue";if(s==="light"){d.dataset.theme="light";}else if(s==="blue"||s==="neu"){d.dataset.theme="light";d.dataset.mode=s;}if(s==="dark"||s==="light"||s==="blue"||s==="neu")d.dataset.appearanceSet="1";var a=localStorage.getItem("ma_accent_light");d.dataset.accent=(a==="blue")?"blue":"amber";}}catch(e){}`;
+const themeBootstrapScript = `try{var d=document.documentElement;if(d.getAttribute("data-appearance-source")==="server"){var m=d.dataset.mode,t=d.dataset.theme==="light"?(m==="blue"||m==="neu"?m:"light"):"dark";localStorage.setItem("ma_theme",t);if(d.dataset.accent)localStorage.setItem("ma_accent_light",d.dataset.accent);d.dataset.appearanceSet="1";}else{var s=localStorage.getItem("ma_theme");if(s==="glacier"||s==="sky")s="blue";if(s==="light"){d.dataset.theme="light";}else if(s==="blue"||s==="neu"){d.dataset.theme="light";d.dataset.mode=s;}else if(s!=="dark"){d.dataset.theme="light";d.dataset.mode="neu";}if(s==="dark"||s==="light"||s==="blue"||s==="neu")d.dataset.appearanceSet="1";var a=localStorage.getItem("ma_accent_light");d.dataset.accent=(a==="blue")?"blue":"amber";}}catch(e){}`;
 
 type Appearance = { theme: ThemeValue | null; accent: "amber" | "blue" };
 

@@ -25,7 +25,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     title: "A proper opening",
     highlights: [
       "Opening Flya Space now shows the title full-screen in your skin while the page loads, then fades it away",
-      "Not signed in, or never picked an appearance? It opens in Neumorphism",
+      "Neumorphism is now the standard look: anyone who never picked an appearance gets it, splash and page alike",
     ],
   },
   {
