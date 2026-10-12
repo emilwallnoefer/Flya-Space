@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { roleInAccessToken } from "@/lib/app-access";
+import { accessTokenIsStale } from "@/lib/app-access";
 
 /**
  * @param requestHeaders headers to forward to the app (carries the CSP nonce set
@@ -40,17 +40,19 @@ export async function updateSession(request: NextRequest, requestHeaders?: Heade
     } = await supabase.auth.getUser();
 
     // The database reads the role from the access token (`public.has_app_role()`
-    // uses auth.jwt()), but `getUser()` above reads it fresh. When an admin has
-    // just assigned or removed a role, the two disagree until the token is
-    // reissued — up to an hour, during which a newly approved colleague would
-    // see the dashboard but an empty team chat. Reissue it now instead. The
-    // decode is unverified on purpose: it only decides whether to refresh.
+    // uses auth.jwt()), and the root layout reads the saved appearance from
+    // the same token — but `getUser()` above reads both fresh. When an admin
+    // has just assigned or removed a role, or the skin was changed on another
+    // device, the two disagree until the token is reissued — up to an hour,
+    // during which a newly approved colleague would see the dashboard but an
+    // empty team chat, and a laptop would keep the skin the phone just left.
+    // Reissue it now instead. The decode is unverified on purpose: it only
+    // decides whether to refresh.
     if (user) {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      const freshRole = typeof user.app_metadata?.role === "string" ? user.app_metadata.role : null;
-      if (session && roleInAccessToken(session.access_token) !== (freshRole || null)) {
+      if (session && accessTokenIsStale(session.access_token, user)) {
         await supabase.auth.refreshSession();
       }
     }
