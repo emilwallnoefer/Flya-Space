@@ -311,6 +311,12 @@
   /* It covers the page: taps must land here, not on what is underneath. */
   pointer-events: auto;
 }
+/* Phones: the title sits a little above centre, where the eye rests on a
+ * tall screen. The launch page carries the same rule, so the hand-over
+ * changes nothing; the camera measures the title wherever it is. */
+@media (max-width: 639px) {
+  .launch-splash { padding-bottom: 12vh; }
+}
 .launch-splash[data-phase="fade"] {
   pointer-events: none;
 }
