@@ -257,6 +257,24 @@
 }
 
 /* ---- Launch splash (components/launch-splash.tsx) ----
+ * The wordmark face is self-hosted from public/fonts (OFL, see the note
+ * there) rather than next/font, because the CDN-served launch page at "/"
+ * (public/launch.html) needs the same files at a stable URL; app/layout.tsx
+ * preloads the bold cut. `block`: the title must never paint in a fallback
+ * face and swap mid-fade. */
+@font-face {
+  font-family: "Syncopate";
+  font-weight: 400;
+  font-display: block;
+  src: url("/fonts/syncopate-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Syncopate";
+  font-weight: 700;
+  font-display: block;
+  src: url("/fonts/syncopate-700.woff2") format("woff2");
+}
+/* ---- Launch splash (components/launch-splash.tsx) ----
  * Painted from the server HTML before hydration, so the colours must be
  * decidable from <html> attributes alone. The bootstrap in app/layout.tsx
  * sets data-appearance-set whenever a skin is known (saved on the account, or
@@ -288,7 +306,7 @@ html[data-appearance-set] .launch-splash {
 }
 .launch-splash-word,
 .launch-splash-sub {
-  font-family: var(--font-splash), "Michroma", "Eurostile", ui-sans-serif, sans-serif;
+  font-family: "Syncopate", "Michroma", "Eurostile", ui-sans-serif, sans-serif;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -343,6 +361,12 @@ html[data-appearance-set] .launch-splash {
 @keyframes launchSplashWordOut {
   from { transform: scaleX(1.18); }
   to { transform: scaleX(1.2); }
+}
+/* Arriving from the launch page at "/", the wordmark is already on screen:
+ * start at rest so the hand-off between the two documents is seamless. */
+html[data-launch-warm] .launch-splash-word,
+html[data-launch-warm] .launch-splash-sub {
+  animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
   .launch-splash-word,

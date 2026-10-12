@@ -1,0 +1,4 @@
+Syncopate (Graham Meade), latin subset, 400 and 700, from Google Fonts.
+Licensed under the SIL Open Font License 1.1: https://openfontlicense.org
+Self-hosted so the launch page at "/" (public/launch.html) and the app's
+launch splash (app/animations.css) share one stable URL.
