@@ -21,7 +21,7 @@
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.3",
     "framer-motion": "^14.0.0",
-    "google-auth-library": "^11.1.0",
+    "google-auth-library": "^11.2.0",
     "html-to-image": "^1.11.13",
     "next": "16.3.8",
     "react": "^19.3.0",
