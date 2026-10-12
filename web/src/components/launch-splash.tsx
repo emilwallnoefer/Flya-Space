@@ -88,13 +88,27 @@ function maxDeviation(a: Rect, b: Rect): number {
   );
 }
 
-function highestRevealIndex(): number {
-  let max = 0;
-  document.querySelectorAll<HTMLElement>("[data-launch-reveal]").forEach((el) => {
-    const i = Number(el.style.getPropertyValue("--reveal-i"));
-    if (Number.isFinite(i) && i > max) max = i;
+/** The reveals' CSS animations, once they exist (the frame after the zoom attribute goes on). */
+function revealAnimations(): Animation[] {
+  return document.getAnimations().filter((a) => {
+    const target = (a.effect as KeyframeEffect | null)?.target;
+    return target instanceof Element && target.hasAttribute("data-launch-reveal");
   });
-  return max;
+}
+
+/**
+ * Settled when the cross-document view transition (animations.css,
+ * `@view-transition`) is over. Arriving from the launch page or from login,
+ * the browser crossfades its last frame into our first for 350 ms; a camera
+ * move under that crossfade shows the old frame's title, frozen, over the
+ * moving one. Nothing to wait for when there is no transition.
+ */
+function whenViewTransitionDone(): Promise<unknown> {
+  const pending = document.getAnimations().filter((a) => {
+    const pseudo = (a.effect as KeyframeEffect | null)?.pseudoElement;
+    return typeof pseudo === "string" && pseudo.startsWith("::view-transition");
+  });
+  return Promise.allSettled(pending.map((a) => a.finished));
 }
 
 type Phase = "in" | "fade" | "done";
@@ -102,6 +116,7 @@ type Phase = "in" | "fade" | "done";
 export function LaunchSplash() {
   const [phase, setPhase] = useState<Phase>("in");
   const wordRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -200,11 +215,29 @@ export function LaunchSplash() {
           // A hard cut: the page under the overlay is the same title on the
           // same page colour (decorations are reveals, still hidden), so
           // removing the overlay changes no pixel; a fade would only dim the
-          // page's title through the scrim for a moment.
+          // page's title through the scrim for a moment. The cut is made on
+          // the DOM here, in the frame the move starts: through React it
+          // would land a frame or more later (a render after this task), and
+          // the overlay's still title would then sit over a page title that
+          // has already begun to move.
+          overlayRef.current?.style.setProperty("display", "none");
           setPhase("done");
           letGoWarm();
-          after(choreographyEnd(highestRevealIndex()) + 50, letGo);
-          animation.finished
+          // Release everything in one frame, once the move and every reveal
+          // have landed: the inline transform, the move itself, the zoom
+          // attribute (the stage's compositor layer, the clip, the reveals'
+          // animations). Each of these makes the browser re-raster the page,
+          // and spread over separate frames they read as a stutter on the
+          // title at the end; together they are one change at rest. The
+          // reveals are measured here, after the attribute went on, so the
+          // ones created by it exist; a reveal mounting later runs on its own.
+          const landed = animation.finished.then(() =>
+            Promise.race([
+              Promise.allSettled(revealAnimations().map((a) => a.finished)),
+              delay(choreographyEnd(0) + REVEAL_STEP_MS * 12),
+            ]),
+          );
+          landed
             .then(() => {
               if (cancelled) return;
               // Inline transform first, then the animation: no frame in
@@ -212,11 +245,11 @@ export function LaunchSplash() {
               stage.style.transform = "";
               animation?.cancel();
               animation = null;
+              letGo();
               html.dataset.launchSettle = "";
               after(LATE_MS + 50, () => {
                 delete html.dataset.launchSettle;
-                // Attributes all gone (the zoom one goes at the choreography
-                // end, which is at or before this): the opening is over.
+                // Attributes all gone: the opening is over.
                 markLaunchDone();
               });
             })
@@ -227,9 +260,11 @@ export function LaunchSplash() {
       });
     };
 
-    Promise.all([hold, document.fonts.ready, readyOrCap]).then(() => {
-      if (!cancelled) camera();
-    });
+    Promise.all([hold, document.fonts.ready, readyOrCap])
+      .then(() => whenViewTransitionDone())
+      .then(() => {
+        if (!cancelled) camera();
+      });
 
     return () => {
       cancelled = true;
@@ -247,6 +282,7 @@ export function LaunchSplash() {
   return (
     <div
       className="launch-splash"
+      ref={overlayRef}
       data-phase={phase}
       role="status"
       aria-label="Flya Space is loading"
