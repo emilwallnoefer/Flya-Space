@@ -21,7 +21,10 @@ export const THEMES: { value: Theme; label: string; swatch: string }[] = [
 ];
 
 const THEME_STORAGE_KEY = "ma_theme";
-const DEFAULT_THEME: Theme = "dark";
+// What an account with no saved appearance (and a device with nothing cached)
+// gets. Mirrored by the pre-hydration bootstrap in app/layout.tsx and the
+// launch splash's literal colours in app/animations.css: change all three.
+const DEFAULT_THEME: Theme = "neu";
 
 // Map any stored value to a current theme. Legacy "glacier"/"sky" (the old split
 // cool-blue skins) now collapse into the single "blue" mode.

@@ -255,3 +255,102 @@
     transform: none;
   }
 }
+
+/* ---- Launch splash (components/launch-splash.tsx) ----
+ * Painted from the server HTML before hydration, so the colours must be
+ * decidable from <html> attributes alone. The bootstrap in app/layout.tsx
+ * sets data-appearance-set whenever a skin is known (saved on the account, or
+ * cached on the device); then the splash reads that skin's own tokens. With
+ * no skin known — not signed in, or never chose one — it is Neumorphism,
+ * literal values because the dark base tokens are what :root holds then.
+ * Both fades are finite; the node leaves the DOM once they are done. */
+.launch-splash {
+  --splash-bg: #ebecef;
+  --splash-ink: #1f252e;
+  --splash-accent: #2f5f63;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 0 16px;
+  background: var(--splash-bg);
+  color: var(--splash-ink);
+  pointer-events: none;
+}
+html[data-appearance-set] .launch-splash {
+  --splash-bg: var(--surface);
+  --splash-ink: var(--ink);
+  --splash-accent: var(--accent-soft);
+}
+.launch-splash-word,
+.launch-splash-sub {
+  font-family: var(--font-splash), "Michroma", "Eurostile", ui-sans-serif, sans-serif;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.launch-splash-word {
+  font-weight: 700;
+  font-size: clamp(15px, 3.4vw, 56px);
+  line-height: 1;
+  letter-spacing: 0.22em;
+  margin-right: -0.22em;
+  /* The face is already extended; the stretch pushes it to cinematic. */
+  transform: scaleX(1.18);
+  animation: launchSplashWord 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.launch-splash-sub {
+  font-weight: 400;
+  font-size: clamp(9px, 1.1vw, 13px);
+  letter-spacing: 0.6em;
+  margin-right: -0.6em;
+  color: var(--splash-accent);
+  opacity: 0.85;
+  animation: launchSplashSub 600ms 260ms ease-out both;
+}
+.launch-splash[data-phase="out"] {
+  animation: launchSplashOut 360ms cubic-bezier(0.4, 0, 0.6, 1) both;
+}
+.launch-splash[data-phase="out"] .launch-splash-word {
+  animation: launchSplashWordOut 360ms cubic-bezier(0.4, 0, 0.6, 1) both;
+}
+@keyframes launchSplashWord {
+  from {
+    opacity: 0;
+    letter-spacing: 0.34em;
+    margin-right: -0.34em;
+  }
+  45% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    letter-spacing: 0.22em;
+    margin-right: -0.22em;
+  }
+}
+@keyframes launchSplashSub {
+  from { opacity: 0; }
+  to { opacity: 0.85; }
+}
+@keyframes launchSplashOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes launchSplashWordOut {
+  from { transform: scaleX(1.18); }
+  to { transform: scaleX(1.2); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .launch-splash-word,
+  .launch-splash-sub {
+    animation: none;
+  }
+  .launch-splash[data-phase="out"],
+  .launch-splash[data-phase="out"] .launch-splash-word {
+    animation-duration: 120ms;
+  }
+}

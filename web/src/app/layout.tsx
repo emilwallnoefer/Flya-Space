@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Syncopate } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
+import { LaunchSplash } from "@/components/launch-splash";
 import { MotionProvider } from "@/components/motion-provider";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 import { createClient } from "@/lib/supabase/server";
@@ -18,6 +19,16 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+// The launch splash wordmark (components/launch-splash.tsx). `block` so the
+// title never paints in a fallback face and then swaps mid-fade; next/font
+// preloads it, so the wait is a cache hit after the first visit.
+const syncopate = Syncopate({
+  variable: "--font-splash",
+  weight: ["400", "700"],
+  subsets: ["latin"],
+  display: "block",
 });
 
 export const metadata: Metadata = {
@@ -52,17 +63,21 @@ export async function generateViewport(): Promise<Viewport> {
     // 100dvh sheets keep their composer visible. iOS ignores it (handled by
     // the visualViewport listener in the chat sheet).
     interactiveWidget: "resizes-content",
-    themeColor: THEME_COLORS[theme ?? "dark"],
+    themeColor: THEME_COLORS[theme ?? "neu"],
   };
 }
 
 // Pre-hydration fallback for signed-out pages (and signed-in users who never saved
 // a preference): read the device-local cache and apply before first paint so light
-// users don't flash dark. When the server already applied the account preference
+// users don't flash dark. Nothing cached means Neumorphism, the default in
+// lib/theme.ts (dark is only what the bare tokens hold, never a default). When the server already applied the account preference
 // (data-appearance-source="server"), this instead syncs the localStorage cache to
 // the server truth so the two never drift. The theme → attribute mapping is
 // themeAttributes() from lib/theme-attrs.ts, hand-inlined: keep the two in step.
-const themeBootstrapScript = `try{var d=document.documentElement;if(d.getAttribute("data-appearance-source")==="server"){var m=d.dataset.mode,t=d.dataset.theme==="light"?(m==="blue"||m==="neu"?m:"light"):"dark";localStorage.setItem("ma_theme",t);if(d.dataset.accent)localStorage.setItem("ma_accent_light",d.dataset.accent);}else{var s=localStorage.getItem("ma_theme");if(s==="glacier"||s==="sky")s="blue";if(s==="light"){d.dataset.theme="light";}else if(s==="blue"||s==="neu"){d.dataset.theme="light";d.dataset.mode=s;}var a=localStorage.getItem("ma_accent_light");d.dataset.accent=(a==="blue")?"blue":"amber";}}catch(e){}`;
+// It also sets data-appearance-set whenever a skin is known from either source;
+// the launch splash (animations.css) uses that to tell "chose dark" from "never
+// chose", which the attributes alone cannot, since dark is their absence.
+const themeBootstrapScript = `try{var d=document.documentElement;if(d.getAttribute("data-appearance-source")==="server"){var m=d.dataset.mode,t=d.dataset.theme==="light"?(m==="blue"||m==="neu"?m:"light"):"dark";localStorage.setItem("ma_theme",t);if(d.dataset.accent)localStorage.setItem("ma_accent_light",d.dataset.accent);d.dataset.appearanceSet="1";}else{var s=localStorage.getItem("ma_theme");if(s==="glacier"||s==="sky")s="blue";if(s==="light"){d.dataset.theme="light";}else if(s==="blue"||s==="neu"){d.dataset.theme="light";d.dataset.mode=s;}else if(s!=="dark"){d.dataset.theme="light";d.dataset.mode="neu";}if(s==="dark"||s==="light"||s==="blue"||s==="neu")d.dataset.appearanceSet="1";var a=localStorage.getItem("ma_accent_light");d.dataset.accent=(a==="blue")?"blue":"amber";}}catch(e){}`;
 
 type Appearance = { theme: ThemeValue | null; accent: "amber" | "blue" };
 
@@ -115,6 +130,7 @@ export default async function RootLayout({
   if (isPhoneRequest(requestHeaders)) htmlProps["data-device"] = "phone";
   if (theme) {
     htmlProps["data-appearance-source"] = "server";
+    htmlProps["data-appearance-set"] = "1";
     htmlProps["data-accent"] = accent;
     // dark = absence of data-theme/data-mode
     const attrs = themeAttributes(theme);
@@ -142,11 +158,12 @@ export default async function RootLayout({
         ) : null}
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${syncopate.variable} antialiased`}
       >
         <a href="#main-content" className="skip-link">
           Skip to content
         </a>
+        <LaunchSplash />
         <MotionProvider>{children}</MotionProvider>
         <ServiceWorkerRegistrar />
       </body>
