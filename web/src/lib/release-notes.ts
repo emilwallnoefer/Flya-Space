@@ -20,6 +20,15 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-12-launch-splash",
+    date: "Oct 12, 2026",
+    title: "A proper opening",
+    highlights: [
+      "Opening Flya Space now shows the title full-screen in your skin while the page loads, then fades it away",
+      "Not signed in, or never picked an appearance? It opens in Neumorphism",
+    ],
+  },
+  {
     version: "2026-10-12-phone-tour",
     date: "Oct 12, 2026",
     title: "A tour of the phone app",
