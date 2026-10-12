@@ -79,7 +79,7 @@ export function PhoneTour({
   }, [back, finish, next]);
 
   return (
-    <div className="fixed inset-0 z-[130] grid place-items-center overflow-auto bg-overlay/80 p-6 backdrop-blur-sm" role="presentation" data-launch-late>
+    <div className="fixed inset-0 z-[130] grid place-items-center overflow-auto bg-overlay/80 p-6 backdrop-blur-sm" role="presentation">
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="phone-tour-title" tabIndex={-1} className="outline-none">
         <PhoneMock email={email} step={step} availableModules={availableModules} first={index === 0} last={last} onBack={back} onNext={next} />
       </div>

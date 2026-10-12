@@ -14,7 +14,7 @@ import {
   transformString,
   type Rect,
 } from "@/lib/launch-camera";
-import { whenLaunchReady } from "@/lib/launch-ready";
+import { markLaunchDone, whenLaunchReady } from "@/lib/launch-ready";
 import { NAVBAR_TITLE } from "@/components/workspace-home-layout";
 
 /**
@@ -136,7 +136,10 @@ export function LaunchSplash() {
 
     const plainFade = () => {
       setPhase("fade");
-      after(FADE_MS, () => setPhase("done"));
+      after(FADE_MS, () => {
+        setPhase("done");
+        markLaunchDone();
+      });
     };
 
     const camera = () => {
@@ -196,7 +199,12 @@ export function LaunchSplash() {
               animation?.cancel();
               animation = null;
               html.dataset.launchSettle = "";
-              after(LATE_MS + 50, () => delete html.dataset.launchSettle);
+              after(LATE_MS + 50, () => {
+                delete html.dataset.launchSettle;
+                // Attributes all gone (the zoom one goes at the choreography
+                // end, which is at or before this): the opening is over.
+                markLaunchDone();
+              });
             })
             .catch(() => {
               // Cancelled by the cleanup below.

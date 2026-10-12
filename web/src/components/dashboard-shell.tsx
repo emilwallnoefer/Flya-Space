@@ -3,7 +3,7 @@
 import { AnimatePresence, m } from "framer-motion";
 import dynamic from "next/dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { markLaunchReady } from "@/lib/launch-ready";
+import { markLaunchReady, whenLaunchDone } from "@/lib/launch-ready";
 import { AuthNavbar } from "@/components/auth-navbar";
 import { OfflineGameCard } from "@/components/offline-game-card";
 import { PanelLoading } from "@/components/panel-loading";
@@ -392,50 +392,49 @@ export function DashboardShell({
     return () => window.removeEventListener("ma-gmail-status-changed", refresh);
   }, []);
 
-  // Which bottom-right popup to show, decided once from localStorage.
-  //
-  // `react-hooks/set-state-in-effect` is suppressed for this effect ONLY. The
-  // decision depends on `window.localStorage`, which does not exist during SSR:
-  // reading it in a lazy `useState` initializer would make the server and the
-  // first client render disagree and produce a hydration mismatch on the popup.
-  // A mount effect is the correct shape here; the compliant alternative is
-  // `useSyncExternalStore`, which is a bigger change than this popup warrants.
-  //
-  // This is long-standing code, not new: the rule only started reporting it
-  // once the first-login role picker was removed from this component and the
-  // React Compiler could analyse the whole function again.
-  /* eslint-disable react-hooks/set-state-in-effect */
+  // Which bottom-right popup to show, decided once from localStorage (which
+  // does not exist during SSR, so this cannot be a lazy useState initializer
+  // without a hydration mismatch on the popup).
+  // Nothing opens until the launch camera has finished pulling back
+  // (lib/launch-ready.ts): the walkthrough and the corner popups would
+  // otherwise appear, or ask for a click, in the middle of the opening.
   useEffect(() => {
-    try {
-      // The phone walkthrough shows once per browser for everyone, ahead of
-      // the corner popups; `?tour=phone` brings it back on demand.
-      const tourRequested = new URLSearchParams(window.location.search).get("tour") === "phone";
-      if (tourRequested || !window.localStorage.getItem(PHONE_TOUR_SEEN_KEY)) {
-        setShowPhoneTour(true);
-      }
-      const firstLaunchSeen = window.localStorage.getItem(PROGRAM_README_PROMPT_SEEN_KEY);
-      if (!firstLaunchSeen) {
-        // Brand-new user: show the one-time first-launch README prompt, and mark
-        // the current release as already seen so they only ever get the
-        // "What's new" popup for *future* releases (everything is new to them now).
-        setShowProgramReadmePrompt(true);
-        try {
-          window.localStorage.setItem(WHATS_NEW_SEEN_VERSION_KEY, LATEST_RELEASE.version);
-        } catch {
-          // Ignore storage errors.
+    let cancelled = false;
+    void whenLaunchDone().then(() => {
+      if (cancelled) return;
+      try {
+        // The phone walkthrough shows once per browser for everyone, ahead of
+        // the corner popups; `?tour=phone` brings it back on demand.
+        const tourRequested = new URLSearchParams(window.location.search).get("tour") === "phone";
+        if (tourRequested || !window.localStorage.getItem(PHONE_TOUR_SEEN_KEY)) {
+          setShowPhoneTour(true);
         }
-        return;
+        const firstLaunchSeen = window.localStorage.getItem(PROGRAM_README_PROMPT_SEEN_KEY);
+        if (!firstLaunchSeen) {
+          // Brand-new user: show the one-time first-launch README prompt, and mark
+          // the current release as already seen so they only ever get the
+          // "What's new" popup for *future* releases (everything is new to them now).
+          setShowProgramReadmePrompt(true);
+          try {
+            window.localStorage.setItem(WHATS_NEW_SEEN_VERSION_KEY, LATEST_RELEASE.version);
+          } catch {
+            // Ignore storage errors.
+          }
+          return;
+        }
+        // Returning user: surface the "What's new" popup once per release.
+        const seenVersion = window.localStorage.getItem(WHATS_NEW_SEEN_VERSION_KEY) || "";
+        if (seenVersion !== LATEST_RELEASE.version) {
+          setShowWhatsNew(true);
+        }
+      } catch {
+        // Storage blocked (e.g. private mode): stay quiet rather than nagging.
       }
-      // Returning user: surface the "What's new" popup once per release.
-      const seenVersion = window.localStorage.getItem(WHATS_NEW_SEEN_VERSION_KEY) || "";
-      if (seenVersion !== LATEST_RELEASE.version) {
-        setShowWhatsNew(true);
-      }
-    } catch {
-      // Storage blocked (e.g. private mode): stay quiet rather than nagging.
-    }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Mirror the open module into `?module=`, so a reload (or a shared link, or
   // the fleet reminder mail's /dashboard?module=fleet) restores the same view
@@ -853,7 +852,6 @@ export function DashboardShell({
       {showProgramReadmePrompt && !showPhoneTour ? (
         <div
           className="fixed bottom-safe right-4 z-[120] w-[min(92vw,22rem)] rounded-xl border border-glass/20 bg-surface/92 p-3 shadow-xl backdrop-blur-xl"
-          data-launch-late
         >
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -888,7 +886,6 @@ export function DashboardShell({
       {showWhatsNew && !showPhoneTour ? (
         <div
           className="fixed bottom-safe right-4 z-[120] w-[min(92vw,22rem)] rounded-xl border border-glass/20 bg-surface/92 p-3 shadow-xl backdrop-blur-xl"
-          data-launch-late
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">

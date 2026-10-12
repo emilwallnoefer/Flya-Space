@@ -18,6 +18,7 @@ type Trace = {
 declare global {
   interface Window {
     __trace?: Trace;
+    __doneState?: { zoom: boolean; settle: boolean; splash: boolean; transform: string };
   }
 }
 
@@ -25,6 +26,15 @@ async function armTrace(page: Page, warm: boolean) {
   await page.addInitScript((isWarm) => {
     window.addEventListener("flya:launch-trace", (e) => {
       window.__trace = (e as CustomEvent<Trace>).detail;
+    });
+    window.addEventListener("flya:launch-done", () => {
+      const html = document.documentElement;
+      window.__doneState = {
+        zoom: html.hasAttribute("data-launch-zoom"),
+        settle: html.hasAttribute("data-launch-settle"),
+        splash: Boolean(document.querySelector(".launch-splash")),
+        transform: (document.querySelector(".launch-stage") as HTMLElement).style.transform,
+      };
     });
     if (isWarm) sessionStorage.setItem("ma_launch", String(Date.now()));
   }, warm);
@@ -92,6 +102,11 @@ test("the stage transform runs and leaves nothing behind", async ({ page }) => {
   expect(atEnd.overflowBody).not.toBe("hidden");
   expect(atEnd.wide).toBe(false);
   expect(atEnd.leftovers).toBe(0);
+  // The "opening is over" signal (what first-load popups wait for) fired
+  // only once every attribute and the overlay were gone.
+  await page.waitForFunction(() => Boolean(window.__doneState), null, { timeout: 3_000 });
+  const doneState = await page.evaluate(() => window.__doneState);
+  expect(doneState).toEqual({ zoom: false, settle: false, splash: false, transform: "" });
 });
 
 test("mid-move frames", async ({ page }, testInfo) => {

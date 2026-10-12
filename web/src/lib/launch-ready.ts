@@ -30,7 +30,36 @@ export function whenLaunchReady(): Promise<void> {
   });
 }
 
+/**
+ * The other direction: "the opening is over". First-load popups (the phone
+ * walkthrough, the README prompt, What's new, the notifications offer) wait
+ * for this so nothing opens, moves or asks for a tap while the camera is
+ * still pulling back. Fired by the splash once every attribute is gone;
+ * already true on a client-side navigation, where no splash runs.
+ */
+export const LAUNCH_DONE_EVENT = "flya:launch-done";
+
+let done = false;
+
+export function markLaunchDone(): void {
+  if (done || typeof window === "undefined") return;
+  done = true;
+  window.dispatchEvent(new Event(LAUNCH_DONE_EVENT));
+}
+
+export function isLaunchDone(): boolean {
+  return done;
+}
+
+export function whenLaunchDone(): Promise<void> {
+  if (done) return Promise.resolve();
+  return new Promise((resolve) => {
+    window.addEventListener(LAUNCH_DONE_EVENT, () => resolve(), { once: true });
+  });
+}
+
 /** Test seam. */
 export function resetLaunchReadyForTests(): void {
   ready = false;
+  done = false;
 }

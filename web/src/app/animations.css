@@ -308,6 +308,10 @@
   padding: 0 16px;
   background: var(--splash-bg);
   color: var(--splash-ink);
+  /* It covers the page: taps must land here, not on what is underneath. */
+  pointer-events: auto;
+}
+.launch-splash[data-phase="fade"] {
   pointer-events: none;
 }
 html[data-appearance-set] .launch-splash {
