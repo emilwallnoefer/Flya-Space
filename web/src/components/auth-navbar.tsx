@@ -1,12 +1,14 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { playUiSound } from "@/lib/ui-sounds";
 import {
   NAVBAR_CLASS,
   NAVBAR_EYEBROW_CLASS,
   NAVBAR_LOGO_CLASS,
+  NAVBAR_LOGO_SRC,
   NAVBAR_MENU_BUTTON_CLASS,
   NAVBAR_SURFACE_CLASS,
   NAVBAR_TITLE,
@@ -50,9 +52,7 @@ export function AuthNavbar({
       <div className={NAVBAR_SURFACE_CLASS} data-launch-reveal="surface" style={{ "--reveal-i": 0 } as CSSProperties} aria-hidden />
       <div className="flex items-center justify-between gap-2 sm:gap-3">
         <div className="min-w-0 flex items-center gap-2.5">
-          <div className={NAVBAR_LOGO_CLASS} data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>
-            FA
-          </div>
+          <Image src={NAVBAR_LOGO_SRC} alt="" width={28} height={28} className={NAVBAR_LOGO_CLASS} priority data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties} />
           <div className="min-w-0">
             <p className={NAVBAR_EYEBROW_CLASS} data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>Flyability Internal</p>
             {/* The launch camera's target: the splash title lands exactly here. */}

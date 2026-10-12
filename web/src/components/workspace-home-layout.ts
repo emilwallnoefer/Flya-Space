@@ -26,8 +26,10 @@ export const NAVBAR_SURFACE_CLASS = "glass-card absolute! inset-0 -z-1";
  * the launch splash (which the camera lines up with it, so one class, one
  * copy of the text). The face is .brand-wordmark in app/animations.css. */
 export const NAVBAR_TITLE = "The Flya Space";
-export const NAVBAR_LOGO_CLASS =
-  "navbar-logo grid h-7 w-7 place-items-center rounded-md bg-gradient-to-br from-accent-from to-accent-to text-[11px] font-semibold text-slate-950";
+// The app icon (public/icons, built from src/brand/flya-space-icon.svg) is a
+// full-bleed square, so the corner radius and clipping come from here.
+export const NAVBAR_LOGO_CLASS = "navbar-logo h-7 w-7 shrink-0 overflow-hidden rounded-md";
+export const NAVBAR_LOGO_SRC = "/icons/icon-192.png";
 export const NAVBAR_EYEBROW_CLASS = "text-[11px] uppercase tracking-[0.15em] text-accent-soft/70";
 export const NAVBAR_TITLE_CLASS = "brand-wordmark mt-1 text-[11px] text-ink";
 export const NAVBAR_MENU_BUTTON_CLASS =
