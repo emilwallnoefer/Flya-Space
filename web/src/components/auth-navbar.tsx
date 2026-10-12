@@ -1,11 +1,13 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { playUiSound } from "@/lib/ui-sounds";
 import {
   NAVBAR_CLASS,
   NAVBAR_EYEBROW_CLASS,
   NAVBAR_LOGO_CLASS,
+  NAVBAR_LOGO_SRC,
   NAVBAR_MENU_BUTTON_CLASS,
   NAVBAR_TITLE_CLASS,
 } from "@/components/workspace-home-layout";
@@ -45,9 +47,7 @@ export function AuthNavbar({
     <nav className={NAVBAR_CLASS}>
       <div className="flex items-center justify-between gap-2 sm:gap-3">
         <div className="min-w-0 flex items-center gap-2.5">
-          <div className={NAVBAR_LOGO_CLASS}>
-            FA
-          </div>
+          <Image src={NAVBAR_LOGO_SRC} alt="" width={28} height={28} className={NAVBAR_LOGO_CLASS} priority />
           <div className="min-w-0">
             <p className={NAVBAR_EYEBROW_CLASS}>Flyability Internal</p>
             <p className={NAVBAR_TITLE_CLASS} data-launch-target>Flya Space</p>

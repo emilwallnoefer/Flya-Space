@@ -1253,10 +1253,6 @@ html[data-mode="neu"] .beta-badge {
   background: rgb(var(--paper-1));
   color: var(--ink-3);
 }
-html[data-mode="neu"] .navbar-logo {
-  background: var(--ink);
-  color: #ffffff;
-}
 
 /* Menus, tabs and segmented controls — the navbar menu, settings and admin
  * side navs, fleet tabs, composer toggles, the appearance picker: one rule for
