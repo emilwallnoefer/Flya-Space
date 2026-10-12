@@ -39,6 +39,12 @@ import { NAVBAR_TITLE } from "@/components/workspace-home-layout";
  * data-launch-late waits for html[data-launch-settle], once the transform
  * is gone (a fixed element inside a transformed ancestor is mispositioned).
  *
+ * Opening from the launch page at "/" (public/launch.html), the title is
+ * already on screen and partway through its entrance; the bootstrap in
+ * app/layout.tsx marks html[data-launch-warm] with --launch-elapsed, and the
+ * overlay title resumes the entrance from there (animations.css), so the
+ * document change is invisible.
+ *
  * Nothing outlives the move: the attributes, the inline transform and the
  * custom properties are all removed, and the overlay leaves the DOM. Every
  * animation is finite. Without a target on the page, under Reduce Motion,
@@ -133,11 +139,18 @@ export function LaunchSplash() {
       html.style.removeProperty("--launch-reveal-step");
       delete html.dataset.launchZoom;
     };
+    // The launch page's hand-over marks (see alreadyShownMs) matter only
+    // while the overlay title is on screen.
+    const letGoWarm = () => {
+      html.style.removeProperty("--launch-elapsed");
+      delete html.dataset.launchWarm;
+    };
 
     const plainFade = () => {
       setPhase("fade");
       after(FADE_MS, () => {
         setPhase("done");
+        letGoWarm();
         markLaunchDone();
       });
     };
@@ -189,6 +202,7 @@ export function LaunchSplash() {
           // removing the overlay changes no pixel; a fade would only dim the
           // page's title through the scrim for a moment.
           setPhase("done");
+          letGoWarm();
           after(choreographyEnd(highestRevealIndex()) + 50, letGo);
           animation.finished
             .then(() => {
@@ -223,6 +237,7 @@ export function LaunchSplash() {
       animation?.cancel();
       if (stage) stage.style.transform = "";
       letGo();
+      letGoWarm();
       delete html.dataset.launchSettle;
     };
   }, []);

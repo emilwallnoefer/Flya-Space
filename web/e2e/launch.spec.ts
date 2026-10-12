@@ -44,6 +44,10 @@ for (const warm of [false, true]) {
   test(`the header title sits exactly under the splash title at the swap (${warm ? "from the launch page" : "cold"})`, async ({ page }) => {
     await armTrace(page, warm);
     await page.goto("/login");
+    if (warm) {
+      // Marked while the overlay is up (it is cleared when the overlay goes).
+      await expect(page.locator("html")).toHaveAttribute("data-launch-warm", "1");
+    }
     await page.waitForFunction(() => Boolean(window.__trace), null, { timeout: 10_000 });
     const trace = (await page.evaluate(() => window.__trace)) as Trace;
     expect(trace.s).toBeGreaterThan(1.05);
@@ -51,11 +55,47 @@ for (const warm of [false, true]) {
     for (const k of ["left", "top", "width", "height"] as const) {
       expect(Math.abs(trace.targetAtT0[k] - trace.overlay[k])).toBeLessThanOrEqual(1);
     }
-    if (warm) {
-      await expect(page.locator("html")).toHaveAttribute("data-launch-warm", "1");
-    }
   });
 }
+
+test("from the launch page, the splash title resumes its entrance where the launch page left it", async ({ page }) => {
+  // The launch page stamped its entrance 400 ms before this document starts.
+  await page.addInitScript(() => {
+    sessionStorage.setItem("ma_launch", String(Date.now() - 400));
+    window.addEventListener("flya:launch-trace", () => {
+      (window as unknown as { __traced: boolean }).__traced = true;
+    });
+  });
+  await page.goto("/login", { waitUntil: "commit" });
+  await page.waitForSelector(".launch-splash-word", { state: "attached" });
+  const state = await page.evaluate(() => {
+    const word = document.querySelector(".launch-splash-word") as HTMLElement;
+    const anim = word.getAnimations()[0] as CSSAnimation | undefined;
+    // The negative delay is in the effect's progress, not in currentTime.
+    const progress = anim?.effect?.getComputedTiming().progress ?? null;
+    return {
+      elapsed: getComputedStyle(document.documentElement).getPropertyValue("--launch-elapsed").trim(),
+      name: anim?.animationName ?? null,
+      progress,
+      spacing: parseFloat(getComputedStyle(word).letterSpacing),
+      fontSize: parseFloat(getComputedStyle(word).fontSize),
+    };
+  });
+  // Resumed, not restarted (the time already lived on the launch page is
+  // counted) and not at rest (0.22em is where it ends).
+  expect(state.name).toBe("launchSplashWord");
+  expect(parseFloat(state.elapsed)).toBeGreaterThanOrEqual(400);
+  expect(state.progress).toBeGreaterThanOrEqual(400 / 900);
+  expect(state.progress).toBeLessThan(1);
+  expect(state.spacing).toBeGreaterThan(0.22 * state.fontSize);
+  // And the marks are gone once the overlay is.
+  await page.waitForFunction(() => !document.querySelector(".launch-splash"), null, { timeout: 8_000 });
+  const after = await page.evaluate(() => ({
+    warm: document.documentElement.hasAttribute("data-launch-warm"),
+    elapsed: document.documentElement.style.getPropertyValue("--launch-elapsed"),
+  }));
+  expect(after).toEqual({ warm: false, elapsed: "" });
+});
 
 test("the stage transform runs and leaves nothing behind", async ({ page }) => {
   await armTrace(page, false);

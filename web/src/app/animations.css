@@ -340,10 +340,17 @@ html[data-appearance-set] .launch-splash {
     margin-right: -0.22em;
   }
 }
-/* Arriving from the launch page at "/", the wordmark is already on screen:
- * start at rest so the hand-off between the two documents is seamless. */
+/* Arriving from the launch page at "/", the wordmark is already on screen
+ * and partway through this same entrance (the launch page runs a copy of
+ * these keyframes): resume it from that point, --launch-elapsed being how
+ * long ago it started there (set on <html> by the bootstrap in
+ * app/layout.tsx), so the hand-off between the two documents changes
+ * nothing. Past the 900 ms the entrance is simply at rest. Starting over
+ * would fade the title in a second time; starting at rest would snap the
+ * letter-spacing when the app paints before the entrance is over, which on
+ * a fast open is every time. */
 html[data-launch-warm] .launch-splash-word {
-  animation: none;
+  animation-delay: calc(-1 * var(--launch-elapsed, 900ms));
 }
 /* Letting go, camera style, is a hard cut: the page under the overlay is
  * the same title on the same page colour (every decoration is a reveal,
