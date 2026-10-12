@@ -8,7 +8,7 @@ import type { ModuleKey } from "@/lib/dashboard-modules";
 import { fromDateKey } from "@/lib/date";
 import { greetingFromEmail, timeGreeting } from "@/lib/greeting";
 import { cn } from "@/lib/cn";
-import { MobileAvatar, MobileRow, MobileTopBar } from "./primitives";
+import { MobileAvatar, MobileHomeHeader, MobileRow } from "./primitives";
 import { todayStatus } from "./today-status";
 import type { useHomeSummary } from "./use-home-summary";
 
@@ -65,22 +65,19 @@ export function MobileHome({
 
   return (
     <div className="m-screen">
-      <MobileTopBar
-        large
-        title={
-          <span className="block pt-1 pb-1">
-            {/* The launch camera's target: the splash title is this, zoomed in. */}
-            <span className={NAVBAR_TITLE_CLASS} data-launch-target>
-              {NAVBAR_TITLE}
-            </span>
-            <span className="block text-base font-medium text-ink-3" data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>{timeGreeting()}</span>
-            <span className="block text-[2rem] font-bold leading-[1.1] tracking-tight text-ink" data-launch-reveal style={{ "--reveal-i": 1 } as CSSProperties}>{greetingFromEmail(email)}</span>
+      <MobileHomeHeader
+        brand={
+          /* The launch camera's target: the splash title is this, zoomed in. */
+          <span className={NAVBAR_TITLE_CLASS} data-launch-target>
+            {NAVBAR_TITLE}
           </span>
         }
+        greeting={timeGreeting()}
+        name={greetingFromEmail(email)}
         right={<MobileAvatar email={email} onClick={onOpenMore} />}
       />
 
-      <div className="grid grid-cols-2 gap-3 px-4 pt-2">
+      <div className="grid grid-cols-2 gap-3 px-4 pt-1">
         {hasTime ? (
           <HomeTile
             revealIndex={2}
