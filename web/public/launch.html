@@ -45,8 +45,22 @@
   html[data-theme="light"][data-mode="blue"] { --splash-bg: #f7fafd; --splash-ink: #586e75; --splash-accent: #205698; }
   html[data-theme="light"][data-mode="neu"] { --splash-bg: #ebecef; --splash-ink: #1f252e; --splash-accent: #285458; }
   html[data-dark] { --splash-bg: #020617; --splash-ink: #f1f5f9; --splash-accent: #a5f3fc; color-scheme: dark; }
+  /* Hand over to the app with a cross-document view transition: the browser
+     keeps this page's last frame and crossfades into the app's first frame,
+     which is the same wordmark at rest, instead of cutting. Same declaration
+     in app/animations.css; a browser without it simply cuts, as before. */
+  @view-transition { navigation: auto; }
+  ::view-transition-old(root), ::view-transition-new(root) {
+    animation-duration: 350ms;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
   html, body { height: 100%; margin: 0; }
-  body { background: var(--splash-bg); color: var(--splash-ink); }
+  /* Same smoothing as the app's body (Tailwind `antialiased`), or the title
+     renders a touch heavier here and visibly shifts weight at the hand-over. */
+  body {
+    background: var(--splash-bg); color: var(--splash-ink);
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  }
   .launch-splash {
     position: fixed; inset: 0;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -76,6 +90,7 @@
   @keyframes launchSplashSub { from { opacity: 0; } to { opacity: 0.85; } }
   @media (prefers-reduced-motion: reduce) {
     .launch-splash-word, .launch-splash-sub { animation: none; }
+    @view-transition { navigation: none; }
   }
 </style>
 <script src="/launch-boot.js"></script>

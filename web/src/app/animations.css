@@ -329,11 +329,52 @@ html[data-appearance-set] .launch-splash {
   opacity: 0.85;
   animation: launchSplashSub 600ms 260ms ease-out both;
 }
+/* 500 ms, in step with SPLASH_OUT_MS in the component. */
 .launch-splash[data-phase="out"] {
-  animation: launchSplashOut 360ms cubic-bezier(0.4, 0, 0.6, 1) both;
+  animation: launchSplashOut 500ms cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 .launch-splash[data-phase="out"] .launch-splash-word {
-  animation: launchSplashWordOut 360ms cubic-bezier(0.4, 0, 0.6, 1) both;
+  animation: launchSplashWordOut 500ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+/* With a target on the page (data-launch-target, measured by the component
+ * into --merge-*), the title travels into it, shrinking, and dissolves as it
+ * lands, so the page's own name seems to take it over. The sub line just
+ * goes. Same 500 ms as the scrim. */
+.launch-splash[data-phase="out"] .launch-splash-word[data-merge] {
+  animation: launchSplashWordMerge 500ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.launch-splash[data-phase="out"] .launch-splash-sub {
+  animation: launchSplashSubOut 200ms ease-out both;
+}
+@keyframes launchSplashSubOut {
+  from { opacity: 0.85; }
+  to { opacity: 0; }
+}
+@keyframes launchSplashWordMerge {
+  from {
+    transform: translate(0, 0) scale(1) scaleX(1.18);
+    opacity: 1;
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--merge-x, 0px), var(--merge-y, 0px)) scale(var(--merge-scale, 0.3)) scaleX(1.18);
+    opacity: 0;
+  }
+}
+/* Arriving from the launch page at "/" is a cross-document navigation; with
+ * this, the browser crossfades its last frame into our first (the same
+ * wordmark at rest, see data-launch-warm below) instead of cutting. It applies
+ * to every same-origin full navigation (login → dashboard too), which is
+ * fine: a 350 ms crossfade, once, finite. Browsers without it cut as before. */
+@view-transition {
+  navigation: auto;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 350ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 @keyframes launchSplashWord {
   from {
@@ -354,13 +395,15 @@ html[data-appearance-set] .launch-splash {
   from { opacity: 0; }
   to { opacity: 0.85; }
 }
+/* The scrim lets go of its colour, not its opacity: the title inside keeps
+ * its own fade, so it can still be seen landing on the page's name. */
 @keyframes launchSplashOut {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from { background-color: var(--splash-bg); }
+  to { background-color: transparent; }
 }
 @keyframes launchSplashWordOut {
-  from { transform: scaleX(1.18); }
-  to { transform: scaleX(1.2); }
+  from { transform: scaleX(1.18); opacity: 1; }
+  to { transform: scaleX(1.2); opacity: 0; }
 }
 /* Arriving from the launch page at "/", the wordmark is already on screen:
  * start at rest so the hand-off between the two documents is seamless. */
@@ -376,5 +419,8 @@ html[data-launch-warm] .launch-splash-sub {
   .launch-splash[data-phase="out"],
   .launch-splash[data-phase="out"] .launch-splash-word {
     animation-duration: 120ms;
+  }
+  @view-transition {
+    navigation: none;
   }
 }
