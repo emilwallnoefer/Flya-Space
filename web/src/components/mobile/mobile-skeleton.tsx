@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+import { NAVBAR_TITLE, NAVBAR_TITLE_CLASS } from "@/components/workspace-home-layout";
 import { MOBILE_LOOK } from "./look";
 
 /**
@@ -13,23 +15,27 @@ export function MobileSkeleton() {
       <div className="m-screen motion-safe:animate-pulse">
         <header className="flex items-center gap-2 px-3 pb-2 pt-[max(0.5rem,var(--safe-top))]">
           <span className="w-1" />
-          <span className="min-w-0 flex-1">
-            <span className="mt-1 block h-4 w-28 rounded bg-glass/10" />
-            <span className="mt-1.5 mb-1 block h-9 w-40 rounded bg-glass/10" />
+          <span className="min-w-0 flex-1 pt-1 pb-1">
+            {/* The real title, so the launch camera has its target while the home streams in. */}
+            <span className={NAVBAR_TITLE_CLASS} data-launch-target>
+              {NAVBAR_TITLE}
+            </span>
+            <span className="block h-4 w-28 rounded bg-glass/10" data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties} />
+            <span className="mt-1.5 block h-9 w-40 rounded bg-glass/10" data-launch-reveal style={{ "--reveal-i": 1 } as CSSProperties} />
           </span>
-          <span className="h-10 w-10 rounded-full bg-glass/10" />
+          <span className="h-10 w-10 rounded-full bg-glass/10" data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties} />
         </header>
         <div className="grid grid-cols-2 gap-3 px-4 pt-2">
           {[0, 1].map((i) => (
-            <span key={i} className="block min-h-[5.75rem] rounded-2xl border border-glass/10 bg-panel" />
+            <span key={i} className="block min-h-[5.75rem] rounded-2xl border border-glass/10 bg-panel" data-launch-reveal style={{ "--reveal-i": 2 + i } as CSSProperties} />
           ))}
-          <span className="col-span-2 block h-36 rounded-2xl border border-glass/10 bg-panel" />
+          <span className="col-span-2 block h-36 rounded-2xl border border-glass/10 bg-panel" data-launch-reveal style={{ "--reveal-i": 4 } as CSSProperties} />
           {[0, 1, 2, 3].map((i) => (
-            <span key={i} className="block min-h-14 rounded-2xl border border-glass/10 bg-panel" />
+            <span key={i} className="block min-h-14 rounded-2xl border border-glass/10 bg-panel" data-launch-reveal style={{ "--reveal-i": 5 + i } as CSSProperties} />
           ))}
         </div>
       </div>
-      <nav className="m-tabbar fixed inset-x-0 bottom-0 z-[95] flex items-stretch border-t border-glass/10 bg-surface pb-safe" aria-hidden>
+      <nav className="m-tabbar fixed inset-x-0 bottom-0 z-[95] flex items-stretch border-t border-glass/10 bg-surface pb-safe" aria-hidden data-launch-late>
         {["Time", "Mail", "Fleet"].map((label) => (
           <span key={label} className="flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[10.5px] text-transparent">
             <span className="h-6 w-6 rounded-md bg-glass/10" />

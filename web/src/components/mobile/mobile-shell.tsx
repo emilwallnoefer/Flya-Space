@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { AnimatePresence } from "framer-motion";
 import { Suspense, use, useCallback, useEffect, useMemo, useState } from "react";
+import { markLaunchReady, whenLaunchDone } from "@/lib/launch-ready";
 import type { DashboardShellProps } from "@/components/dashboard-shell";
 import { useMailComposer } from "@/components/mail-composer/use-mail-composer";
 import { OfflineGameCard } from "@/components/offline-game-card";
@@ -127,6 +128,10 @@ export function MobileShell({
 
   // Gmail status for the mail composer, when the server did not seed it.
   const gmailStatusSeeded = initialSettings?.gmail != null;
+  // The real home is on screen: the launch camera may pull back now.
+  useEffect(() => {
+    markLaunchReady();
+  }, []);
   useEffect(() => {
     if (gmailStatusSeeded || userRole === "sales" || userRole === "hr") return;
     fetch("/api/gmail/status")
@@ -152,21 +157,27 @@ export function MobileShell({
   // "What's new" once per release. A brand-new user is marked as having seen
   // the current release (everything is new to them); the first-launch README
   // prompt is a desktop affair.
-  /* eslint-disable react-hooks/set-state-in-effect */
+  // Not before the launch camera has finished (lib/launch-ready.ts).
   useEffect(() => {
-    try {
-      const firstLaunchSeen = window.localStorage.getItem(PROGRAM_README_PROMPT_SEEN_KEY);
-      if (!firstLaunchSeen) {
-        window.localStorage.setItem(PROGRAM_README_PROMPT_SEEN_KEY, "1");
-        window.localStorage.setItem(WHATS_NEW_SEEN_VERSION_KEY, LATEST_RELEASE.version);
-        return;
+    let cancelled = false;
+    void whenLaunchDone().then(() => {
+      if (cancelled) return;
+      try {
+        const firstLaunchSeen = window.localStorage.getItem(PROGRAM_README_PROMPT_SEEN_KEY);
+        if (!firstLaunchSeen) {
+          window.localStorage.setItem(PROGRAM_README_PROMPT_SEEN_KEY, "1");
+          window.localStorage.setItem(WHATS_NEW_SEEN_VERSION_KEY, LATEST_RELEASE.version);
+          return;
+        }
+        if (window.localStorage.getItem(WHATS_NEW_SEEN_VERSION_KEY) !== LATEST_RELEASE.version) setWhatsNewOpen(true);
+      } catch {
+        // Storage blocked: stay quiet.
       }
-      if (window.localStorage.getItem(WHATS_NEW_SEEN_VERSION_KEY) !== LATEST_RELEASE.version) setWhatsNewOpen(true);
-    } catch {
-      // Storage blocked: stay quiet.
-    }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   function dismissWhatsNew() {
     setWhatsNewOpen(false);
@@ -283,7 +294,7 @@ export function MobileShell({
 
   return (
     <main id="main-content" className="relative min-h-dvh bg-surface text-ink" data-mobile-look={MOBILE_LOOK}>
-      {MOBILE_LOOK === "skin" ? <div className="fixed inset-0 -z-10 aurora-bg" aria-hidden /> : null}
+      {MOBILE_LOOK === "skin" ? <div className="fixed inset-0 -z-10 aurora-bg" aria-hidden data-launch-late /> : null}
       <MobileScreen screenKey={screenKey} direction={navDir}>
       {teamOpen ? (
         <div className="m-screen">

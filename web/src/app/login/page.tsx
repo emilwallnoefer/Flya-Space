@@ -2,7 +2,9 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { m } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { markLaunchReady } from "@/lib/launch-ready";
+import { NAVBAR_TITLE, NAVBAR_TITLE_CLASS } from "@/components/workspace-home-layout";
 
 /** True when the page runs as a home-screen app (iOS `navigator.standalone`, or the manifest's display mode elsewhere). */
 function isStandaloneApp(): boolean {
@@ -16,6 +18,11 @@ export default function LoginPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   );
   const [loading, setLoading] = useState(false);
+
+  // The page is on screen: the launch camera may pull back now.
+  useEffect(() => {
+    markLaunchReady();
+  }, []);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
@@ -69,23 +76,29 @@ export default function LoginPage() {
 
   return (
     <main id="main-content" className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-surface px-4 py-8 text-ink">
-      <div className="absolute inset-0 aurora-bg" />
-      <div className="absolute inset-0 bg-overlay/30 backdrop-blur-xl" />
+      {/* Background decoration: in with the launch camera, so the opening
+          frame is the title on the plain page colour. */}
+      <div className="absolute inset-0 aurora-bg" data-launch-reveal="surface" style={{ "--reveal-i": 0 } as CSSProperties} />
+      <div className="absolute inset-0 bg-overlay/30 backdrop-blur-xl" data-launch-reveal="surface" style={{ "--reveal-i": 0 } as CSSProperties} />
       <m.section
-        initial={{ opacity: 0, y: 20 }}
+        // No entrance of its own: the launch camera is the entrance, and it
+        // measures the title while this would still be moving.
+        initial={false}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
         className="relative z-10 w-full max-w-md"
       >
-        <div className="glass-card hourlogger-surface w-full p-5 md:p-6">
+        <div className="relative isolate w-full p-5 md:p-6">
+          {/* The card itself; a launch reveal so the title can stand alone first. */}
+          <div className="glass-card hourlogger-surface absolute! inset-0 -z-1" data-launch-reveal="surface" style={{ "--reveal-i": 0 } as CSSProperties} aria-hidden />
           <div className="mb-7">
-            <p className="mb-2 text-xs tracking-[0.22em] text-accent-soft/80 uppercase">Flyability Internal</p>
-            <h2 className="text-2xl font-semibold md:text-3xl">Welcome back</h2>
-            <p className="mt-2 text-sm text-ink-2/80">
+            {/* The launch camera's target: the splash title is this, zoomed in. */}
+            <p className={`${NAVBAR_TITLE_CLASS} mb-2`} data-launch-target>{NAVBAR_TITLE}</p>
+            <h2 className="text-2xl font-semibold md:text-3xl" data-launch-reveal style={{ "--reveal-i": 1 } as CSSProperties}>Welcome back</h2>
+            <p className="mt-2 text-sm text-ink-2/80" data-launch-reveal style={{ "--reveal-i": 2 } as CSSProperties}>
               Continue with your Flyability Google account.
             </p>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-4" data-launch-reveal style={{ "--reveal-i": 3 } as CSSProperties}>
             {!supabaseConfigured && (
               <p className="rounded-lg border border-rose-300/40 bg-rose-500/15 px-3 py-2 text-xs text-danger">
                 Supabase is not configured for this deployment. Add `NEXT_PUBLIC_SUPABASE_URL` and
@@ -105,8 +118,8 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {message && <p className="mt-4 text-sm text-positive">{message}</p>}
-          {error && <p className="mt-4 text-sm text-danger">{error}</p>}
+          {message && <p className="mt-4 text-sm text-positive" data-launch-reveal style={{ "--reveal-i": 3 } as CSSProperties}>{message}</p>}
+          {error && <p className="mt-4 text-sm text-danger" data-launch-reveal style={{ "--reveal-i": 3 } as CSSProperties}>{error}</p>}
         </div>
       </m.section>
     </main>

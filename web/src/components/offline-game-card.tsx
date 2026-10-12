@@ -53,6 +53,7 @@ export function OfflineGameCard() {
       role="dialog"
       aria-label={online ? "Back online" : "You're offline"}
       className="fixed bottom-safe left-4 z-[125] w-[min(92vw,24rem)] rounded-xl border border-glass/20 bg-surface/95 p-4 text-ink shadow-xl backdrop-blur-xl"
+      data-launch-late
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

@@ -35,7 +35,7 @@ export function MobileTabBar({
     { key: "chat", label: "Chat", icon: <ChatBubbleIcon className="h-6 w-6" /> },
   ];
   return (
-    <nav className="m-tabbar fixed inset-x-0 bottom-0 z-[95] flex items-stretch border-t border-glass/10 bg-surface pb-safe" aria-label="Workspace">
+    <nav className="m-tabbar fixed inset-x-0 bottom-0 z-[95] flex items-stretch border-t border-glass/10 bg-surface pb-safe" aria-label="Workspace" data-launch-late>
       {items.map((item) => {
         const isActive = item.key === active;
         return (

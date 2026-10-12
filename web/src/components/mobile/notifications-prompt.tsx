@@ -8,6 +8,7 @@ import {
   shouldOfferNotifications,
   shouldResubscribeQuietly,
 } from "@/lib/push/first-launch";
+import { whenLaunchDone } from "@/lib/launch-ready";
 import { MobileButton, MobileSheet } from "./primitives";
 
 /**
@@ -41,6 +42,9 @@ export function NotificationsPrompt({ held }: { held: boolean }) {
         return;
       }
       if (shouldOfferNotifications({ ...facts, dismissedAt: readDismissedAt(window.localStorage), now: Date.now() })) {
+        // Not while the launch camera is still pulling back.
+        await whenLaunchDone();
+        if (cancelled) return;
         setOffer(true);
       }
     })();

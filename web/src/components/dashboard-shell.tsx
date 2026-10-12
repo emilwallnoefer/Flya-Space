@@ -2,7 +2,8 @@
 
 import { AnimatePresence, m } from "framer-motion";
 import dynamic from "next/dynamic";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { markLaunchReady, whenLaunchDone } from "@/lib/launch-ready";
 import { AuthNavbar } from "@/components/auth-navbar";
 import { OfflineGameCard } from "@/components/offline-game-card";
 import { PanelLoading } from "@/components/panel-loading";
@@ -119,7 +120,7 @@ function ScrollHint({ active }: { active: boolean }) {
   }, [done]);
   if (!active || done) return null;
   return (
-    <div aria-hidden className="pointer-events-none fixed inset-x-0 bottom-safe-16 z-[60] flex justify-center text-ink-3">
+    <div aria-hidden className="pointer-events-none fixed inset-x-0 bottom-safe-16 z-[60] flex justify-center text-ink-3" data-launch-late>
       <m.div initial={{ opacity: 0 }} animate={{ opacity: 0.55 }} transition={{ duration: 0.6, delay: 0.8, ease: "easeOut" }}>
         <svg className="h-8 w-12" viewBox="0 0 48 32" fill="none" stroke="currentColor" strokeWidth="1.75">
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 5l18 10L42 5" />
@@ -391,50 +392,49 @@ export function DashboardShell({
     return () => window.removeEventListener("ma-gmail-status-changed", refresh);
   }, []);
 
-  // Which bottom-right popup to show, decided once from localStorage.
-  //
-  // `react-hooks/set-state-in-effect` is suppressed for this effect ONLY. The
-  // decision depends on `window.localStorage`, which does not exist during SSR:
-  // reading it in a lazy `useState` initializer would make the server and the
-  // first client render disagree and produce a hydration mismatch on the popup.
-  // A mount effect is the correct shape here; the compliant alternative is
-  // `useSyncExternalStore`, which is a bigger change than this popup warrants.
-  //
-  // This is long-standing code, not new: the rule only started reporting it
-  // once the first-login role picker was removed from this component and the
-  // React Compiler could analyse the whole function again.
-  /* eslint-disable react-hooks/set-state-in-effect */
+  // Which bottom-right popup to show, decided once from localStorage (which
+  // does not exist during SSR, so this cannot be a lazy useState initializer
+  // without a hydration mismatch on the popup).
+  // Nothing opens until the launch camera has finished pulling back
+  // (lib/launch-ready.ts): the walkthrough and the corner popups would
+  // otherwise appear, or ask for a click, in the middle of the opening.
   useEffect(() => {
-    try {
-      // The phone walkthrough shows once per browser for everyone, ahead of
-      // the corner popups; `?tour=phone` brings it back on demand.
-      const tourRequested = new URLSearchParams(window.location.search).get("tour") === "phone";
-      if (tourRequested || !window.localStorage.getItem(PHONE_TOUR_SEEN_KEY)) {
-        setShowPhoneTour(true);
-      }
-      const firstLaunchSeen = window.localStorage.getItem(PROGRAM_README_PROMPT_SEEN_KEY);
-      if (!firstLaunchSeen) {
-        // Brand-new user: show the one-time first-launch README prompt, and mark
-        // the current release as already seen so they only ever get the
-        // "What's new" popup for *future* releases (everything is new to them now).
-        setShowProgramReadmePrompt(true);
-        try {
-          window.localStorage.setItem(WHATS_NEW_SEEN_VERSION_KEY, LATEST_RELEASE.version);
-        } catch {
-          // Ignore storage errors.
+    let cancelled = false;
+    void whenLaunchDone().then(() => {
+      if (cancelled) return;
+      try {
+        // The phone walkthrough shows once per browser for everyone, ahead of
+        // the corner popups; `?tour=phone` brings it back on demand.
+        const tourRequested = new URLSearchParams(window.location.search).get("tour") === "phone";
+        if (tourRequested || !window.localStorage.getItem(PHONE_TOUR_SEEN_KEY)) {
+          setShowPhoneTour(true);
         }
-        return;
+        const firstLaunchSeen = window.localStorage.getItem(PROGRAM_README_PROMPT_SEEN_KEY);
+        if (!firstLaunchSeen) {
+          // Brand-new user: show the one-time first-launch README prompt, and mark
+          // the current release as already seen so they only ever get the
+          // "What's new" popup for *future* releases (everything is new to them now).
+          setShowProgramReadmePrompt(true);
+          try {
+            window.localStorage.setItem(WHATS_NEW_SEEN_VERSION_KEY, LATEST_RELEASE.version);
+          } catch {
+            // Ignore storage errors.
+          }
+          return;
+        }
+        // Returning user: surface the "What's new" popup once per release.
+        const seenVersion = window.localStorage.getItem(WHATS_NEW_SEEN_VERSION_KEY) || "";
+        if (seenVersion !== LATEST_RELEASE.version) {
+          setShowWhatsNew(true);
+        }
+      } catch {
+        // Storage blocked (e.g. private mode): stay quiet rather than nagging.
       }
-      // Returning user: surface the "What's new" popup once per release.
-      const seenVersion = window.localStorage.getItem(WHATS_NEW_SEEN_VERSION_KEY) || "";
-      if (seenVersion !== LATEST_RELEASE.version) {
-        setShowWhatsNew(true);
-      }
-    } catch {
-      // Storage blocked (e.g. private mode): stay quiet rather than nagging.
-    }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Mirror the open module into `?module=`, so a reload (or a shared link, or
   // the fleet reminder mail's /dashboard?module=fleet) restores the same view
@@ -501,9 +501,22 @@ export function DashboardShell({
     handleBeginAutomating();
   }
 
+  // The real home is on screen: the launch camera may pull back now.
+  useEffect(() => {
+    markLaunchReady();
+  }, []);
+
+  // Launch reveal order, in source order: the hero intro is 1, the cards
+  // count on from 2 (roles hide some), field stats come last.
+  let revealIndex = 2;
+  const reveal = () => ({
+    "data-launch-reveal": "",
+    style: { "--reveal-i": revealIndex++ } as CSSProperties,
+  });
+
   return (
     <main id="main-content" className="relative min-h-dvh overflow-x-hidden bg-surface text-ink">
-      <div className="absolute inset-0 aurora-bg" />
+      <div className="absolute inset-0 aurora-bg" data-launch-reveal="surface" style={{ "--reveal-i": 0 } as CSSProperties} />
       <section className="page-shell">
         <AuthNavbar
           activeModule={activeModule}
@@ -562,10 +575,10 @@ export function DashboardShell({
             transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
             className={HOME_HERO_CLASS}
           >
-            <div className="dashboard-mesh" aria-hidden />
-            <div className="dashboard-mesh-fade" aria-hidden />
+            <div className="dashboard-mesh" aria-hidden data-launch-reveal="surface" style={{ "--reveal-i": 1 } as CSSProperties} />
+            <div className="dashboard-mesh-fade" aria-hidden data-launch-reveal="surface" style={{ "--reveal-i": 1 } as CSSProperties} />
             <div className={HOME_CONTENT_CLASS}>
-              <div className={HOME_INTRO_CLASS}>
+              <div className={HOME_INTRO_CLASS} data-launch-reveal style={{ "--reveal-i": 1 } as CSSProperties}>
                 <p className={HOME_EYEBROW_CLASS}>Workspace</p>
                 <h1 className={HOME_GREETING_CLASS}>
                   {timeGreeting()}, {greetingFromEmail(email)}
@@ -580,6 +593,7 @@ export function DashboardShell({
                     type="button"
                     initial={false}
                     whileTap={{ scale: 0.97 }}
+                    {...reveal()}
                     onClick={() => openModuleCard("mail")}
                     className={`${MODULE_CARD_CLASS} hover:border-accent/35 hover:shadow-[0_28px_56px_-12px_rgba(34,211,238,0.12)] focus-visible:outline-accent/80`}
                   >
@@ -604,6 +618,7 @@ export function DashboardShell({
                   type="button"
                   initial={false}
                   whileTap={{ scale: 0.97 }}
+                  {...reveal()}
                   onClick={() => openModuleCard("time")}
                   className={`${MODULE_CARD_CLASS} hover:border-emerald-400/35 hover:shadow-[0_28px_56px_-12px_rgba(52,211,153,0.1)] focus-visible:outline-emerald-400/80`}
                 >
@@ -628,6 +643,7 @@ export function DashboardShell({
                     type="button"
                     initial={false}
                     whileTap={{ scale: 0.97 }}
+                    {...reveal()}
                     onClick={() => openModuleCard("fleet")}
                     className={`${MODULE_CARD_CLASS} hover:border-sky-400/35 hover:shadow-[0_28px_56px_-12px_rgba(56,189,248,0.1)] focus-visible:outline-sky-400/80`}
                   >
@@ -656,6 +672,7 @@ export function DashboardShell({
                     type="button"
                     initial={false}
                     whileTap={{ scale: 0.97 }}
+                    {...reveal()}
                     onClick={() => openModuleCard("planning")}
                     className={`${MODULE_CARD_CLASS} hover:border-violet-400/35 hover:shadow-[0_28px_56px_-12px_rgba(167,139,250,0.1)] focus-visible:outline-violet-400/80`}
                   >
@@ -681,6 +698,7 @@ export function DashboardShell({
                     type="button"
                     initial={false}
                     whileTap={{ scale: 0.97 }}
+                    {...reveal()}
                     onClick={() => openModuleCard("fleetsheet")}
                     className={`${MODULE_CARD_CLASS} hover:border-amber-400/35 hover:shadow-[0_28px_56px_-12px_rgba(251,191,36,0.1)] focus-visible:outline-amber-400/80`}
                   >
@@ -706,6 +724,7 @@ export function DashboardShell({
                     type="button"
                     initial={false}
                     whileTap={{ scale: 0.97 }}
+                    {...reveal()}
                     onClick={() => openModuleCard("roaddays")}
                     className={`${MODULE_CARD_CLASS} hover:border-rose-400/35 hover:shadow-[0_28px_56px_-12px_rgba(251,113,133,0.1)] focus-visible:outline-rose-400/80`}
                   >
@@ -731,7 +750,7 @@ export function DashboardShell({
         )}
 
         {!showComposer && !beginAnimating ? (
-          <div className="relative z-[1] mx-auto w-full max-w-5xl pb-10">
+          <div className="relative z-[1] mx-auto w-full max-w-5xl pb-10" {...reveal()}>
             <FieldStatsOnScroll />
           </div>
         ) : null}
@@ -819,6 +838,7 @@ export function DashboardShell({
               setChatOpen(true);
             }}
             className={CHAT_PILL_CLASS}
+            data-launch-late
           >
             <ChatBubbleIcon className="h-5 w-5" />
             <span className="hidden sm:inline">Team chat</span>

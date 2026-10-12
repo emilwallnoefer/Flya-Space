@@ -168,7 +168,12 @@ export default async function RootLayout({
           Skip to content
         </a>
         <LaunchSplash />
-        <MotionProvider>{children}</MotionProvider>
+        {/* .launch-stage: the page as the launch camera sees it. The splash
+            transforms it so the header title fills the screen, then pulls
+            back (components/launch-splash.tsx). A plain block otherwise. */}
+        <MotionProvider>
+          <div className="launch-stage">{children}</div>
+        </MotionProvider>
         <ServiceWorkerRegistrar />
       </body>
     </html>
