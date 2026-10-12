@@ -286,6 +286,12 @@ export function DashboardShell({
   // and "What's new" popups. Their height varies per release, so measure the
   // visible one and lift the pill just above it instead of guessing a fixed rem.
   const [chatOpen, setChatOpen] = useState(false);
+  // The pill is fixed chrome above the launch splash (z 125 over the splash's
+  // 100), so it must not mount at all until the opening is over: mounted on
+  // hydration, its entrance would play over the wordmark, the camera would
+  // then hide it, and it would come back with the settle. True from the start
+  // on a client-side navigation, where no splash runs.
+  const [launchDone, setLaunchDone] = useState(false);
   const [settingsReadmeOpenToken, setSettingsReadmeOpenToken] = useState(0);
   const [gmailStatus, setGmailStatus] = useState<{ connected: boolean; gmail_email?: string | null }>(
     initialSettings?.gmail ?? { connected: false },
@@ -402,6 +408,7 @@ export function DashboardShell({
     let cancelled = false;
     void whenLaunchDone().then(() => {
       if (cancelled) return;
+      setLaunchDone(true);
       try {
         // The phone walkthrough shows once per browser for everyone, ahead of
         // the corner popups; `?tour=phone` brings it back on demand.
@@ -820,10 +827,11 @@ export function DashboardShell({
       </section>
       {chatOpen ? <ChatWidget isAdmin={isAdmin} onClose={() => setChatOpen(false)} /> : null}
       <AnimatePresence>
-        {/* Hidden while the panel is open, and while a bottom-right popup
-            (program readme, what's new) holds that corner. */}
+        {/* Not before the opening is over (see launchDone). Hidden while the
+            panel is open, and while a bottom-right popup (program readme,
+            what's new) holds that corner. */}
         {/* Also hidden over the full-screen planning sheet, where it would cover the sheet's corner. */}
-        {!chatOpen && !showProgramReadmePrompt && !showWhatsNew && !showPhoneTour && !embedOpen ? (
+        {launchDone && !chatOpen && !showProgramReadmePrompt && !showWhatsNew && !showPhoneTour && !embedOpen ? (
           <m.button
             key="chat-trigger"
             type="button"
@@ -838,7 +846,6 @@ export function DashboardShell({
               setChatOpen(true);
             }}
             className={CHAT_PILL_CLASS}
-            data-launch-late
           >
             <ChatBubbleIcon className="h-5 w-5" />
             <span className="hidden sm:inline">Team chat</span>
