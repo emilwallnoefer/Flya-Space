@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { forbidHeldAccount, hasAppAccess, roleInAccessToken } from "./app-access";
+import { accessTokenIsStale, forbidHeldAccount, hasAppAccess, roleInAccessToken } from "./app-access";
 
 /**
  * hasAppAccess is the line between a held account and a working one, on every
@@ -73,5 +73,48 @@ describe("roleInAccessToken", () => {
     expect(roleInAccessToken(null)).toBeNull();
     expect(roleInAccessToken("not-a-jwt")).toBeNull();
     expect(roleInAccessToken("a.!!!.b")).toBeNull();
+  });
+});
+
+describe("accessTokenIsStale", () => {
+  const token = (claims: unknown) =>
+    `h.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.s`;
+  const current = token({
+    app_metadata: { role: "sales" },
+    user_metadata: { appearance_theme: "dark", appearance_accent: "amber" },
+  });
+  const fresh = {
+    app_metadata: { role: "sales" },
+    user_metadata: { appearance_theme: "dark", appearance_accent: "amber" },
+  };
+
+  it("is fresh when the token matches the account", () => {
+    expect(accessTokenIsStale(current, fresh)).toBe(false);
+  });
+
+  it("is stale once the skin was changed elsewhere", () => {
+    // The phone saved neu; the laptop's token still says dark.
+    expect(
+      accessTokenIsStale(current, { ...fresh, user_metadata: { ...fresh.user_metadata, appearance_theme: "neu" } }),
+    ).toBe(true);
+    expect(
+      accessTokenIsStale(current, { ...fresh, user_metadata: { ...fresh.user_metadata, appearance_accent: "blue" } }),
+    ).toBe(true);
+  });
+
+  it("is stale once an admin changed the role", () => {
+    expect(accessTokenIsStale(current, { ...fresh, app_metadata: { role: "hr" } })).toBe(true);
+    expect(accessTokenIsStale(current, { ...fresh, app_metadata: {} })).toBe(true);
+  });
+
+  it("treats a missing claim and a missing field as the same thing", () => {
+    const bare = token({ app_metadata: {}, user_metadata: {} });
+    expect(accessTokenIsStale(bare, { app_metadata: {}, user_metadata: {} })).toBe(false);
+    expect(accessTokenIsStale(bare, {})).toBe(false);
+  });
+
+  it("never refreshes on a token it cannot read", () => {
+    expect(accessTokenIsStale(null, fresh)).toBe(false);
+    expect(accessTokenIsStale("not-a-jwt", fresh)).toBe(false);
   });
 });
