@@ -8,6 +8,7 @@ import type { ModuleKey } from "@/lib/dashboard-modules";
 import { fromDateKey } from "@/lib/date";
 import { greetingFromEmail, timeGreeting } from "@/lib/greeting";
 import { cn } from "@/lib/cn";
+import { MOBILE_HOME_SCREEN_TOP_CLASS } from "./home-layout";
 import { MobileAvatar, MobileHomeHeader, MobileRow } from "./primitives";
 import { todayStatus } from "./today-status";
 import type { useHomeSummary } from "./use-home-summary";
@@ -64,20 +65,19 @@ export function MobileHome({
   ];
 
   return (
-    <div className="m-screen">
+    <div className={cn("m-screen", MOBILE_HOME_SCREEN_TOP_CLASS)}>
       <MobileHomeHeader
         brand={
           /* The launch camera's target: the splash title is this, zoomed in. */
-          <span className={NAVBAR_TITLE_CLASS} data-launch-target>
+          <p className={NAVBAR_TITLE_CLASS} data-launch-target>
             {NAVBAR_TITLE}
-          </span>
+          </p>
         }
-        greeting={timeGreeting()}
-        name={greetingFromEmail(email)}
+        greeting={`${timeGreeting()}, ${greetingFromEmail(email)}`}
         right={<MobileAvatar email={email} onClick={onOpenMore} />}
       />
 
-      <div className="grid grid-cols-2 gap-3 px-4 pt-1">
+      <div className="grid grid-cols-2 gap-3 px-4 pt-2">
         {hasTime ? (
           <HomeTile
             revealIndex={2}

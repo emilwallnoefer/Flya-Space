@@ -9,12 +9,16 @@ import { lockPageScroll } from "@/lib/scroll-lock";
 import { useFocusTrap } from "@/lib/use-focus-trap";
 import { useVisualViewport } from "@/lib/use-visual-viewport";
 import { cn } from "@/lib/cn";
+import Image from "next/image";
+import { NAVBAR_EYEBROW_CLASS, NAVBAR_LOGO_CLASS, NAVBAR_LOGO_SRC } from "@/components/workspace-home-layout";
 import {
-  MOBILE_HOME_BRAND_CLASS,
-  MOBILE_HOME_BRAND_ROW_CLASS,
+  MOBILE_HOME_EYEBROW_CLASS,
   MOBILE_HOME_GREETING_CLASS,
-  MOBILE_HOME_HEADER_CLASS,
-  MOBILE_HOME_NAME_CLASS,
+  MOBILE_HOME_INTRO_CLASS,
+  MOBILE_HOME_NAVBAR_BRAND_CLASS,
+  MOBILE_HOME_NAVBAR_CLASS,
+  MOBILE_HOME_NAVBAR_ROW_CLASS,
+  MOBILE_HOME_NAVBAR_SURFACE_CLASS,
 } from "./home-layout";
 
 /**
@@ -59,45 +63,52 @@ export function MobileTopBar({
 /* --------------------------------------------------------------- home header */
 
 /**
- * The home's header: a brand row (the wordmark on the left, the avatar on
- * the right, centred on each other) and the greeting under it as the page's
- * large title. It scrolls with the page rather than sticking: the home's
- * fixed chrome is the tab bar. The launch camera targets the wordmark (the
- * caller passes it in carrying data-launch-target, so the markup test's
- * one-target rule stays per page), and the avatar, greeting and name ride the
- * first two reveal slots. The skeleton (mobile-skeleton.tsx) draws the same
- * boxes from the same class constants, so the page lands where it was drawn.
+ * The home's header, after the desktop's (auth-navbar.tsx + the hero intro in
+ * dashboard-shell.tsx): a sticky navbar card with the app icon, the eyebrow
+ * over the wordmark and the avatar on the right; some air; then the greeting
+ * block ("Workspace" eyebrow, "Good afternoon, Emil"). The launch camera
+ * targets the wordmark (the caller passes it in carrying data-launch-target,
+ * so the markup test's one-target rule stays per page); the card surface is a
+ * "surface" reveal so the title stands alone first, the icon, eyebrow and
+ * avatar ride slot 0 and the greeting slot 1, exactly as on the desktop. The
+ * skeleton (mobile-skeleton.tsx) draws the same boxes from the same class
+ * constants (home-layout.ts), so the page lands where it was drawn.
  */
 export function MobileHomeHeader({
   brand,
   greeting,
-  name,
   right,
 }: {
   /** The wordmark, carrying data-launch-target. */
   brand: ReactNode;
   greeting: ReactNode;
-  name: ReactNode;
   right?: ReactNode;
 }) {
   return (
-    <header className={MOBILE_HOME_HEADER_CLASS}>
-      <div className={MOBILE_HOME_BRAND_ROW_CLASS}>
-        <span className={MOBILE_HOME_BRAND_CLASS}>{brand}</span>
-        {right ? (
-          <div className="flex shrink-0 items-center" data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>
-            {right}
+    <header>
+      <div className={MOBILE_HOME_NAVBAR_CLASS}>
+        <div className={MOBILE_HOME_NAVBAR_SURFACE_CLASS} data-launch-reveal="surface" style={{ "--reveal-i": 0 } as CSSProperties} aria-hidden />
+        <div className={MOBILE_HOME_NAVBAR_ROW_CLASS}>
+          <div className={MOBILE_HOME_NAVBAR_BRAND_CLASS}>
+            <Image src={NAVBAR_LOGO_SRC} alt="" width={28} height={28} className={NAVBAR_LOGO_CLASS} priority data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties} />
+            <div className="min-w-0">
+              <p className={NAVBAR_EYEBROW_CLASS} data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>
+                Flyability Internal
+              </p>
+              {brand}
+            </div>
           </div>
-        ) : null}
+          {right ? (
+            <div className="flex shrink-0 items-center" data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>
+              {right}
+            </div>
+          ) : null}
+        </div>
       </div>
-      <h1 className="min-w-0">
-        <span className={MOBILE_HOME_GREETING_CLASS} data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>
-          {greeting}
-        </span>
-        <span className={MOBILE_HOME_NAME_CLASS} data-launch-reveal style={{ "--reveal-i": 1 } as CSSProperties}>
-          {name}
-        </span>
-      </h1>
+      <div className={MOBILE_HOME_INTRO_CLASS} data-launch-reveal style={{ "--reveal-i": 1 } as CSSProperties}>
+        <p className={MOBILE_HOME_EYEBROW_CLASS}>Workspace</p>
+        <h1 className={MOBILE_HOME_GREETING_CLASS}>{greeting}</h1>
+      </div>
     </header>
   );
 }
