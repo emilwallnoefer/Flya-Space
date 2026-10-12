@@ -264,16 +264,28 @@
  * face and swap mid-fade. */
 @font-face {
   font-family: "Syncopate";
-  font-weight: 400;
-  font-display: block;
-  src: url("/fonts/syncopate-400.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Syncopate";
   font-weight: 700;
   font-display: block;
   src: url("/fonts/syncopate-700.woff2") format("woff2");
 }
+/* ---- Brand wordmark ----
+ * "The Flya Space" as set in the navbar, the phone home, the login card and
+ * the launch splash: one class, so the launch camera can put the page's own
+ * title exactly under the splash's. Inline-block so its box is the text run
+ * (the camera's scale is a ratio of widths); the 18 % stretch grows from the
+ * left edge, never into what sits before it. */
+.brand-wordmark {
+  display: inline-block;
+  font-family: "Syncopate", "Michroma", "Eurostile", ui-sans-serif, sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  line-height: 1;
+  white-space: nowrap;
+  transform: scaleX(1.18);
+  transform-origin: 0 50%;
+}
+
 /* ---- Launch splash (components/launch-splash.tsx) ----
  * Painted from the server HTML before hydration, so the colours must be
  * decidable from <html> attributes alone. The bootstrap in app/layout.tsx
@@ -281,11 +293,11 @@
  * cached on the device); then the splash reads that skin's own tokens. With
  * no skin known — not signed in, or never chose one — it is Neumorphism,
  * literal values because the dark base tokens are what :root holds then.
- * Both fades are finite; the node leaves the DOM once they are done. */
+ * public/launch.html, the CDN page at "/", copies this at-rest frame by
+ * hand: keep the two in step. */
 .launch-splash {
   --splash-bg: #ebecef;
   --splash-ink: #1f252e;
-  --splash-accent: #2f5f63;
   position: fixed;
   inset: 0;
   z-index: 100;
@@ -293,7 +305,6 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
   padding: 0 16px;
   background: var(--splash-bg);
   color: var(--splash-ink);
@@ -302,108 +313,13 @@
 html[data-appearance-set] .launch-splash {
   --splash-bg: var(--surface);
   --splash-ink: var(--ink);
-  --splash-accent: var(--accent-soft);
-}
-.launch-splash-word,
-.launch-splash-sub {
-  font-family: "Syncopate", "Michroma", "Eurostile", ui-sans-serif, sans-serif;
-  text-transform: uppercase;
-  white-space: nowrap;
 }
 .launch-splash-word {
-  font-weight: 700;
-  font-size: clamp(15px, 3.4vw, 56px);
-  line-height: 1;
-  letter-spacing: 0.22em;
+  font-size: clamp(17px, 3.4vw, 56px);
+  /* Centring: the trailing letter-space would otherwise sit it left of centre. */
   margin-right: -0.22em;
-  /* The face is already extended; the stretch pushes it to cinematic. */
-  transform: scaleX(1.18);
+  transform-origin: 50% 50%;
   animation: launchSplashWord 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-.launch-splash-sub {
-  font-weight: 400;
-  font-size: clamp(9px, 1.1vw, 13px);
-  /* A fixed line box: this weight arrives after the bold one, and with the
-   * fallback's metrics the line was taller, so the title shifted up when
-   * the face landed. */
-  line-height: 1;
-  letter-spacing: 0.6em;
-  margin-right: -0.6em;
-  color: var(--splash-accent);
-  opacity: 0.85;
-  animation: launchSplashSub 600ms 260ms ease-out both;
-}
-/* 500 ms, in step with SPLASH_OUT_MS in the component. */
-.launch-splash[data-phase="out"] {
-  animation: launchSplashOut 500ms cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-.launch-splash[data-phase="out"] .launch-splash-word {
-  animation: launchSplashWordOut 500ms cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-/* With a target on the page (data-launch-target, measured by the component
- * into --merge-*), the title travels into it, shrinking, and dissolves as it
- * lands, so the page's own name seems to take it over. The sub line just
- * goes. Same 500 ms as the scrim. */
-.launch-splash[data-phase="out"] .launch-splash-word[data-merge] {
-  animation: launchSplashWordMerge 500ms cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-.launch-splash[data-phase="out"] .launch-splash-sub {
-  animation: launchSplashSubOut 200ms ease-out both;
-}
-@keyframes launchSplashSubOut {
-  from { opacity: 0.85; }
-  to { opacity: 0; }
-}
-@keyframes launchSplashWordMerge {
-  from {
-    transform: translate(0, 0) scale(1) scaleX(1.18);
-    opacity: 1;
-  }
-  80% {
-    opacity: 1;
-  }
-  to {
-    transform: translate(var(--merge-x, 0px), var(--merge-y, 0px)) scale(var(--merge-scale, 0.3)) scaleX(1.18);
-    opacity: 0;
-  }
-}
-/* While the title shrinks into the page's name, the page itself pulls back
- * from slightly enlarged to its true size (html[data-launch-out], set by the
- * component for the 500 ms and removed after, so no transform outlives it
- * and fixed elements are untouched once it is over). `.launch-stage` is the
- * root layout's wrapper around the page. */
-html[data-launch-out] .launch-stage {
-  transform-origin: 50% 30vh;
-  animation: launchStageZoom 500ms cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-/* The enlarged page would overflow the viewport and grow the scrollable area;
- * on phones that resizes the viewport mid-animation and re-centres the title
- * by a dozen pixels. Clip for the duration; it is 500 ms with nothing to
- * scroll to yet. */
-html[data-launch-out],
-html[data-launch-out] body {
-  overflow: hidden;
-}
-@keyframes launchStageZoom {
-  from {
-    transform: scale(1.08);
-  }
-  to {
-    transform: scale(1);
-  }
-}
-/* Arriving from the launch page at "/" is a cross-document navigation; with
- * this, the browser crossfades its last frame into our first (the same
- * wordmark at rest, see data-launch-warm below) instead of cutting. It applies
- * to every same-origin full navigation (login → dashboard too), which is
- * fine: a 350 ms crossfade, once, finite. Browsers without it cut as before. */
-@view-transition {
-  navigation: auto;
-}
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 350ms;
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 @keyframes launchSplashWord {
   from {
@@ -420,39 +336,131 @@ html[data-launch-out] body {
     margin-right: -0.22em;
   }
 }
-@keyframes launchSplashSub {
-  from { opacity: 0; }
-  to { opacity: 0.85; }
+/* Arriving from the launch page at "/", the wordmark is already on screen:
+ * start at rest so the hand-off between the two documents is seamless. */
+html[data-launch-warm] .launch-splash-word {
+  animation: none;
 }
-/* The scrim lets go of its colour, not its opacity: the title inside keeps
- * its own fade, so it can still be seen landing on the page's name. */
-@keyframes launchSplashOut {
+/* Letting go, camera style: the title fades in 80 ms (the page's own title is
+ * already exactly under it, so this only covers sub-pixel drift) and the
+ * scrim lets go of its colour over 240 ms, so the skin emerges under the
+ * title instead of cutting. In step with SCRIM_MS in the component. */
+.launch-splash[data-phase="out"] {
+  animation: launchSplashScrim 240ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.launch-splash[data-phase="out"] .launch-splash-word {
+  animation: launchSplashFade 80ms linear both;
+}
+/* Letting go without a camera (no target on the page, Reduce Motion, a
+ * scrolled reload): a plain fade. In step with FADE_MS. */
+.launch-splash[data-phase="fade"] {
+  animation: launchSplashFade 200ms ease-out both;
+}
+@keyframes launchSplashScrim {
   from { background-color: var(--splash-bg); }
   to { background-color: transparent; }
 }
-@keyframes launchSplashWordOut {
-  from { transform: scaleX(1.18); opacity: 1; }
-  to { transform: scaleX(1.2); opacity: 0; }
+@keyframes launchSplashFade {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
-/* Arriving from the launch page at "/", the wordmark is already on screen:
- * start at rest so the hand-off between the two documents is seamless. */
-html[data-launch-warm] .launch-splash-word,
-html[data-launch-warm] .launch-splash-sub {
-  animation: none;
+
+/* ---- Launch camera ----
+ * html[data-launch-zoom] is on from the opening frame until the last reveal
+ * has landed; html[data-launch-settle] for a moment after the stage's
+ * transform is gone. Both are set and removed by the splash component; the
+ * stage's transform itself is a Web Animation, not CSS. Everything here is
+ * transform or opacity, nothing that lays out, and every animation is
+ * finite. */
+html[data-launch-zoom] .launch-stage {
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none;
+}
+/* The enlarged page would grow the scrollable area; on phones that resizes
+ * the viewport mid-move and shifts everything. Clip for the duration. */
+html[data-launch-zoom],
+html[data-launch-zoom] body {
+  overflow: hidden;
+}
+/* Reveals: hidden at the opening frame, in on a stagger from ~30 % into the
+ * move. --reveal-i is the element's order (inline, since attr() cannot feed
+ * calc()); the start and step come from the component. "surface" variants
+ * only fade, so a card that holds the title never moves relative to it. An
+ * element mounting mid-way just runs its own animation; when the attribute
+ * goes, every element is back to its normal styles. */
+html[data-launch-zoom] [data-launch-reveal] {
+  opacity: 0;
+  animation: launchReveal 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--launch-reveal-start, 450ms) + var(--reveal-i, 0) * var(--launch-reveal-step, 70ms));
+}
+html[data-launch-zoom] [data-launch-reveal="surface"] {
+  animation-name: launchRevealFade;
+}
+/* Fixed chrome (chat pill, phone tab bar, popups): a fixed element inside a
+ * transformed ancestor is mispositioned, so it waits for the settle. */
+html[data-launch-zoom] [data-launch-late] {
+  opacity: 0;
+}
+html[data-launch-settle] [data-launch-late] {
+  animation: launchRevealFade 300ms ease-out both;
+}
+@keyframes launchReveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes launchRevealFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* Phones: no backdrop blur while the stage is moving, so the move stays at
+ * frame rate; these surfaces are fading in from nothing during that window
+ * anyway, which hides the blur arriving at the settle. */
+@media (hover: none) and (pointer: coarse) {
+  html[data-launch-zoom] .glass-card,
+  html[data-launch-zoom] .m-topbar,
+  html[data-launch-zoom] .m-tile {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+/* Arriving from the launch page at "/" is a cross-document navigation; with
+ * this, the browser crossfades its last frame into our first (the same
+ * wordmark at rest, see data-launch-warm above) instead of cutting. It applies
+ * to every same-origin full navigation (login → dashboard too), which is
+ * fine: a 350 ms crossfade, once, finite. Browsers without it cut as before. */
+@view-transition {
+  navigation: auto;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 350ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 @media (prefers-reduced-motion: reduce) {
-  .launch-splash-word,
-  .launch-splash-sub {
+  .launch-splash-word {
     animation: none;
   }
   .launch-splash[data-phase="out"],
-  .launch-splash[data-phase="out"] .launch-splash-word {
-    animation-duration: 120ms;
+  .launch-splash[data-phase="out"] .launch-splash-word,
+  .launch-splash[data-phase="fade"] {
+    animation-duration: 150ms;
   }
   @view-transition {
     navigation: none;
   }
-  html[data-launch-out] .launch-stage {
+  /* The component never runs the camera under Reduce Motion; this is the
+   * belt to those braces. */
+  html[data-launch-zoom] [data-launch-reveal],
+  html[data-launch-zoom] [data-launch-late],
+  html[data-launch-settle] [data-launch-late] {
     animation: none;
+    opacity: 1;
   }
 }

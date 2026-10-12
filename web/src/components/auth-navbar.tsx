@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
 import { playUiSound } from "@/lib/ui-sounds";
 import {
@@ -7,6 +8,8 @@ import {
   NAVBAR_EYEBROW_CLASS,
   NAVBAR_LOGO_CLASS,
   NAVBAR_MENU_BUTTON_CLASS,
+  NAVBAR_SURFACE_CLASS,
+  NAVBAR_TITLE,
   NAVBAR_TITLE_CLASS,
 } from "@/components/workspace-home-layout";
 
@@ -43,18 +46,21 @@ export function AuthNavbar({
 
   return (
     <nav className={NAVBAR_CLASS}>
+      {/* The card itself; a launch reveal so the title can stand alone first. */}
+      <div className={NAVBAR_SURFACE_CLASS} data-launch-reveal="surface" style={{ "--reveal-i": 0 } as CSSProperties} aria-hidden />
       <div className="flex items-center justify-between gap-2 sm:gap-3">
         <div className="min-w-0 flex items-center gap-2.5">
-          <div className={NAVBAR_LOGO_CLASS}>
+          <div className={NAVBAR_LOGO_CLASS} data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>
             FA
           </div>
           <div className="min-w-0">
-            <p className={NAVBAR_EYEBROW_CLASS}>Flyability Internal</p>
-            <p className={NAVBAR_TITLE_CLASS} data-launch-target>Flya Space</p>
+            <p className={NAVBAR_EYEBROW_CLASS} data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>Flyability Internal</p>
+            {/* The launch camera's target: the splash title lands exactly here. */}
+            <p className={NAVBAR_TITLE_CLASS} data-launch-target>{NAVBAR_TITLE}</p>
           </div>
         </div>
 
-        <div className="relative" ref={menuRef}>
+        <div className="relative" ref={menuRef} data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>
           <button
             type="button"
             onClick={() => {

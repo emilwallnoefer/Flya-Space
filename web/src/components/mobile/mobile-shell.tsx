@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { AnimatePresence } from "framer-motion";
 import { Suspense, use, useCallback, useEffect, useMemo, useState } from "react";
+import { markLaunchReady } from "@/lib/launch-ready";
 import type { DashboardShellProps } from "@/components/dashboard-shell";
 import { useMailComposer } from "@/components/mail-composer/use-mail-composer";
 import { OfflineGameCard } from "@/components/offline-game-card";
@@ -127,6 +128,10 @@ export function MobileShell({
 
   // Gmail status for the mail composer, when the server did not seed it.
   const gmailStatusSeeded = initialSettings?.gmail != null;
+  // The real home is on screen: the launch camera may pull back now.
+  useEffect(() => {
+    markLaunchReady();
+  }, []);
   useEffect(() => {
     if (gmailStatusSeeded || userRole === "sales" || userRole === "hr") return;
     fetch("/api/gmail/status")

@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { greetingFromEmail } from "@/lib/greeting";
 import { AnimatePresence, m } from "framer-motion";
 import { SHEET_EASE } from "./screen";
@@ -46,7 +47,14 @@ export function MobileTopBar({
         <span className="w-1" aria-hidden />
       )}
       <h1 className={cn("min-w-0 flex-1 truncate font-semibold text-ink", large ? "text-2xl" : "text-base")}>{title}</h1>
-      {right ? <div className="flex shrink-0 items-center gap-1">{right}</div> : null}
+      {right ? (
+        <div
+          className="flex shrink-0 items-center gap-1"
+          {...(large ? { "data-launch-reveal": "", style: { "--reveal-i": 0 } as CSSProperties } : {})}
+        >
+          {right}
+        </div>
+      ) : null}
     </header>
   );
 }

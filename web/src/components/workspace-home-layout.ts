@@ -13,11 +13,20 @@
  * they carry no styles of their own.
  */
 
-export const NAVBAR_CLASS = "glass-card sticky top-3 z-[90] !overflow-visible p-2.5 md:p-3";
+/* The navbar is a positioned, isolated box; its card surface is a separate
+ * absolutely-positioned child (NAVBAR_SURFACE_CLASS) so the launch camera can
+ * hold the surface back while the title is on screen alone, and so the menu
+ * dropdown escapes the card's overflow without an override. */
+export const NAVBAR_CLASS = "relative isolate sticky top-3 z-[90] p-2.5 md:p-3";
+export const NAVBAR_SURFACE_CLASS = "glass-card absolute inset-0 -z-1";
+/* The brand title, everywhere it appears: navbar, phone home, login card and
+ * the launch splash (which the camera lines up with it, so one class, one
+ * copy of the text). The face is .brand-wordmark in app/animations.css. */
+export const NAVBAR_TITLE = "The Flya Space";
 export const NAVBAR_LOGO_CLASS =
   "navbar-logo grid h-7 w-7 place-items-center rounded-md bg-gradient-to-br from-accent-from to-accent-to text-[11px] font-semibold text-slate-950";
 export const NAVBAR_EYEBROW_CLASS = "text-[11px] uppercase tracking-[0.15em] text-accent-soft/70";
-export const NAVBAR_TITLE_CLASS = "truncate text-xs font-medium md:text-sm";
+export const NAVBAR_TITLE_CLASS = "brand-wordmark mt-1 text-[11px] text-ink";
 export const NAVBAR_MENU_BUTTON_CLASS =
   "inline-flex items-center gap-2 rounded-lg border border-glass/15 bg-glass/8 px-2.5 py-1.5 text-xs transition ease-fluid hover:bg-glass/12";
 

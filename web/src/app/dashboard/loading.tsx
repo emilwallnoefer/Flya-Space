@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { headers } from "next/headers";
 import { MobileSkeleton } from "@/components/mobile/mobile-skeleton";
 import { isPhoneRequest } from "@/lib/device";
@@ -25,6 +26,8 @@ import {
   NAVBAR_EYEBROW_CLASS,
   NAVBAR_LOGO_CLASS,
   NAVBAR_MENU_BUTTON_CLASS,
+  NAVBAR_SURFACE_CLASS,
+  NAVBAR_TITLE,
   NAVBAR_TITLE_CLASS,
 } from "@/components/workspace-home-layout";
 
@@ -62,15 +65,16 @@ export default async function DashboardLoading() {
         {/* Navbar and hero are direct children of the page shell, like on the
             real page, so the shell's flex gap spaces them the same way. */}
         <div className={`${NAVBAR_CLASS} motion-safe:animate-pulse`}>
+          <div className={NAVBAR_SURFACE_CLASS} data-launch-reveal="surface" style={{ "--reveal-i": 0 } as CSSProperties} aria-hidden />
           <div className="flex items-center justify-between gap-2 sm:gap-3">
             <div className="min-w-0 flex items-center gap-2.5">
-              <div className={NAVBAR_LOGO_CLASS}>FA</div>
+              <div className={NAVBAR_LOGO_CLASS} data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>FA</div>
               <div className="min-w-0">
-                <p className={NAVBAR_EYEBROW_CLASS}>Flyability Internal</p>
-                <p className={NAVBAR_TITLE_CLASS} data-launch-target>Flya Space</p>
+                <p className={NAVBAR_EYEBROW_CLASS} data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>Flyability Internal</p>
+                <p className={NAVBAR_TITLE_CLASS} data-launch-target>{NAVBAR_TITLE}</p>
               </div>
             </div>
-            <span className={`${NAVBAR_MENU_BUTTON_CLASS} text-transparent`}>
+            <span className={`${NAVBAR_MENU_BUTTON_CLASS} text-transparent`} data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>
               <span className="hidden sm:inline">Menu</span>
               <span className="h-4 w-4" />
             </span>
@@ -81,7 +85,7 @@ export default async function DashboardLoading() {
           <div className="dashboard-mesh" aria-hidden />
           <div className="dashboard-mesh-fade" aria-hidden />
           <div className={HOME_CONTENT_CLASS}>
-            <div className={HOME_INTRO_CLASS}>
+            <div className={HOME_INTRO_CLASS} data-launch-reveal style={{ "--reveal-i": 1 } as CSSProperties}>
               <p className={HOME_EYEBROW_CLASS}>
                 <Bar>Workspace</Bar>
               </p>
@@ -95,8 +99,8 @@ export default async function DashboardLoading() {
             </div>
 
             <div className={homeGridClass(HOME_CARDS.length)}>
-              {HOME_CARDS.map((card) => (
-                <div key={card.key} className={MODULE_CARD_CLASS}>
+              {HOME_CARDS.map((card, index) => (
+                <div key={card.key} className={MODULE_CARD_CLASS} data-launch-reveal style={{ "--reveal-i": 2 + index } as CSSProperties}>
                   <span className={MODULE_CARD_CORE_CLASS}>
                     <span className={`${MODULE_CARD_ICON_CLASS} border-glass/10 bg-glass/10`} />
                     <span className={MODULE_CARD_TITLE_CLASS}>
@@ -116,7 +120,7 @@ export default async function DashboardLoading() {
             </div>
           </div>
         </div>
-        <span className={`${CHAT_PILL_CLASS} pointer-events-none border-glass/15! bg-glass/10! text-transparent! shadow-none!`} aria-hidden>
+        <span className={`${CHAT_PILL_CLASS} pointer-events-none border-glass/15! bg-glass/10! text-transparent! shadow-none!`} aria-hidden data-launch-late>
           <span className="h-5 w-5" />
           <span className="hidden sm:inline">Team chat</span>
         </span>

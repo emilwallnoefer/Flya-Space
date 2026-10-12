@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { NAVBAR_TITLE, NAVBAR_TITLE_CLASS } from "@/components/workspace-home-layout";
 import { IconClock, IconDrone, IconMail } from "@/components/module-icons";
 import { fmtSignedHM } from "@/components/time-tracker/types";
 import type { ModuleKey } from "@/lib/dashboard-modules";
@@ -68,12 +69,12 @@ export function MobileHome({
         large
         title={
           <span className="block pt-1 pb-1">
-            {/* Where the launch splash's title lands (data-launch-target). */}
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-4" data-launch-target>
-              Flya Space
+            {/* The launch camera's target: the splash title is this, zoomed in. */}
+            <span className={NAVBAR_TITLE_CLASS} data-launch-target>
+              {NAVBAR_TITLE}
             </span>
-            <span className="block text-base font-medium text-ink-3">{timeGreeting()}</span>
-            <span className="block text-[2rem] font-bold leading-[1.1] tracking-tight text-ink">{greetingFromEmail(email)}</span>
+            <span className="block text-base font-medium text-ink-3" data-launch-reveal style={{ "--reveal-i": 0 } as CSSProperties}>{timeGreeting()}</span>
+            <span className="block text-[2rem] font-bold leading-[1.1] tracking-tight text-ink" data-launch-reveal style={{ "--reveal-i": 1 } as CSSProperties}>{greetingFromEmail(email)}</span>
           </span>
         }
         right={<MobileAvatar email={email} onClick={onOpenMore} />}
@@ -82,6 +83,7 @@ export function MobileHome({
       <div className="grid grid-cols-2 gap-3 px-4 pt-2">
         {hasTime ? (
           <HomeTile
+            revealIndex={2}
             label="Overtime"
             value={bankMins === null ? "—" : fmtSignedHM(bankMins)}
             sub={!week ? "" : lastLogged ? `Through ${WEEKDAY.format(fromDateKey(lastLogged.date))}` : "Nothing yet"}
@@ -91,6 +93,7 @@ export function MobileHome({
         ) : null}
         {hasTime ? (
           <HomeTile
+            revealIndex={3}
             label="Today"
             icon={<IconClock className="h-4 w-4" />}
             value={todayState.value}
@@ -101,7 +104,7 @@ export function MobileHome({
         ) : null}
 
         {hasFleet ? (
-          <section className="m-tile col-span-2 overflow-hidden rounded-2xl border border-glass/10 bg-panel">
+          <section className="m-tile col-span-2 overflow-hidden rounded-2xl border border-glass/10 bg-panel" data-launch-reveal style={{ "--reveal-i": 4 } as CSSProperties}>
             <h2 className="px-4 pt-3 pb-1 text-xs font-medium text-ink-4">With you</h2>
             {myItems.length > 0 ? (
               myItems.map((item) => (
@@ -123,6 +126,7 @@ export function MobileHome({
         {shortcuts.map((shortcut, index) => (
           <ShortcutTile
             key={shortcut.key}
+            revealIndex={5 + index}
             icon={shortcut.icon}
             label={shortcut.label}
             href={shortcut.href}
@@ -140,7 +144,12 @@ export function MobileHome({
  * `href` it splits: the left two thirds open the module in the app, the right
  * third is a link that opens the same thing in Google, in a new tab.
  */
-function ShortcutTile({ icon, label, onClick, href, wide }: { icon: ReactNode; label: string; onClick: () => void; href?: string; wide: boolean }) {
+/** The launch camera's reveal order for a tile (see components/launch-splash.tsx). */
+function revealProps(index: number) {
+  return { "data-launch-reveal": "", style: { "--reveal-i": index } as CSSProperties };
+}
+
+function ShortcutTile({ icon, label, onClick, href, wide, revealIndex }: { icon: ReactNode; label: string; onClick: () => void; href?: string; wide: boolean; revealIndex: number }) {
   const PRESS = "transition-transform duration-150 ease-out active:scale-[0.97] active:duration-100";
   const body = (
     <>
@@ -150,7 +159,7 @@ function ShortcutTile({ icon, label, onClick, href, wide }: { icon: ReactNode; l
   );
   if (href) {
     return (
-      <div className={cn("m-tile flex min-h-14 min-w-0 overflow-hidden rounded-2xl border border-glass/10 bg-panel", wide && "col-span-2")}>
+      <div className={cn("m-tile flex min-h-14 min-w-0 overflow-hidden rounded-2xl border border-glass/10 bg-panel", wide && "col-span-2")} {...revealProps(revealIndex)}>
         <button type="button" onClick={onClick} className={cn("flex min-w-0 flex-[2] items-center gap-3 px-4 text-left", PRESS)}>
           {body}
         </button>
@@ -171,6 +180,7 @@ function ShortcutTile({ icon, label, onClick, href, wide }: { icon: ReactNode; l
       type="button"
       onClick={onClick}
       className={cn("m-tile flex min-h-14 min-w-0 items-center gap-3 rounded-2xl border border-glass/10 bg-panel px-4 text-left", PRESS, wide && "col-span-2")}
+      {...revealProps(revealIndex)}
     >
       {body}
     </button>
@@ -187,6 +197,7 @@ function HomeTile({
   tone = "default",
   compact = false,
   onClick,
+  revealIndex,
 }: {
   label?: ReactNode;
   "aria-label"?: string;
@@ -196,6 +207,7 @@ function HomeTile({
   tone?: "default" | "accent" | "positive" | "warn";
   compact?: boolean;
   onClick: () => void;
+  revealIndex?: number;
 }) {
   const toneClass = tone === "accent" ? "text-accent-soft" : tone === "positive" ? "text-positive" : tone === "warn" ? "text-warn" : "text-ink";
   return (
@@ -203,6 +215,7 @@ function HomeTile({
       type="button"
       aria-label={ariaLabel}
       onClick={onClick}
+      {...(revealIndex === undefined ? {} : revealProps(revealIndex))}
       className={cn(
         "m-tile flex min-w-0 flex-col justify-between rounded-2xl border border-glass/10 bg-panel p-3 text-left transition-transform duration-150 ease-out active:scale-[0.97] active:duration-100",
         compact ? "min-h-[4.75rem] gap-2" : "min-h-[5.75rem] gap-3",

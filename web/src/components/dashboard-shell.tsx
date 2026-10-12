@@ -2,7 +2,8 @@
 
 import { AnimatePresence, m } from "framer-motion";
 import dynamic from "next/dynamic";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { markLaunchReady } from "@/lib/launch-ready";
 import { AuthNavbar } from "@/components/auth-navbar";
 import { OfflineGameCard } from "@/components/offline-game-card";
 import { PanelLoading } from "@/components/panel-loading";
@@ -119,7 +120,7 @@ function ScrollHint({ active }: { active: boolean }) {
   }, [done]);
   if (!active || done) return null;
   return (
-    <div aria-hidden className="pointer-events-none fixed inset-x-0 bottom-safe-16 z-[60] flex justify-center text-ink-3">
+    <div aria-hidden className="pointer-events-none fixed inset-x-0 bottom-safe-16 z-[60] flex justify-center text-ink-3" data-launch-late>
       <m.div initial={{ opacity: 0 }} animate={{ opacity: 0.55 }} transition={{ duration: 0.6, delay: 0.8, ease: "easeOut" }}>
         <svg className="h-8 w-12" viewBox="0 0 48 32" fill="none" stroke="currentColor" strokeWidth="1.75">
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 5l18 10L42 5" />
@@ -501,6 +502,19 @@ export function DashboardShell({
     handleBeginAutomating();
   }
 
+  // The real home is on screen: the launch camera may pull back now.
+  useEffect(() => {
+    markLaunchReady();
+  }, []);
+
+  // Launch reveal order, in source order: the hero intro is 1, the cards
+  // count on from 2 (roles hide some), field stats come last.
+  let revealIndex = 2;
+  const reveal = () => ({
+    "data-launch-reveal": "",
+    style: { "--reveal-i": revealIndex++ } as CSSProperties,
+  });
+
   return (
     <main id="main-content" className="relative min-h-dvh overflow-x-hidden bg-surface text-ink">
       <div className="absolute inset-0 aurora-bg" />
@@ -565,7 +579,7 @@ export function DashboardShell({
             <div className="dashboard-mesh" aria-hidden />
             <div className="dashboard-mesh-fade" aria-hidden />
             <div className={HOME_CONTENT_CLASS}>
-              <div className={HOME_INTRO_CLASS}>
+              <div className={HOME_INTRO_CLASS} data-launch-reveal style={{ "--reveal-i": 1 } as CSSProperties}>
                 <p className={HOME_EYEBROW_CLASS}>Workspace</p>
                 <h1 className={HOME_GREETING_CLASS}>
                   {timeGreeting()}, {greetingFromEmail(email)}
@@ -580,6 +594,7 @@ export function DashboardShell({
                     type="button"
                     initial={false}
                     whileTap={{ scale: 0.97 }}
+                    {...reveal()}
                     onClick={() => openModuleCard("mail")}
                     className={`${MODULE_CARD_CLASS} hover:border-accent/35 hover:shadow-[0_28px_56px_-12px_rgba(34,211,238,0.12)] focus-visible:outline-accent/80`}
                   >
@@ -604,6 +619,7 @@ export function DashboardShell({
                   type="button"
                   initial={false}
                   whileTap={{ scale: 0.97 }}
+                  {...reveal()}
                   onClick={() => openModuleCard("time")}
                   className={`${MODULE_CARD_CLASS} hover:border-emerald-400/35 hover:shadow-[0_28px_56px_-12px_rgba(52,211,153,0.1)] focus-visible:outline-emerald-400/80`}
                 >
@@ -628,6 +644,7 @@ export function DashboardShell({
                     type="button"
                     initial={false}
                     whileTap={{ scale: 0.97 }}
+                    {...reveal()}
                     onClick={() => openModuleCard("fleet")}
                     className={`${MODULE_CARD_CLASS} hover:border-sky-400/35 hover:shadow-[0_28px_56px_-12px_rgba(56,189,248,0.1)] focus-visible:outline-sky-400/80`}
                   >
@@ -656,6 +673,7 @@ export function DashboardShell({
                     type="button"
                     initial={false}
                     whileTap={{ scale: 0.97 }}
+                    {...reveal()}
                     onClick={() => openModuleCard("planning")}
                     className={`${MODULE_CARD_CLASS} hover:border-violet-400/35 hover:shadow-[0_28px_56px_-12px_rgba(167,139,250,0.1)] focus-visible:outline-violet-400/80`}
                   >
@@ -681,6 +699,7 @@ export function DashboardShell({
                     type="button"
                     initial={false}
                     whileTap={{ scale: 0.97 }}
+                    {...reveal()}
                     onClick={() => openModuleCard("fleetsheet")}
                     className={`${MODULE_CARD_CLASS} hover:border-amber-400/35 hover:shadow-[0_28px_56px_-12px_rgba(251,191,36,0.1)] focus-visible:outline-amber-400/80`}
                   >
@@ -706,6 +725,7 @@ export function DashboardShell({
                     type="button"
                     initial={false}
                     whileTap={{ scale: 0.97 }}
+                    {...reveal()}
                     onClick={() => openModuleCard("roaddays")}
                     className={`${MODULE_CARD_CLASS} hover:border-rose-400/35 hover:shadow-[0_28px_56px_-12px_rgba(251,113,133,0.1)] focus-visible:outline-rose-400/80`}
                   >
@@ -731,7 +751,7 @@ export function DashboardShell({
         )}
 
         {!showComposer && !beginAnimating ? (
-          <div className="relative z-[1] mx-auto w-full max-w-5xl pb-10">
+          <div className="relative z-[1] mx-auto w-full max-w-5xl pb-10" {...reveal()}>
             <FieldStatsOnScroll />
           </div>
         ) : null}
@@ -819,6 +839,7 @@ export function DashboardShell({
               setChatOpen(true);
             }}
             className={CHAT_PILL_CLASS}
+            data-launch-late
           >
             <ChatBubbleIcon className="h-5 w-5" />
             <span className="hidden sm:inline">Team chat</span>
@@ -832,6 +853,7 @@ export function DashboardShell({
       {showProgramReadmePrompt && !showPhoneTour ? (
         <div
           className="fixed bottom-safe right-4 z-[120] w-[min(92vw,22rem)] rounded-xl border border-glass/20 bg-surface/92 p-3 shadow-xl backdrop-blur-xl"
+          data-launch-late
         >
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -866,6 +888,7 @@ export function DashboardShell({
       {showWhatsNew && !showPhoneTour ? (
         <div
           className="fixed bottom-safe right-4 z-[120] w-[min(92vw,22rem)] rounded-xl border border-glass/20 bg-surface/92 p-3 shadow-xl backdrop-blur-xl"
+          data-launch-late
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">

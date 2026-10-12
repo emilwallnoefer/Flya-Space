@@ -153,13 +153,6 @@ export default async function RootLayout({
           type="font/woff2"
           crossOrigin="anonymous"
         />
-        <link
-          rel="preload"
-          href="/fonts/syncopate-400.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
         {nonce ? (
           <script
             nonce={nonce}
@@ -175,8 +168,9 @@ export default async function RootLayout({
           Skip to content
         </a>
         <LaunchSplash />
-        {/* .launch-stage: what the launch splash zooms out as it lets go
-            (animations.css). A plain block, invisible to layout otherwise. */}
+        {/* .launch-stage: the page as the launch camera sees it. The splash
+            transforms it so the header title fills the screen, then pulls
+            back (components/launch-splash.tsx). A plain block otherwise. */}
         <MotionProvider>
           <div className="launch-stage">{children}</div>
         </MotionProvider>
