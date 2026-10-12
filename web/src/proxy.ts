@@ -41,10 +41,13 @@ export const config = {
   // Everything except static assets, which need no CSP and would only add
   // middleware overhead. Note this is much wider than the old matcher — see
   // `needsSession` for why that does not mean more auth work per request.
+  // "/" itself (the `(?!$)`) is excluded too: next.config.ts rewrites it to the
+  // static launch page, which must come off the CDN without waking any
+  // function, and carries its own static CSP there.
   matcher: [
     {
       source:
-        "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff|woff2|ttf|otf|txt|xml|webmanifest)$).*)",
+        "/((?!$|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff|woff2|ttf|otf|txt|xml|webmanifest)$).*)",
     },
   ],
 };

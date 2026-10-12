@@ -20,6 +20,21 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
 ];
 
+// The launch page at "/" (public/launch.html) is the one route the proxy does
+// not cover (see its matcher), so it gets a static policy here. It loads one
+// same-origin script and two same-origin fonts and fetches nothing else; the
+// policy says exactly that. No nonce is needed because nothing is inline.
+const launchPageCsp = [
+  "default-src 'none'",
+  "script-src 'self'",
+  "style-src 'unsafe-inline'",
+  "font-src 'self'",
+  "img-src 'self'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+].join("; ");
+
 const nextConfig: NextConfig = {
   env: {
     // Versions the offline service worker (public/sw.js): a new value is a new
@@ -37,7 +52,19 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: securityHeaders,
       },
+      {
+        source: "/",
+        headers: [{ key: "Content-Security-Policy", value: launchPageCsp }],
+      },
     ];
+  },
+  async rewrites() {
+    return {
+      // "/" is the launch page: a static file, served from the CDN the moment
+      // the app is opened, which then moves on to /dashboard (or /login via
+      // the proxy). `beforeFiles` so it wins over any route for "/".
+      beforeFiles: [{ source: "/", destination: "/launch.html" }],
+    };
   },
 };
 

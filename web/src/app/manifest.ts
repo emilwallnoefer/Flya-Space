@@ -20,7 +20,9 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Flya Space",
     short_name: "Flya Space",
     description: "Flyability's internal workspace: time tracking, team chat, fleet and mail.",
-    start_url: "/dashboard",
+    // The launch page: the wordmark is on screen the moment the icon is
+    // tapped, before any server function has woken (public/launch.html).
+    start_url: "/",
     scope: "/",
     display: "standalone",
     background_color: THEME_COLORS.dark,
