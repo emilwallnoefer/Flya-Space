@@ -77,17 +77,18 @@ test("from the launch page, the splash title resumes its entrance where the laun
       elapsed: getComputedStyle(document.documentElement).getPropertyValue("--launch-elapsed").trim(),
       name: anim?.animationName ?? null,
       progress,
-      spacing: parseFloat(getComputedStyle(word).letterSpacing),
-      fontSize: parseFloat(getComputedStyle(word).fontSize),
+      // scaleX of the computed matrix: matrix(a, b, c, d, tx, ty).
+      scaleX: parseFloat(getComputedStyle(word).transform.replace("matrix(", "")),
     };
   });
   // Resumed, not restarted (the time already lived on the launch page is
-  // counted) and not at rest (0.22em is where it ends).
+  // counted) and not at rest (scaleX(1.28) is where it ends).
   expect(state.name).toBe("launchSplashWord");
   expect(parseFloat(state.elapsed)).toBeGreaterThanOrEqual(400);
   expect(state.progress).toBeGreaterThanOrEqual(400 / 900);
   expect(state.progress).toBeLessThan(1);
-  expect(state.spacing).toBeGreaterThan(0.22 * state.fontSize);
+  expect(state.scaleX).toBeGreaterThan(1.28);
+  expect(state.scaleX).toBeLessThanOrEqual(1.44);
   // And the marks are gone once the overlay is.
   await page.waitForFunction(() => !document.querySelector(".launch-splash"), null, { timeout: 8_000 });
   const after = await page.evaluate(() => ({
