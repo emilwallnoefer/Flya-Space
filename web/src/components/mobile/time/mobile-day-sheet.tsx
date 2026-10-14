@@ -147,7 +147,7 @@ export function MobileDaySheet({
 
         <div>
           <span className="mb-1.5 block text-xs text-ink-4">Day type</span>
-          <div role="radiogroup" aria-label="Day type" className="grid grid-cols-2 gap-1.5 rounded-xl bg-glass/8 p-1.5">
+          <div role="radiogroup" aria-label="Day type" className="grid grid-cols-4 gap-1 rounded-xl bg-glass/8 p-1">
             {(
               [
                 { key: "normal", label: "Normal", active: "bg-raised text-ink shadow-sm" },
@@ -167,7 +167,7 @@ export function MobileDaySheet({
                   setFormPublicHoliday(opt.key === "public_holiday");
                   setFormSickLeave(opt.key === "sick");
                 }}
-                className={cn("min-h-10 rounded-lg px-2 text-sm font-medium transition disabled:opacity-50", dayType === opt.key ? opt.active : "text-ink-4")}
+                className={cn("min-h-10 rounded-lg px-1 py-1 text-xs font-medium leading-tight transition disabled:opacity-50", dayType === opt.key ? opt.active : "text-ink-4")}
               >
                 {opt.label}
               </button>
