@@ -26,6 +26,15 @@ describe("todayStatus", () => {
     expect(s).toEqual({ value: "8h 30m", sub: "08:00–17:00", tone: "positive", off: false });
   });
 
+  it("says a day paid from the overtime bank is compensated", () => {
+    expect(todayStatus(day({ comp_mins: 504 }), "2026-10-14")).toEqual({ value: "Compensated", sub: "8h 24m", tone: "positive", off: true });
+  });
+
+  it("shows the compensated part next to the hours when both exist", () => {
+    const s = todayStatus(day({ net_mins: 300, comp_mins: 204, start_time: "09:00", stop_time: "14:00" }), "2026-10-14");
+    expect(s).toEqual({ value: "5h 00m", sub: "09:00–14:00 · 3h 24m comp", tone: "positive", off: false });
+  });
+
   it("names the kind of day off instead of showing an empty dash", () => {
     expect(todayStatus(day({ holiday: true }), "2026-10-14")).toMatchObject({ value: "Vacation", sub: "Day off", off: true });
     expect(todayStatus(day({ public_holiday: true }), "2026-10-14")).toMatchObject({ value: "Holiday", sub: "Day off", off: true });
