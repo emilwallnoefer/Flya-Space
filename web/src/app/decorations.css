@@ -272,6 +272,13 @@
   content-visibility: auto;
   contain-intrinsic-size: auto 3.25rem;
 }
+/* `content-visibility: auto` implies paint containment, which clips the
+ * floating action bar where it rises above the bubble into the row before.
+ * A hovered or focused row is on screen anyway, so lifting it costs nothing. */
+.chat-msg-row:hover,
+.chat-msg-row:focus-within {
+  content-visibility: visible;
+}
 
 /* Unread count on the Team chat pill and the phone's Chat tab. Its own class,
  * not Tailwind colour utilities, because the neu skin washes every
