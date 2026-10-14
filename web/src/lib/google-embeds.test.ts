@@ -25,7 +25,7 @@ describe("sheetEmbed", () => {
   it("embeds the editor with menus, on the configured tab", () => {
     const urls = sheetEmbed(ID, "365898566")!;
     expect(urls.kind).toBe("sheet");
-    expect(urls.embed).toBe(`https://docs.google.com/spreadsheets/d/${ID}/edit?rm=embedded#gid=365898566`);
+    expect(urls.embed).toBe(`https://docs.google.com/spreadsheets/d/${ID}/edit#gid=365898566`);
     expect(urls.open).toBe(`https://docs.google.com/spreadsheets/d/${ID}/edit#gid=365898566`);
   });
 
@@ -37,7 +37,7 @@ describe("sheetEmbed", () => {
   });
 
   it("falls back to the first tab when the gid is missing or not a number", () => {
-    expect(sheetEmbed(ID, undefined)!.embed).toBe(`https://docs.google.com/spreadsheets/d/${ID}/edit?rm=embedded`);
+    expect(sheetEmbed(ID, undefined)!.embed).toBe(`https://docs.google.com/spreadsheets/d/${ID}/edit`);
     expect(sheetEmbed(ID, "abc")!.embed).not.toContain("gid");
   });
 
