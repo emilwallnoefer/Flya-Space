@@ -20,6 +20,15 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-14-sheet-comments",
+    date: "Oct 14, 2026",
+    title: "Comments in Mission planning",
+    highlights: [
+      "Mission planning and Fleet management now show cell comments, and you can add your own, right in the app",
+      "Google's title bar is back on top of the sheet; that is the price of comments",
+    ],
+  },
+  {
     version: "2026-10-12-phone-tour",
     date: "Oct 12, 2026",
     title: "A tour of the phone app",

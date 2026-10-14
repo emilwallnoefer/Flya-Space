@@ -28,9 +28,12 @@
  * that is also signed in; iOS hands such a link to the Sheets / Forms app when
  * it is installed.
  *
- * Sheets use `rm=embedded` (keeps menus and the format toolbar; `rm=minimal`
- * drops them). Forms use `embedded=true`. The two calendar sheets open scrolled
- * to today: the panel asks `/api/google-embeds/today` for the cell and adds it
+ * Sheets load Google's full editor (no `rm=` render mode). `rm=embedded`
+ * hides the title bar and keeps the menus, but it also drops the comment
+ * layer: no comment markers on cells, no reading them, no "Comment" on a
+ * cell (reported 2026-10-14). The planning calendar runs on comments, so
+ * the full editor it is, title bar and all. Forms use `embedded=true`.
+ * The two calendar sheets open scrolled to today: the panel asks `/api/google-embeds/today` for the cell and adds it
  * as `range=` to the URL (`withRange`), the only way to steer a cross-origin frame.
  */
 
@@ -77,7 +80,7 @@ export function sheetEmbed(
   const tab = gid?.trim() && /^\d+$/.test(gid.trim()) ? `#gid=${gid.trim()}` : "";
   const base = `https://docs.google.com/spreadsheets/d/${id}/edit`;
   const open = `${base}${tab}`;
-  return { kind: "sheet", today, embed: `${base}?rm=embedded${tab}`, open, signIn: signInTo(open) };
+  return { kind: "sheet", today, embed: `${base}${tab}`, open, signIn: signInTo(open) };
 }
 
 const CELL_PATTERN = /^[A-Z]{1,3}[1-9]\d{0,6}$/;
