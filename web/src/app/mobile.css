@@ -29,8 +29,22 @@ html[data-device="phone"] body {
   padding-bottom: calc(var(--m-tabbar) + var(--safe-bottom) + 1rem);
 }
 
-/* Chat action pills (vote / edit / delete / mark done) are desktop-sized
- * 22px chips; on a phone they are always visible and tapped, not hovered. */
+/* Chat action pills (reply / vote / edit / delete / mark done) are
+ * desktop-sized 22px chips; on a phone they are tapped, not hovered, and stay
+ * hidden until the message is long-pressed (`use-long-press-actions.ts`). */
+html[data-device="phone"] .chat-msg-row:not([data-actions-open]) .chat-actions-row {
+  display: none;
+}
+/* The hold is ours: no iOS callout or text selection under the finger. */
+html[data-device="phone"] .chat-msg-row {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+html[data-device="phone"] .chat-msg-row textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
 html[data-device="phone"] .chat-actions-row > button {
   min-height: 2rem;
   padding-inline: 0.625rem;

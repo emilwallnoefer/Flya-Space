@@ -2,6 +2,7 @@
 
 import { AnimatePresence, m } from "framer-motion";
 import { SHEET_EASE } from "../screen";
+import { useLongPressActions } from "./use-long-press-actions";
 import { type ReactNode, useEffect, useRef } from "react";
 import { CertificateRequestModal } from "@/components/chat/certificate-request-modal";
 import { MentionPicker, ReplyStrip } from "@/components/chat/composer-extras";
@@ -91,6 +92,7 @@ export function MobileChatScreen({ isAdmin, onClose }: { isAdmin: boolean; onClo
   const viewport = useVisualViewport(true);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => lockPageScroll(), []);
+  const { bindMessage, onListClick } = useLongPressActions();
 
   return (
     <>
@@ -128,7 +130,7 @@ export function MobileChatScreen({ isAdmin, onClose }: { isAdmin: boolean; onClo
         </div>
 
         <div className="relative min-h-0 flex-1">
-          <div ref={scrollRef} onScroll={handleScroll} className="absolute inset-0 overflow-y-auto overscroll-contain px-3 py-3 [touch-action:pan-y]">
+          <div ref={scrollRef} onScroll={handleScroll} onClick={onListClick} className="absolute inset-0 overflow-y-auto overscroll-contain px-3 py-3 [touch-action:pan-y]">
            <div ref={contentRef} className="space-y-3">
             {hasMoreHistory ? (
               <div className="flex justify-center pb-2">
@@ -161,7 +163,7 @@ export function MobileChatScreen({ isAdmin, onClose }: { isAdmin: boolean; onClo
                       previous.kind !== msg.kind ||
                       new Date(msg.created_at).getTime() - new Date(previous.created_at).getTime() > 5 * 60 * 1000;
                     items.push(
-                      <m.div key={msg.id} className="chat-msg-row" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18, ease: "easeOut" }}>
+                      <m.div key={msg.id} className="chat-msg-row" {...bindMessage(msg.id)} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18, ease: "easeOut" }}>
                         <MessageRow
                           message={msg}
                           isMe={msg.sender_id === currentUserId}

@@ -20,6 +20,15 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-15-chat-long-press",
+    date: "Oct 15, 2026",
+    title: "Phone chat: long-press for actions",
+    highlights: [
+      "On the phone, Reply, votes, Edit, Delete and Mark done stay hidden until you long-press a message",
+      "Tap anywhere in the chat to hide them again",
+    ],
+  },
+  {
     version: "2026-10-14-chat-badge",
     date: "Oct 14, 2026",
     title: "Team chat: badges, @-mentions and replies",
