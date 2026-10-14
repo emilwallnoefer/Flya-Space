@@ -142,3 +142,11 @@ export function TrashIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+export function ReplyIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h11a7 7 0 017 7v4" />
+    </svg>
+  );
+}

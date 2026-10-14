@@ -21,36 +21,51 @@ export function MobileTabBar({
   availableModules,
   onSelect,
   hidden = false,
+  chatUnread = 0,
 }: {
   active: MobileTab | null;
   availableModules: ModuleKey[];
   onSelect: (tab: MobileTab) => void;
   hidden?: boolean;
+  /** New chat messages since the chat was last open; a red badge on the Chat tab. */
+  chatUnread?: number;
 }) {
   if (hidden) return null;
-  const items: Array<{ key: MobileTab; label: string; icon: ReactNode }> = [
+  const items: Array<{ key: MobileTab; label: string; icon: ReactNode; badge?: number }> = [
     { key: "time", label: "Time", icon: <IconClock className="h-6 w-6" /> },
     ...(availableModules.includes("mail") ? [{ key: "mail" as const, label: "Mail", icon: <IconMail className="h-6 w-6" /> }] : []),
     ...(availableModules.includes("fleet") ? [{ key: "fleet" as const, label: "Fleet", icon: <IconDrone className="h-6 w-6" /> }] : []),
-    { key: "chat", label: "Chat", icon: <ChatBubbleIcon className="h-6 w-6" /> },
+    { key: "chat", label: "Chat", icon: <ChatBubbleIcon className="h-6 w-6" />, badge: chatUnread },
   ];
   return (
     <nav className="m-tabbar fixed inset-x-0 bottom-0 z-[95] flex items-stretch border-t border-glass/10 bg-surface pb-safe" aria-label="Workspace" data-launch-late>
       {items.map((item) => {
         const isActive = item.key === active;
+        const badge = item.badge ?? 0;
         return (
           <button
             key={item.key}
             type="button"
             onClick={() => onSelect(item.key)}
-            aria-label={item.label}
+            aria-label={badge > 0 ? `${item.label}, ${badge} new ${badge === 1 ? "message" : "messages"}` : item.label}
             aria-current={isActive ? "page" : undefined}
             className={cn(
               "flex min-h-14 min-w-0 flex-1 items-center justify-center px-1 transition",
               isActive ? "text-accent-soft" : "text-ink-4 active:text-ink-2",
             )}
           >
-            {item.icon}
+            <span className="relative inline-flex">
+              {item.icon}
+              {badge > 0 ? (
+                <span
+                  key={`unread-${badge}`}
+                  className="chat-unread-badge absolute -right-2.5 -top-1.5 h-[1.125rem] min-w-[1.125rem] px-1 text-[10px]"
+                  aria-hidden
+                >
+                  {badge > 99 ? "99+" : badge}
+                </span>
+              ) : null}
+            </span>
           </button>
         );
       })}

@@ -3,6 +3,7 @@
 import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import type { CertificateRequestInput } from "@/lib/certificate-request";
+import type { ChatMember } from "@/lib/chat-mentions";
 
 /**
  * Team Chat client helpers.
@@ -113,6 +114,8 @@ export type ChatMessageRow = {
   done_at: string | null;
   done_by: string | null;
   edited_at: string | null;
+  /** The message this one replies to (`supabase/2026-10-14-chat-replies.sql`); null once that message is deleted. */
+  reply_to: string | null;
 };
 
 export type ChatVoteRow = {
@@ -140,8 +143,30 @@ export type TypingPayload = {
   is_typing: boolean;
 };
 
-const MESSAGE_COLUMNS =
+const BASE_MESSAGE_COLUMNS =
   "id, sender_id, sender_email, body, attachment_path, attachment_name, attachment_type, attachment_size, created_at, kind, done_at, done_by, edited_at";
+
+/**
+ * `reply_to` arrived with `supabase/2026-10-14-chat-replies.sql`. Until that is
+ * applied, selecting it fails with 42703 (undefined column) and would take the
+ * whole chat down; so the first such error turns replies off for this page
+ * load and the query is retried without the column. The UI reads
+ * `chatRepliesAvailable()` to hide the Reply action meanwhile.
+ */
+let repliesAvailable = true;
+export function chatRepliesAvailable(): boolean {
+  return repliesAvailable;
+}
+function messageColumns(): string {
+  return repliesAvailable ? `${BASE_MESSAGE_COLUMNS}, reply_to` : BASE_MESSAGE_COLUMNS;
+}
+function isMissingReplyColumn(error: { code?: string; message?: string } | null): boolean {
+  return Boolean(error && error.code === "42703" && /reply_to/.test(error.message ?? ""));
+}
+/** Rows read without the column still satisfy `ChatMessageRow`. */
+function withReplyField<T extends Record<string, unknown>>(row: T): T & { reply_to: string | null } {
+  return { ...row, reply_to: typeof row.reply_to === "string" ? row.reply_to : null };
+}
 
 let _client: SupabaseClient | null = null;
 function client(): SupabaseClient {
@@ -168,17 +193,24 @@ export async function fetchChatHistory(opts: FetchHistoryOptions = {}): Promise<
   const supabase = client();
   const limit = opts.limit ?? (opts.before || opts.after ? CHAT_PAGE_SIZE : CHAT_HISTORY_LIMIT);
 
-  let q = supabase
-    .from("chat_messages")
-    .select(MESSAGE_COLUMNS)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (opts.before) q = q.lt("created_at", opts.before);
-  if (opts.after) q = q.gt("created_at", opts.after);
+  const run = async () => {
+    let q = supabase
+      .from("chat_messages")
+      .select(messageColumns())
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (opts.before) q = q.lt("created_at", opts.before);
+    if (opts.after) q = q.gt("created_at", opts.after);
+    return q;
+  };
 
-  const { data, error } = await q;
+  let { data, error } = await run();
+  if (isMissingReplyColumn(error)) {
+    repliesAvailable = false;
+    ({ data, error } = await run());
+  }
   if (error) throw error;
-  return ((data ?? []) as ChatMessageRow[]).slice().reverse();
+  return ((data ?? []) as unknown as Array<Record<string, unknown>>).map(withReplyField).reverse() as unknown as ChatMessageRow[];
 }
 
 /**
@@ -221,6 +253,8 @@ type SendInput = {
     type: string;
     size: number;
   };
+  /** Id of the message this one answers. */
+  replyTo?: string | null;
 };
 
 export async function sendChatMessage(input: SendInput): Promise<ChatMessageRow> {
@@ -246,13 +280,22 @@ export async function sendChatMessage(input: SendInput): Promise<ChatMessageRow>
     kind: input.kind ?? "message",
   };
 
-  const { data, error } = await supabase
-    .from("chat_messages")
-    .insert(insertRow)
-    .select(MESSAGE_COLUMNS)
-    .single();
+  const run = () => {
+    const row: Record<string, unknown> = repliesAvailable ? { ...insertRow, reply_to: input.replyTo ?? null } : insertRow;
+    return supabase
+      .from("chat_messages")
+      .insert(row)
+      .select(messageColumns())
+      .single();
+  };
+
+  let { data, error } = await run();
+  if (isMissingReplyColumn(error)) {
+    repliesAvailable = false;
+    ({ data, error } = await run());
+  }
   if (error) throw error;
-  return data as ChatMessageRow;
+  return withReplyField(data as unknown as Record<string, unknown>) as unknown as ChatMessageRow;
 }
 
 export async function editChatMessage(messageId: string, body: string): Promise<ChatMessageRow> {
@@ -263,10 +306,10 @@ export async function editChatMessage(messageId: string, body: string): Promise<
     .from("chat_messages")
     .update({ body: trimmed, edited_at: new Date().toISOString() })
     .eq("id", messageId)
-    .select(MESSAGE_COLUMNS)
+    .select(messageColumns())
     .single();
   if (error) throw error;
-  return data as ChatMessageRow;
+  return withReplyField(data as unknown as Record<string, unknown>) as unknown as ChatMessageRow;
 }
 
 export async function deleteChatMessage(messageId: string): Promise<void> {
@@ -612,6 +655,33 @@ export function formatChatTimestamp(iso: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/** The people who can be @-mentioned (every role holder), from the server. */
+export async function fetchChatMembers(): Promise<ChatMember[]> {
+  const response = await fetch("/api/chat/members", { credentials: "same-origin" });
+  if (!response.ok) throw new Error("Could not load the team list.");
+  const payload = (await response.json()) as { members: ChatMember[] };
+  return payload.members;
+}
+
+/**
+ * Tells the people a saved message @-mentions (a push to their phones). Fire
+ * and forget: the message is already sent, and a failed notice should not
+ * read as a failed message.
+ */
+export async function notifyMentions(messageId: string, userIds: string[]): Promise<void> {
+  if (userIds.length === 0) return;
+  try {
+    await fetch("/api/chat/mention", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message_id: messageId, user_ids: userIds }),
+    });
+  } catch {
+    // Best effort.
+  }
 }
 
 export function shortNameFromEmail(email: string): string {
