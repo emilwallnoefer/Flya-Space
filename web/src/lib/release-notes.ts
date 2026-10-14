@@ -20,6 +20,17 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-14-chat-badge",
+    date: "Oct 14, 2026",
+    title: "Team chat: badges, @-mentions and replies",
+    highlights: [
+      "The Team chat button shows a red badge with the number of new messages, in every module and on the phone's Chat tab",
+      "Opening the chat always lands on the latest message",
+      "Type @ to tag a colleague; they get a notification on any device with notifications on",
+      "Reply to a message: the original is quoted above your answer, tap it to jump there",
+    ],
+  },
+  {
     version: "2026-10-14-sheet-comments",
     date: "Oct 14, 2026",
     title: "Comments in Mission planning",

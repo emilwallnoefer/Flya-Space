@@ -4,12 +4,13 @@ import { AnimatePresence, m } from "framer-motion";
 import { SHEET_EASE } from "../screen";
 import { type ReactNode, useEffect, useRef } from "react";
 import { CertificateRequestModal } from "@/components/chat/certificate-request-modal";
+import { MentionPicker, ReplyStrip } from "@/components/chat/composer-extras";
 import { ArrowDownIcon, ArrowUpIcon, PaperclipIcon, SendIcon, SpinnerIcon, XMarkIcon } from "@/components/chat/icons";
 import { MessageRow } from "@/components/chat/message-row";
 import { DaySeparator, FilterStrip, KindToggleRow, PresenceAvatars, TypingStrip } from "@/components/chat/panel-chrome";
 import { useChat } from "@/components/chat/use-chat";
 import { Toast } from "@/components/ui";
-import { dayKeyFromIso, formatDaySeparator, messageKindLabel } from "@/lib/chat";
+import { chatRepliesAvailable, dayKeyFromIso, formatDaySeparator, messageKindLabel } from "@/lib/chat";
 import { lockPageScroll } from "@/lib/scroll-lock";
 import { useVisualViewport } from "@/lib/use-visual-viewport";
 
@@ -34,19 +35,32 @@ export function MobileChatScreen({ isAdmin, onClose }: { isAdmin: boolean; onClo
     setPresenceOpen,
     otherTypingNames,
     visibleMessages,
+    messagesById,
     voteSummary,
     hasMoreHistory,
     loadingMore,
     handleLoadOlder,
     scrollRef,
+    contentRef,
     handleScroll,
     scrollToBottom,
     isAtBottom,
     pendingNew,
     draft,
+    textareaRef,
     handleDraftChange,
     handleKeyDown,
+    handleCaretMove,
     handlePaste,
+    members,
+    mentionCandidates,
+    mentionIndex,
+    setMentionIndex,
+    pickMention,
+    replyTarget,
+    setReplyTarget,
+    startReply,
+    jumpToMessage,
     pendingKind,
     setPendingKind,
     sendState,
@@ -114,7 +128,8 @@ export function MobileChatScreen({ isAdmin, onClose }: { isAdmin: boolean; onClo
         </div>
 
         <div className="relative min-h-0 flex-1">
-          <div ref={scrollRef} onScroll={handleScroll} className="absolute inset-0 space-y-3 overflow-y-auto overscroll-contain px-3 py-3 [touch-action:pan-y]">
+          <div ref={scrollRef} onScroll={handleScroll} className="absolute inset-0 overflow-y-auto overscroll-contain px-3 py-3 [touch-action:pan-y]">
+           <div ref={contentRef} className="space-y-3">
             {hasMoreHistory ? (
               <div className="flex justify-center pb-2">
                 <button type="button" onClick={() => void handleLoadOlder()} disabled={loadingMore} className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-glass/10 bg-glass/5 px-3 text-xs text-ink-3 disabled:opacity-60">
@@ -154,6 +169,11 @@ export function MobileChatScreen({ isAdmin, onClose }: { isAdmin: boolean; onClo
                           isAdmin={isAdmin}
                           isEditing={editingId === msg.id}
                           votes={voteSummary.get(msg.id)}
+                          members={members}
+                          currentUserId={currentUserId}
+                          replyTo={msg.reply_to ? (messagesById.get(msg.reply_to) ?? "missing") : undefined}
+                          onReply={chatRepliesAvailable() ? () => startReply(msg) : undefined}
+                          onJumpTo={jumpToMessage}
                           onStartEdit={() => setEditingId(msg.id)}
                           onCancelEdit={() => setEditingId(null)}
                           onSaveEdit={(body) => handleSaveEdit(msg.id, body)}
@@ -169,6 +189,7 @@ export function MobileChatScreen({ isAdmin, onClose }: { isAdmin: boolean; onClo
                 })()}
               </AnimatePresence>
             )}
+           </div>
           </div>
           <AnimatePresence>
             {!isAtBottom && pendingNew > 0 ? (
@@ -202,18 +223,25 @@ export function MobileChatScreen({ isAdmin, onClose }: { isAdmin: boolean; onClo
               </button>
             </div>
           ) : null}
-          <div className="border-t border-glass/10 bg-panel px-3 pt-2 pb-[max(0.5rem,var(--safe-bottom))]">
+          <div className="relative border-t border-glass/10 bg-panel px-3 pt-2 pb-[max(0.5rem,var(--safe-bottom))]">
+            <MentionPicker candidates={mentionCandidates} activeIndex={mentionIndex} onPick={pickMention} onHover={setMentionIndex} />
             <KindToggleRow pendingKind={pendingKind} setPendingKind={setPendingKind} onOpenCertificate={() => setCertificateOpen(true)} />
-            <div className="mt-2 flex items-end gap-1.5 rounded-2xl border border-glass/12 bg-glass/5 px-1.5 py-1 focus-within:border-accent/50">
+            <div className="mt-2">
+              <ReplyStrip target={replyTarget} currentUserId={currentUserId} onCancel={() => setReplyTarget(null)} />
+            </div>
+            <div className="flex items-end gap-1.5 rounded-2xl border border-glass/12 bg-glass/5 px-1.5 py-1 focus-within:border-accent/50">
               <button type="button" aria-label="Attach file" onClick={() => fileInputRef.current?.click()} disabled={sendState === "sending"} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-ink-3 active:bg-glass/10 disabled:opacity-50">
                 <PaperclipIcon className="h-5 w-5" />
               </button>
               <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => void handleAttachmentPick(e)} />
               <textarea
+                ref={textareaRef}
                 rows={1}
                 value={draft}
                 onChange={handleDraftChange}
                 onKeyDown={handleKeyDown}
+                onKeyUp={handleCaretMove}
+                onClick={handleCaretMove}
                 onPaste={handlePaste}
                 placeholder={pendingKind === "message" ? "Message your team…" : `Posting as ${messageKindLabel(pendingKind).toLowerCase()}…`}
                 className="max-h-32 min-h-11 flex-1 resize-none border-0 bg-transparent px-1 py-2.5 text-base text-ink placeholder:text-ink-5 focus:outline-none focus:ring-0"

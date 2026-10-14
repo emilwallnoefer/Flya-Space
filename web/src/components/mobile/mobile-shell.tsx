@@ -30,6 +30,7 @@ import { MobileTeamScreen } from "./team/mobile-team-screen";
 import { useFieldStats } from "./team/use-field-stats";
 import { MobileAvatar, MobileButton, MobileGroup, MobileRow, MobileSheet, MobileTopBar } from "./primitives";
 import { useHomeSummary } from "./use-home-summary";
+import { useChatUnreadCount } from "@/components/chat/hooks/use-chat-unread";
 
 // Chat pulls supabase-js realtime into the browser; it loads only when opened.
 const MobileChatScreen = dynamic(() => import("./chat/mobile-chat-screen").then((m) => m.MobileChatScreen), { ssr: false });
@@ -94,6 +95,19 @@ export function MobileShell({
     initialModule && availableModules.includes(initialModule) ? initialModule : null,
   );
   const [chatOpen, setChatOpen] = useState(false);
+  // The Chat tab's red badge: counted without loading the chat (see the hook).
+  const chatUnread = useChatUnreadCount(chatOpen);
+  // Opened from a mention notification (`/dashboard?chat=open`): straight to
+  // the chat. In an effect, not the initial state, because this shell is
+  // server-rendered and the URL is only known in the browser.
+  useEffect(() => {
+    if (readViewParam("chat", ["open"] as const) !== "open") return;
+    const frame = requestAnimationFrame(() => {
+      setChatOpen(true);
+      writeViewParams({ chat: null });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const [moreOpen, setMoreOpen] = useState(false);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -353,7 +367,7 @@ export function MobileShell({
       )}
       </MobileScreen>
 
-      <MobileTabBar active={activeTab} availableModules={availableModules} onSelect={onTab} hidden={embedOpen || chatOpen} />
+      <MobileTabBar active={activeTab} availableModules={availableModules} onSelect={onTab} hidden={embedOpen || chatOpen} chatUnread={chatUnread} />
 
       <AnimatePresence>{chatOpen ? <MobileChatScreen key="chat" isAdmin={isAdmin} onClose={() => setChatOpen(false)} /> : null}</AnimatePresence>
 

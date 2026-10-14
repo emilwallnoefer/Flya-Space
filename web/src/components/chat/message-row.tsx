@@ -11,12 +11,14 @@ import {
   type MessageKind,
   type VoteSummary,
 } from "@/lib/chat";
+import { excerpt, splitMentions, type ChatMember } from "@/lib/chat-mentions";
 import { AttachmentBlock } from "./attachment-block";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
   CheckIcon,
   PencilSquareIcon,
+  ReplyIcon,
   TrashIcon,
   UndoIcon,
 } from "./icons";
@@ -36,6 +38,16 @@ type MessageRowProps = {
   isAdmin: boolean;
   isEditing: boolean;
   votes?: VoteSummary;
+  /** The team, for rendering @-mentions; empty until loaded (plain text then). */
+  members?: ChatMember[];
+  /** The viewer, so a mention of them stands out. */
+  currentUserId?: string | null;
+  /**
+   * The message this one answers: the row when it is loaded, `"missing"` when
+   * it is older than the loaded history (or was deleted), undefined for a
+   * message that is not a reply.
+   */
+  replyTo?: ChatMessageRow | "missing";
   onStartEdit: () => void;
   onCancelEdit: () => void;
   onSaveEdit: (body: string) => void;
@@ -43,7 +55,11 @@ type MessageRowProps = {
   onVote: (next: -1 | 1) => void;
   onMarkDone: (done: boolean) => void;
   onOpenImage: (url: string, name: string) => void;
+  onReply?: () => void;
+  onJumpTo?: (messageId: string) => void;
 };
+
+const NO_MEMBERS: ChatMember[] = [];
 
 export function MessageRow({
   message,
@@ -52,6 +68,9 @@ export function MessageRow({
   isAdmin,
   isEditing,
   votes,
+  members = NO_MEMBERS,
+  currentUserId = null,
+  replyTo,
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
@@ -59,6 +78,8 @@ export function MessageRow({
   onVote,
   onMarkDone,
   onOpenImage,
+  onReply,
+  onJumpTo,
 }: MessageRowProps) {
   const initials = initialsFromEmail(message.sender_email);
   const name = shortNameFromEmail(message.sender_email);
@@ -67,7 +88,10 @@ export function MessageRow({
   const isDone = Boolean(message.done_at);
 
   return (
-    <div className={`chat-message-row group flex gap-2 ${isMe ? "flex-row-reverse" : "flex-row"}`}>
+    <div
+      className={`chat-message-row group flex gap-2 ${isMe ? "flex-row-reverse" : "flex-row"}`}
+      data-chat-message-id={message.id}
+    >
       <div className="w-7 shrink-0">
         {showHeader ? (
           <span
@@ -114,12 +138,13 @@ export function MessageRow({
         {/* Relative wrapper: anchors the floating action bar to the bubble itself. */}
         <div className="relative min-w-0 max-w-full">
           <div
-            className={`rounded-2xl px-3 py-2 text-sm leading-relaxed transition ${
+            className={`chat-bubble rounded-2xl px-3 py-2 text-sm leading-relaxed transition ${
               isMe
                 ? "rounded-br-sm bg-accent/90 text-slate-900"
                 : "rounded-bl-sm bg-glass/8 text-ink"
             } ${isDone ? "opacity-65 saturate-50" : ""}`}
           >
+            {replyTo ? <ReplyQuote target={replyTo} darkText={isMe} currentUserId={currentUserId} onJumpTo={onJumpTo} /> : null}
             {isEditing ? (
               <EditField initialBody={message.body ?? ""} onSave={onSaveEdit} onCancel={onCancelEdit} />
             ) : message.body ? (
@@ -128,7 +153,7 @@ export function MessageRow({
                   isDone ? "line-through decoration-ink-4/70 decoration-2" : ""
                 }`}
               >
-                {message.body}
+                <MessageBody body={message.body} members={members} darkText={isMe} currentUserId={currentUserId} />
               </p>
             ) : null}
             {message.attachment_path ? (
@@ -148,11 +173,84 @@ export function MessageRow({
               onStartEdit={onStartEdit}
               onDelete={onDelete}
               onMarkDone={onMarkDone}
+              onReply={onReply}
             />
           ) : null}
         </div>
       </div>
     </div>
+  );
+}
+
+/** The body with `@Name` mentions as chips; the viewer's own name stands out. */
+function MessageBody({
+  body,
+  members,
+  darkText,
+  currentUserId,
+}: {
+  body: string;
+  members: ChatMember[];
+  darkText: boolean;
+  currentUserId: string | null;
+}) {
+  const parts = splitMentions(body, members);
+  if (parts.length === 1 && parts[0].type === "text") return <>{body}</>;
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (part.type === "text") return <span key={index}>{part.value}</span>;
+        const me = part.member.id === currentUserId;
+        return (
+          <span
+            key={index}
+            className={`rounded-md px-1 font-semibold ${
+              darkText
+                ? "bg-slate-900/15 text-slate-900"
+                : me
+                  ? "bg-amber-400/25 text-warn"
+                  : "bg-accent/18 text-accent-soft"
+            }`}
+            title={part.member.email}
+          >
+            {part.value}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+/** The quoted original above a reply; tapping it scrolls to the message when it is loaded. */
+function ReplyQuote({
+  target,
+  darkText,
+  currentUserId,
+  onJumpTo,
+}: {
+  target: ChatMessageRow | "missing";
+  darkText: boolean;
+  currentUserId: string | null;
+  onJumpTo?: (messageId: string) => void;
+}) {
+  const tone = darkText ? "border-slate-900/50 bg-slate-900/10 text-slate-900" : "border-accent/70 bg-glass/8 text-ink-2";
+  if (target === "missing") {
+    return (
+      <p className={`mb-1.5 rounded-lg border-l-2 px-2 py-1 text-xs italic ${tone} opacity-80`}>Replying to an earlier message</p>
+    );
+  }
+  const who = target.sender_id === currentUserId ? "You" : shortNameFromEmail(target.sender_email);
+  const text = excerpt(target.body, target.attachment_name, 110) || "Message";
+  return (
+    <button
+      type="button"
+      onClick={() => onJumpTo?.(target.id)}
+      className={`mb-1.5 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-xs transition hover:brightness-110 ${tone}`}
+      aria-label={`Replying to ${who}: ${text}. Show the original.`}
+    >
+      <span className="block font-semibold">{who}</span>
+      <span className="block truncate opacity-85">{text}</span>
+    </button>
   );
 }
 
@@ -166,6 +264,7 @@ function MessageActions({
   onStartEdit,
   onDelete,
   onMarkDone,
+  onReply,
 }: {
   isMe: boolean;
   isAdmin: boolean;
@@ -176,14 +275,26 @@ function MessageActions({
   onStartEdit: () => void;
   onDelete: () => void;
   onMarkDone: (done: boolean) => void;
+  onReply?: () => void;
 }) {
   const showVotes = isVotableKind(kind);
   const showMark = isMarkableKind(kind) && isAdmin;
-  if (!showVotes && !showMark && !isMe) return null;
+  if (!showVotes && !showMark && !isMe && !onReply) return null;
 
   const mine = votes?.mine ?? 0;
   return (
     <div className={`chat-actions-row ${isMe ? "is-me" : "is-other"}`}>
+      {onReply ? (
+        <button
+          type="button"
+          onClick={onReply}
+          aria-label="Reply to this message"
+          className={`${ACTION_PILL_BASE} hover:border-glass/20 hover:bg-glass/10`}
+        >
+          <ReplyIcon className="h-3 w-3" />
+          <span>Reply</span>
+        </button>
+      ) : null}
       {showVotes ? (
         <>
           <button

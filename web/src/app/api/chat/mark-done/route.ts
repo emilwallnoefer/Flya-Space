@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     .update(update)
     .eq("id", message_id)
     .select(
-      "id, sender_id, sender_email, body, attachment_path, attachment_name, attachment_type, attachment_size, created_at, kind, done_at, done_by, edited_at",
+      "id, sender_id, sender_email, body, attachment_path, attachment_name, attachment_type, attachment_size, created_at, kind, done_at, done_by, edited_at, reply_to",
     )
     .single();
 

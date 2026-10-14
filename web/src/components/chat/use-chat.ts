@@ -15,8 +15,10 @@ import {
   CHAT_PAGE_SIZE,
   editChatMessage,
   fetchChatHistory,
+  fetchChatMembers,
   fetchVotesForMessages,
   markMessageDone,
+  notifyMentions,
   sendChatMessage,
   submitCertificateRequest,
   uploadChatAttachment,
@@ -25,7 +27,16 @@ import {
   type MessageKind,
 } from "@/lib/chat";
 import type { CertificateRequestInput } from "@/lib/certificate-request";
+import {
+  insertMention,
+  matchMembers,
+  mentionTokenAtCaret,
+  mentionedMemberIds,
+  type ChatMember,
+  type MentionToken,
+} from "@/lib/chat-mentions";
 import { playUiSound } from "@/lib/ui-sounds";
+import { writeViewParams } from "@/lib/view-params";
 import {
   ERROR_AUTO_DISMISS_MS,
   NEAR_BOTTOM_THRESHOLD_PX,
@@ -44,10 +55,14 @@ import { useChatVotes } from "./hooks/use-chat-votes";
  *  votes and undo-delete live in `./hooks/`; this orchestrator owns the message
  *  list, scroll/unread bookkeeping, composer, and the optimistic
  *  send/edit/mark-done flows, and wires the pieces together. */
-export function useChat({ bottomOffsetRem = 1, isAdmin = false, onClose }: ChatWidgetProps) {
+export function useChat({ isAdmin = false, onClose, pillHidden = false }: ChatWidgetProps) {
   // In menu mode (`onClose` given) the widget is mounted by a click, so it
-  // starts open; the floating-pill mode starts closed.
-  const [open, setOpen] = useState(onClose != null);
+  // starts open; the floating-pill mode starts closed — unless the page was
+  // opened from a mention notification (`/dashboard?chat=open`). The widget
+  // renders client-side only, so reading the URL here is safe.
+  const [open, setOpen] = useState(
+    () => onClose != null || (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("chat") === "open"),
+  );
   const [messages, setMessages] = useState<ChatMessageRow[]>([]);
   const [presence, setPresence] = useState<ChatPresenceUser[]>([]);
   const [draft, setDraft] = useState("");
@@ -77,9 +92,20 @@ export function useChat({ bottomOffsetRem = 1, isAdmin = false, onClose }: ChatW
   const [certificateOpen, setCertificateOpen] = useState(false);
   const [certificateSending, setCertificateSending] = useState(false);
   const [certificateSent, setCertificateSent] = useState(false);
+  // @-mentions: the team list (loaded once the panel first opens), the token
+  // under the caret, and which candidate the arrow keys point at.
+  const [members, setMembers] = useState<ChatMember[]>([]);
+  const [mentionToken, setMentionToken] = useState<MentionToken | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  // The message the next send answers (the "Replying to" strip).
+  const [replyTarget, setReplyTarget] = useState<ChatMessageRow | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  // The list's inner wrapper; watched for size changes so the view stays on the
+  // latest message while images and attachments finish laying out.
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const openRef = useRef(open);
   openRef.current = open;
   // Refs to keep handlers stable while reflecting latest values.
@@ -121,13 +147,63 @@ export function useChat({ bottomOffsetRem = 1, isAdmin = false, onClose }: ChatW
   });
 
   // Whenever the panel opens, jump to the latest message and clear unread.
+  // Opening always lands on the newest message, wherever the reader was last
+  // time, so "at bottom" is asserted here rather than left to the scroll
+  // handler (which only fires once something scrolls).
   useEffect(() => {
     if (!open) return;
     setUnread(0);
-    requestAnimationFrame(() => {
+    setPendingNew(0);
+    setIsAtBottom(true);
+    isAtBottomRef.current = true;
+    // Now (the list is already in the DOM when the history was loaded before
+    // opening), and again on the next frame for anything laid out after.
+    const jump = () => {
       const el = scrollRef.current;
       if (el) el.scrollTop = el.scrollHeight;
+    };
+    jump();
+    requestAnimationFrame(jump);
+  }, [open]);
+
+  // One scrollTop assignment on open is not enough: the history lands a moment
+  // later, images decode after that, and each one grows the list under the
+  // viewport. While the reader is at the bottom, follow every content resize
+  // so the latest message stays in view; once they scroll up, leave them be.
+  useEffect(() => {
+    if (!open) return;
+    const el = scrollRef.current;
+    const content = contentRef.current;
+    if (!el || !content || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (isAtBottomRef.current) el.scrollTop = el.scrollHeight;
     });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [open]);
+
+  // The team list for @-mentions: one request per widget mount, the first
+  // time the panel is open. A failure only means no picker.
+  const membersLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!open || membersLoadedRef.current) return;
+    membersLoadedRef.current = true;
+    let cancelled = false;
+    fetchChatMembers()
+      .then((list) => {
+        if (!cancelled) setMembers(list);
+      })
+      .catch(() => {
+        membersLoadedRef.current = false;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  // Opened from a notification: the `chat=open` param has done its job.
+  useEffect(() => {
+    if (open) writeViewParams({ chat: null });
   }, [open]);
 
   // While the panel is open, keep the persistent last-read mark at the newest
@@ -173,12 +249,14 @@ export function useChat({ bottomOffsetRem = 1, isAdmin = false, onClose }: ChatW
           // Don't discard a half-filled form mid-submit.
           if (!certificateSending) setCertificateOpen(false);
         } else if (editingId) setEditingId(null);
+        else if (mentionToken) setMentionToken(null);
+        else if (replyTarget) setReplyTarget(null);
         else setOpen(false);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, editingId, lightbox, certificateOpen, certificateSending]);
+  }, [open, editingId, lightbox, certificateOpen, certificateSending, mentionToken, replyTarget]);
 
   // Auto-dismiss errors after a few seconds.
   useEffect(() => {
@@ -273,9 +351,77 @@ export function useChat({ bottomOffsetRem = 1, isAdmin = false, onClose }: ChatW
       const value = event.target.value;
       setDraft(value);
       broadcastDraftTyping(value);
+      const token = mentionTokenAtCaret(value, event.target.selectionStart ?? value.length);
+      setMentionToken((prev) => {
+        if (!token) return null;
+        // A fresh token starts the list at the top; the same one keeps the row.
+        if (!prev || prev.start !== token.start) setMentionIndex(0);
+        return token;
+      });
     },
     [broadcastDraftTyping],
   );
+
+  /** People matching the token under the caret, never the writer themselves. */
+  const mentionCandidates = useMemo(() => {
+    if (!mentionToken || members.length === 0) return [];
+    return matchMembers(
+      members.filter((member) => member.id !== currentUserId),
+      mentionToken.query,
+    );
+  }, [mentionToken, members, currentUserId]);
+
+  // Keep the highlighted row inside the list as it shrinks.
+  useEffect(() => {
+    if (mentionIndex >= mentionCandidates.length) setMentionIndex(0);
+  }, [mentionCandidates.length, mentionIndex]);
+
+  const pickMention = useCallback(
+    (member: ChatMember) => {
+      if (!mentionToken) return;
+      const next = insertMention(draft, mentionToken, member);
+      setDraft(next.draft);
+      setMentionToken(null);
+      broadcastDraftTyping(next.draft);
+      // The caret goes after the inserted name once React has written the value.
+      requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(next.caret, next.caret);
+      });
+    },
+    [draft, mentionToken, broadcastDraftTyping],
+  );
+
+  /** Tell the people a saved message mentions. The sender never notifies themselves. */
+  const notifyMentionedPeople = useCallback(
+    (saved: ChatMessageRow) => {
+      const ids = mentionedMemberIds(saved.body, members).filter((id) => id !== saved.sender_id);
+      if (ids.length > 0) void notifyMentions(saved.id, ids);
+    },
+    [members],
+  );
+
+  const startReply = useCallback((message: ChatMessageRow) => {
+    setReplyTarget(message);
+    setEditingId(null);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, []);
+
+  /** Scroll a loaded message into view and light it up once (a reply's quote was tapped). */
+  const jumpToMessage = useCallback((messageId: string) => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const row = root.querySelector<HTMLElement>(`[data-chat-message-id="${messageId}"]`);
+    if (!row) return;
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+    row.classList.remove("chat-msg-flash");
+    // Restart the one-shot animation even when the same quote is tapped twice.
+    void row.offsetWidth;
+    row.classList.add("chat-msg-flash");
+    window.setTimeout(() => row.classList.remove("chat-msg-flash"), 1300);
+  }, []);
 
   /*
    * All mutating actions below follow the same pattern: update local state
@@ -294,6 +440,7 @@ export function useChat({ bottomOffsetRem = 1, isAdmin = false, onClose }: ChatW
       ? crypto.randomUUID()
       : `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const kindAtSend = pendingKind;
+    const replyToAtSend = replyTarget?.id ?? null;
     const optimistic: ChatMessageRow = {
       id,
       sender_id: currentUserId,
@@ -308,27 +455,32 @@ export function useChat({ bottomOffsetRem = 1, isAdmin = false, onClose }: ChatW
       edited_at: null,
       done_at: null,
       done_by: null,
+      reply_to: replyToAtSend,
     };
 
     setMessages((prev) => [...prev, optimistic]);
     setDraft("");
     setPendingKind("message");
+    setReplyTarget(null);
+    setMentionToken(null);
     setError(null);
     resetTyping();
     playUiSound("mailSend");
 
     void (async () => {
       try {
-        const saved = await sendChatMessage({ id, body: trimmed, kind: kindAtSend });
+        const saved = await sendChatMessage({ id, body: trimmed, kind: kindAtSend, replyTo: replyToAtSend });
         setMessages((prev) => prev.map((m) => (m.id === id ? saved : m)));
+        notifyMentionedPeople(saved);
       } catch (err) {
         setMessages((prev) => prev.filter((m) => m.id !== id));
         setDraft((current) => (current === "" ? trimmed : current));
         setPendingKind(kindAtSend);
+        if (replyToAtSend) setReplyTarget((current) => current ?? replyTarget);
         setError((err as Error).message || "Failed to send.");
       }
     })();
-  }, [draft, pendingKind, currentUserId, currentUserEmail, resetTyping]);
+  }, [draft, pendingKind, replyTarget, currentUserId, currentUserEmail, resetTyping, notifyMentionedPeople]);
 
   /*
    * Certificate requests are the one flow that is NOT optimistic. The server
@@ -376,6 +528,7 @@ export function useChat({ bottomOffsetRem = 1, isAdmin = false, onClose }: ChatW
       setError(null);
       const bodyAtPick = draft.trim() || undefined;
       const kindAtPick = pendingKind;
+      const replyToAtPick = replyTarget?.id ?? null;
       try {
         const uploaded = await uploadChatAttachment(file);
         const id = typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -395,10 +548,13 @@ export function useChat({ bottomOffsetRem = 1, isAdmin = false, onClose }: ChatW
           edited_at: null,
           done_at: null,
           done_by: null,
+          reply_to: replyToAtPick,
         };
         setMessages((prev) => [...prev, optimistic]);
         setDraft("");
         setPendingKind("message");
+        setReplyTarget(null);
+        setMentionToken(null);
         playUiSound("mailSend");
         setSendState("idle");
         void (async () => {
@@ -408,8 +564,10 @@ export function useChat({ bottomOffsetRem = 1, isAdmin = false, onClose }: ChatW
               body: bodyAtPick,
               kind: kindAtPick,
               attachment: uploaded,
+              replyTo: replyToAtPick,
             });
             setMessages((prev) => prev.map((m) => (m.id === id ? saved : m)));
+            notifyMentionedPeople(saved);
           } catch (err) {
             setMessages((prev) => prev.filter((m) => m.id !== id));
             setError((err as Error).message || "Failed to send.");
@@ -420,7 +578,7 @@ export function useChat({ bottomOffsetRem = 1, isAdmin = false, onClose }: ChatW
         setSendState("idle");
       }
     },
-    [draft, pendingKind, currentUserId, currentUserEmail],
+    [draft, pendingKind, replyTarget, currentUserId, currentUserEmail, notifyMentionedPeople],
   );
 
   const handleAttachmentPick = useCallback(
@@ -435,13 +593,45 @@ export function useChat({ bottomOffsetRem = 1, isAdmin = false, onClose }: ChatW
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      // While the mention picker is up, the keyboard drives it.
+      if (mentionCandidates.length > 0) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setMentionIndex((i) => (i + 1) % mentionCandidates.length);
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setMentionIndex((i) => (i - 1 + mentionCandidates.length) % mentionCandidates.length);
+          return;
+        }
+        if (e.key === "Enter" || e.key === "Tab") {
+          e.preventDefault();
+          pickMention(mentionCandidates[Math.min(mentionIndex, mentionCandidates.length - 1)]);
+          return;
+        }
+        // Escape is handled by the window listener (closes the picker first).
+      }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         handleSend();
       }
     },
-    [handleSend],
+    [handleSend, mentionCandidates, mentionIndex, pickMention],
   );
+
+  // The caret can move without the text changing (arrow keys, a tap); the
+  // picker follows it so it never sits open over a token the caret has left.
+  const handleCaretMove = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const token = mentionTokenAtCaret(el.value, el.selectionStart ?? el.value.length);
+    setMentionToken((prev) => {
+      if (!token) return prev ? null : prev;
+      if (prev && prev.start === token.start && prev.end === token.end) return prev;
+      return token;
+    });
+  }, []);
 
   const handleMarkDone = useCallback(
     (messageId: string, done: boolean) => {
@@ -522,10 +712,17 @@ export function useChat({ bottomOffsetRem = 1, isAdmin = false, onClose }: ChatW
 
   const onlineCount = presence.length;
 
+  /** Loaded messages by id, so a reply can show the message it answers. */
+  const messagesById = useMemo(() => {
+    const map = new Map<string, ChatMessageRow>();
+    for (const message of messages) map.set(message.id, message);
+    return map;
+  }, [messages]);
+
   return {
     // props echoed for the orchestrator
-    bottomOffsetRem,
     isAdmin,
+    pillHidden,
     // panel + connection state
     open,
     setOpen,
@@ -542,21 +739,36 @@ export function useChat({ bottomOffsetRem = 1, isAdmin = false, onClose }: ChatW
     otherTypingNames,
     // messages + pagination
     visibleMessages,
+    messagesById,
     voteSummary,
     hasMoreHistory,
     loadingMore,
     handleLoadOlder,
     // scroll bookkeeping
     scrollRef,
+    contentRef,
     handleScroll,
     scrollToBottom,
     isAtBottom,
     pendingNew,
     // composer
     draft,
+    textareaRef,
     handleDraftChange,
     handleKeyDown,
+    handleCaretMove,
     handlePaste,
+    // @-mentions
+    members,
+    mentionCandidates,
+    mentionIndex,
+    setMentionIndex,
+    pickMention,
+    // replies
+    replyTarget,
+    setReplyTarget,
+    startReply,
+    jumpToMessage,
     pendingKind,
     setPendingKind,
     sendState,

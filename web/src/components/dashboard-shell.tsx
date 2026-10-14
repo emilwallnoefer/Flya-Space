@@ -8,11 +8,9 @@ import { AuthNavbar } from "@/components/auth-navbar";
 import { OfflineGameCard } from "@/components/offline-game-card";
 import { PanelLoading } from "@/components/panel-loading";
 import { StreamedAdminPanel, StreamedFleetPanel } from "@/components/streamed-panels";
-import { ChatBubbleIcon } from "@/components/chat/icons";
 import { IconClock, IconDrone, IconMail } from "@/components/module-icons";
 import {
   BETA_BADGE_CLASS,
-  CHAT_PILL_CLASS,
   HOME_CARDS,
   HOME_CONTENT_CLASS,
   HOME_EYEBROW_CLASS,
@@ -55,14 +53,14 @@ const SettingsPanel = dynamic(
   () => import("@/components/settings-panel").then((m) => m.SettingsPanel),
   { ssr: false, loading: PanelLoading },
 );
-// Team chat opens from the floating pill and is mounted only while it is open.
-// It is what pulls supabase-js (realtime included) into the browser, and while
-// mounted it holds a postgres_changes subscription — a standing cost on the
-// database for every open dashboard tab, which the 0.5 GB instance cannot
-// spare (it swaps, and the first queries after a quiet spell stall for
-// seconds). So the pill itself is plain markup in the shell: nothing
-// chat-related loads or connects until someone clicks it, which is also why it
-// shows no unread count.
+// Team chat stays mounted (pill mode) for the whole dashboard session so the
+// pill can carry a live unread count: its realtime channel runs while the
+// panel is closed, and opening it lands on the newest message with nothing to
+// load. It is what pulls supabase-js (realtime included) into the browser, so
+// it still loads as its own chunk and only once the opening splash is over
+// (see launchDone); between 2026-09-28 and 2026-10-14 it was mounted only
+// while open to spare the 0.5 GB database instance a standing subscription per
+// tab — the owner chose the always-on badge over that saving.
 const ChatWidget = dynamic(() => import("@/components/chat-widget").then((m) => m.ChatWidget), {
   ssr: false,
 });
@@ -283,9 +281,7 @@ export function DashboardShell({
   // While it is up, the corner popups and the chat pill wait their turn.
   const [showPhoneTour, setShowPhoneTour] = useState(false);
   // The floating chat pill shares the bottom-right corner with the first-launch
-  // and "What's new" popups. Their height varies per release, so measure the
-  // visible one and lift the pill just above it instead of guessing a fixed rem.
-  const [chatOpen, setChatOpen] = useState(false);
+  // and "What's new" popups and steps aside while one is up (`pillHidden`).
   // The pill is fixed chrome above the launch splash (z 125 over the splash's
   // 100), so it must not mount at all until the opening is over: mounted on
   // hydration, its entrance would play over the wordmark, the camera would
@@ -825,33 +821,17 @@ export function DashboardShell({
         </AnimatePresence>
 
       </section>
-      {chatOpen ? <ChatWidget isAdmin={isAdmin} onClose={() => setChatOpen(false)} /> : null}
-      <AnimatePresence>
-        {/* Not before the opening is over (see launchDone). Hidden while the
-            panel is open, and while a bottom-right popup (program readme,
-            what's new) holds that corner. */}
-        {/* Also hidden over the full-screen planning sheet, where it would cover the sheet's corner. */}
-        {launchDone && !chatOpen && !showProgramReadmePrompt && !showWhatsNew && !showPhoneTour && !embedOpen ? (
-          <m.button
-            key="chat-trigger"
-            type="button"
-            aria-label="Open team chat"
-            initial={{ opacity: 0, scale: 0.85, y: 12 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.85, y: 12 }}
-            transition={{ type: "spring", stiffness: 360, damping: 30 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => {
-              playUiSound("switchWhoosh");
-              setChatOpen(true);
-            }}
-            className={CHAT_PILL_CLASS}
-          >
-            <ChatBubbleIcon className="h-5 w-5" />
-            <span className="hidden sm:inline">Team chat</span>
-          </m.button>
-        ) : null}
-      </AnimatePresence>
+      {/* Not before the opening is over (see launchDone). The widget hides its
+          own pill while the panel is open; the shell hides it while a
+          bottom-right popup (program readme, what's new, phone tour) holds that
+          corner, and over the full-window Google sheet, where it would cover
+          the sheet's corner. The widget stays mounted through all of it. */}
+      {launchDone ? (
+        <ChatWidget
+          isAdmin={isAdmin}
+          pillHidden={showProgramReadmePrompt || showWhatsNew || showPhoneTour || embedOpen}
+        />
+      ) : null}
       <OfflineGameCard />
       {showPhoneTour ? (
         <PhoneTour email={email} availableModules={availableModules} onClose={() => setShowPhoneTour(false)} />

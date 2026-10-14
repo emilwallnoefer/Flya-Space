@@ -5,6 +5,7 @@ import { type ReactNode, useRef } from "react";
 import { Toast } from "@/components/ui";
 import { useFocusTrap } from "@/lib/use-focus-trap";
 import {
+  chatRepliesAvailable,
   dayKeyFromIso,
   formatDaySeparator,
   messageKindLabel,
@@ -20,6 +21,7 @@ import {
   XMarkIcon,
 } from "./icons";
 import { CertificateRequestModal } from "./certificate-request-modal";
+import { MentionPicker, ReplyStrip } from "./composer-extras";
 import { MessageRow } from "./message-row";
 import {
   DaySeparator,
@@ -28,14 +30,15 @@ import {
   PresenceAvatars,
   TypingStrip,
 } from "./panel-chrome";
+import { CHAT_PILL_CLASS } from "@/components/workspace-home-layout";
 import type { ChatWidgetProps } from "./types";
 import { useChat } from "./use-chat";
 
 export function ChatWidget(props: ChatWidgetProps) {
   const chat = useChat(props);
   const {
-    bottomOffsetRem,
     isAdmin,
+    pillHidden,
     open,
     setOpen,
     loading,
@@ -50,19 +53,32 @@ export function ChatWidget(props: ChatWidgetProps) {
     setPresenceOpen,
     otherTypingNames,
     visibleMessages,
+    messagesById,
     voteSummary,
     hasMoreHistory,
     loadingMore,
     handleLoadOlder,
     scrollRef,
+    contentRef,
     handleScroll,
     scrollToBottom,
     isAtBottom,
     pendingNew,
     draft,
+    textareaRef,
     handleDraftChange,
     handleKeyDown,
+    handleCaretMove,
     handlePaste,
+    members,
+    mentionCandidates,
+    mentionIndex,
+    setMentionIndex,
+    pickMention,
+    replyTarget,
+    setReplyTarget,
+    startReply,
+    jumpToMessage,
     pendingKind,
     setPendingKind,
     sendState,
@@ -98,15 +114,20 @@ export function ChatWidget(props: ChatWidgetProps) {
 
   return (
     <>
-      {/* Hide the floating trigger pill when the panel is open — it would
-          otherwise visibly stick out behind the bottom-right corner of the
-          floating "iPhone" panel. */}
+      {/* The floating pill (same classes as the skeleton's placeholder in
+          app/dashboard/loading.tsx). Hidden while the panel is open — it would
+          otherwise stick out behind the bottom-right corner of the floating
+          "iPhone" panel — and while the caller says the corner is taken. */}
       <AnimatePresence>
-        {!open && !props.onClose ? (
+        {!open && !props.onClose && !pillHidden ? (
           <m.button
             key="chat-trigger"
             type="button"
-            aria-label="Open team chat"
+            aria-label={
+              unread > 0
+                ? `Open team chat, ${unread} new ${unread === 1 ? "message" : "messages"}`
+                : "Open team chat"
+            }
             initial={{ opacity: 0, scale: 0.85, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.85, y: 12 }}
@@ -116,13 +137,21 @@ export function ChatWidget(props: ChatWidgetProps) {
               playUiSound("switchWhoosh");
               setOpen(true);
             }}
-            style={{ bottom: `calc(${bottomOffsetRem}rem + var(--safe-bottom))` }}
-            className="fixed right-4 z-[125] inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/95 px-4 py-3 text-sm font-semibold text-slate-900 shadow-[0_18px_36px_-12px_rgba(34,211,238,0.55)] backdrop-blur transition hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            className={CHAT_PILL_CLASS}
           >
             <ChatBubbleIcon className="h-5 w-5" />
             <span className="hidden sm:inline">Team chat</span>
+            {/* Red dot with the count of messages from others since the panel
+                was last open, pinned to the pill's top-right corner. Keyed on
+                the count so each new message replays its one-shot pop. Styled
+                by `.chat-unread-badge` (decorations.css), which keeps it red
+                under every skin. */}
             {unread > 0 ? (
-              <span className="ml-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-ink">
+              <span
+                key={`unread-${unread}`}
+                className="chat-unread-badge absolute -right-1.5 -top-1.5 h-[1.375rem] min-w-[1.375rem] px-1.5 text-[11px]"
+                aria-hidden
+              >
                 {unread > 99 ? "99+" : unread}
               </span>
             ) : null}
@@ -204,8 +233,9 @@ export function ChatWidget(props: ChatWidgetProps) {
                   <div
                     ref={scrollRef}
                     onScroll={handleScroll}
-                    className="absolute inset-0 space-y-3 overflow-y-auto overscroll-contain px-4 py-3"
+                    className="absolute inset-0 overflow-y-auto overscroll-contain px-4 py-3"
                   >
+                   <div ref={contentRef} className="space-y-3">
                     {hasMoreHistory ? (
                       <div className="flex justify-center pb-2">
                         <button
@@ -276,6 +306,11 @@ export function ChatWidget(props: ChatWidgetProps) {
                                   isAdmin={isAdmin}
                                   isEditing={editingId === msg.id}
                                   votes={voteSummary.get(msg.id)}
+                                  members={members}
+                                  currentUserId={currentUserId}
+                                  replyTo={msg.reply_to ? (messagesById.get(msg.reply_to) ?? "missing") : undefined}
+                                  onReply={chatRepliesAvailable() ? () => startReply(msg) : undefined}
+                                  onJumpTo={jumpToMessage}
                                   onStartEdit={() => setEditingId(msg.id)}
                                   onCancelEdit={() => setEditingId(null)}
                                   onSaveEdit={(body) => handleSaveEdit(msg.id, body)}
@@ -293,6 +328,7 @@ export function ChatWidget(props: ChatWidgetProps) {
                         })()}
                       </AnimatePresence>
                     )}
+                   </div>
                   </div>
 
                   {/* Jump-to-bottom pill — appears when the user has scrolled
@@ -362,13 +398,22 @@ export function ChatWidget(props: ChatWidgetProps) {
                   ) : null}
                 </AnimatePresence>
 
-                <div className="border-t border-glass/10 bg-overlay/70 px-3 py-3">
+                <div className="relative border-t border-glass/10 bg-overlay/70 px-3 py-3">
+                  <MentionPicker
+                    candidates={mentionCandidates}
+                    activeIndex={mentionIndex}
+                    onPick={pickMention}
+                    onHover={setMentionIndex}
+                  />
                   <KindToggleRow
                     pendingKind={pendingKind}
                     setPendingKind={setPendingKind}
                     onOpenCertificate={() => setCertificateOpen(true)}
                   />
-                  <div className="mt-2 flex items-end gap-2 rounded-2xl border border-glass/12 bg-glass/5 px-2 py-1.5 focus-within:border-accent/50 focus-within:bg-glass/[0.07]">
+                  <div className="mt-2">
+                    <ReplyStrip target={replyTarget} currentUserId={currentUserId} onCancel={() => setReplyTarget(null)} />
+                  </div>
+                  <div className="flex items-end gap-2 rounded-2xl border border-glass/12 bg-glass/5 px-2 py-1.5 focus-within:border-accent/50 focus-within:bg-glass/[0.07]">
                     <button
                       type="button"
                       aria-label="Attach file"
@@ -387,10 +432,13 @@ export function ChatWidget(props: ChatWidgetProps) {
                       }}
                     />
                     <textarea
+                      ref={textareaRef}
                       rows={1}
                       value={draft}
                       onChange={handleDraftChange}
                       onKeyDown={handleKeyDown}
+                      onKeyUp={handleCaretMove}
+                      onClick={handleCaretMove}
                       onPaste={handlePaste}
                       placeholder={
                         pendingKind === "message"

@@ -12,16 +12,21 @@ export const UNDO_DELETE_TIMEOUT_MS = 5000;
 export const ERROR_AUTO_DISMISS_MS = 4500;
 
 export type ChatWidgetProps = {
-  /** Bottom offset (in rem) so we can stack above other floating prompts. */
-  bottomOffsetRem?: number;
   /** When true, this user can mark feature/change requests as done. */
   isAdmin?: boolean;
   /**
    * Menu mode: the widget opens straight to the panel, renders no floating
    * pill, and calls this once the panel has finished closing so the caller can
-   * unmount it — which is what tears down the realtime subscription.
+   * unmount it — which is what tears down the realtime subscription. The
+   * phone's chat screen works this way; the desktop keeps the widget mounted.
    */
   onClose?: () => void;
+  /**
+   * Pill mode: hide the floating pill while something else holds the
+   * bottom-right corner (a popup, the full-window Google sheet). The widget
+   * stays mounted, so the unread count keeps counting underneath.
+   */
+  pillHidden?: boolean;
 };
 
 export type SendState = "idle" | "sending";
