@@ -152,6 +152,7 @@ export function LaunchSplash() {
     const letGo = () => {
       html.style.removeProperty("--launch-reveal-start");
       html.style.removeProperty("--launch-reveal-step");
+      html.style.removeProperty("padding-right");
       delete html.dataset.launchZoom;
     };
     // The launch page's hand-over marks (see alreadyShownMs) matter only
@@ -185,6 +186,14 @@ export function LaunchSplash() {
       // The opening frame: page zoomed so the header title is under the
       // overlay's, everything marked for reveal hidden, overflow clipped.
       // Same task as the measurement, so nothing paints in between.
+      // The zoom clips overflow, which takes away a classic scrollbar
+      // (Windows, or macOS set to always show them) and widens the page;
+      // a centred page (wider than .page-shell's max-width) would then
+      // shift sideways under the camera and fail the check below. Hold the
+      // scrollbar's width as padding while the zoom is on (`scrollbar-gutter:
+      // stable` does not hold it on the root in Chrome once overflow is hidden).
+      const gutter = window.innerWidth - html.clientWidth;
+      if (gutter > 0) html.style.setProperty("padding-right", `${gutter}px`);
       html.dataset.launchZoom = "";
       stage.style.transform = transformString(cam);
       const headerAtCamera = rectOf(target);
@@ -196,7 +205,7 @@ export function LaunchSplash() {
       );
       if (off > SWAP_TOLERANCE_PX) {
         stage.style.transform = "";
-        delete html.dataset.launchZoom;
+        letGo();
         return plainFade();
       }
 
