@@ -28,6 +28,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       "Opening the chat always lands on the latest message",
       "Type @ to tag a colleague; they get a notification on any device with notifications on",
       "Reply to a message: the original is quoted above your answer, tap it to jump there",
+      "Messages can be edited for 10 minutes after sending",
     ],
   },
   {
