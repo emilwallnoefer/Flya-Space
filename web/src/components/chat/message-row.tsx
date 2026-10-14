@@ -11,6 +11,7 @@ import {
   type MessageKind,
   type VoteSummary,
 } from "@/lib/chat";
+import { canEditChatMessage, chatEditTimeLeft } from "@/lib/chat-edit-window";
 import { excerpt, splitMentions, type ChatMember } from "@/lib/chat-mentions";
 import { AttachmentBlock } from "./attachment-block";
 import {
@@ -86,6 +87,7 @@ export function MessageRow({
   const tagged = message.kind !== "message";
   const meta = tagged ? KIND_META[message.kind as Exclude<MessageKind, "message">] : null;
   const isDone = Boolean(message.done_at);
+  const canEdit = useEditWindowOpen(message.created_at, isMe);
 
   return (
     <div
@@ -165,6 +167,7 @@ export function MessageRow({
           {!isEditing ? (
             <MessageActions
               isMe={isMe}
+              canEdit={canEdit}
               isAdmin={isAdmin}
               isDone={isDone}
               kind={message.kind}
@@ -180,6 +183,18 @@ export function MessageRow({
       </div>
     </div>
   );
+}
+
+/** Whether the sender can still edit: true for the first 10 minutes, then
+ *  flips once on a timer (no ticking clock). */
+function useEditWindowOpen(createdAt: string, isMe: boolean): boolean {
+  const [open, setOpen] = useState(() => isMe && canEditChatMessage(createdAt));
+  useEffect(() => {
+    if (!isMe) return;
+    const timer = window.setTimeout(() => setOpen(false), chatEditTimeLeft(createdAt));
+    return () => window.clearTimeout(timer);
+  }, [createdAt, isMe]);
+  return open;
 }
 
 /** The body with `@Name` mentions as chips; the viewer's own name stands out. */
@@ -256,6 +271,7 @@ function ReplyQuote({
 
 function MessageActions({
   isMe,
+  canEdit,
   isAdmin,
   isDone,
   kind,
@@ -267,6 +283,8 @@ function MessageActions({
   onReply,
 }: {
   isMe: boolean;
+  /** Within the 10-minute edit window (lib/chat-edit-window.ts). */
+  canEdit: boolean;
   isAdmin: boolean;
   isDone: boolean;
   kind: MessageKind;
@@ -346,15 +364,17 @@ function MessageActions({
       ) : null}
       {isMe ? (
         <>
-          <button
-            type="button"
-            onClick={onStartEdit}
-            aria-label="Edit message"
-            className={`${ACTION_PILL_BASE} hover:border-glass/20 hover:bg-glass/10`}
-          >
-            <PencilSquareIcon className="h-3 w-3" />
-            <span>Edit</span>
-          </button>
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={onStartEdit}
+              aria-label="Edit message"
+              className={`${ACTION_PILL_BASE} hover:border-glass/20 hover:bg-glass/10`}
+            >
+              <PencilSquareIcon className="h-3 w-3" />
+              <span>Edit</span>
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onDelete}
