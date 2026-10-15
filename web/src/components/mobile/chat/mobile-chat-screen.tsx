@@ -11,7 +11,7 @@ import { MessageRow } from "@/components/chat/message-row";
 import { DaySeparator, FilterStrip, KindToggleRow, PresenceAvatars, TypingStrip } from "@/components/chat/panel-chrome";
 import { useChat } from "@/components/chat/use-chat";
 import { Toast } from "@/components/ui";
-import { chatRepliesAvailable, dayKeyFromIso, formatDaySeparator, messageKindLabel } from "@/lib/chat";
+import { chatReactionsAvailable, chatRepliesAvailable, dayKeyFromIso, formatDaySeparator, messageKindLabel } from "@/lib/chat";
 import { lockPageScroll } from "@/lib/scroll-lock";
 import { useVisualViewport } from "@/lib/use-visual-viewport";
 
@@ -38,6 +38,7 @@ export function MobileChatScreen({ isAdmin, onClose }: { isAdmin: boolean; onClo
     visibleMessages,
     messagesById,
     voteSummary,
+    reactionSummary,
     hasMoreHistory,
     loadingMore,
     handleLoadOlder,
@@ -82,6 +83,7 @@ export function MobileChatScreen({ isAdmin, onClose }: { isAdmin: boolean; onClo
     handleSaveEdit,
     handleDelete,
     handleVote,
+    handleReact,
     handleMarkDone,
     pendingUndo,
     handleUndoDelete,
@@ -171,9 +173,11 @@ export function MobileChatScreen({ isAdmin, onClose }: { isAdmin: boolean; onClo
                           isAdmin={isAdmin}
                           isEditing={editingId === msg.id}
                           votes={voteSummary.get(msg.id)}
+                          reactions={reactionSummary.get(msg.id)}
                           members={members}
                           currentUserId={currentUserId}
                           replyTo={msg.reply_to ? (messagesById.get(msg.reply_to) ?? "missing") : undefined}
+                          onReact={chatReactionsAvailable() ? (emoji) => handleReact(msg.id, emoji) : undefined}
                           onReply={chatRepliesAvailable() ? () => startReply(msg) : undefined}
                           onJumpTo={jumpToMessage}
                           onStartEdit={() => setEditingId(msg.id)}

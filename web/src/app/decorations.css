@@ -357,7 +357,9 @@
     align-items: center;
     gap: 0.25rem;
     margin-top: 0;
-    transform: translateY(-55%);
+    /* Sits above the bubble with only a 4px hook over its edge, so it never
+     * covers the name and time that open the bubble. */
+    transform: translateY(calc(-100% + 4px));
     white-space: nowrap;
     width: max-content;
     max-width: none;

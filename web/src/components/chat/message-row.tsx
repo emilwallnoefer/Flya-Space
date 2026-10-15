@@ -13,6 +13,7 @@ import {
 } from "@/lib/chat";
 import { canEditChatMessage, chatEditTimeLeft } from "@/lib/chat-edit-window";
 import { excerpt, splitMentions, type ChatMember } from "@/lib/chat-mentions";
+import { CHAT_REACTIONS, type ReactionGroup } from "@/lib/chat-reactions";
 import { AttachmentBlock } from "./attachment-block";
 import {
   ArrowDownIcon,
@@ -20,8 +21,10 @@ import {
   CheckIcon,
   PencilSquareIcon,
   ReplyIcon,
+  SmileIcon,
   TrashIcon,
   UndoIcon,
+  XMarkIcon,
 } from "./icons";
 import { KIND_META } from "./types";
 
@@ -39,6 +42,8 @@ type MessageRowProps = {
   isAdmin: boolean;
   isEditing: boolean;
   votes?: VoteSummary;
+  /** Emoji reactions on this message, grouped (lib/chat-reactions.ts). */
+  reactions?: ReactionGroup[];
   /** The team, for rendering @-mentions; empty until loaded (plain text then). */
   members?: ChatMember[];
   /** The viewer, so a mention of them stands out. */
@@ -58,6 +63,8 @@ type MessageRowProps = {
   onOpenImage: (url: string, name: string) => void;
   onReply?: () => void;
   onJumpTo?: (messageId: string) => void;
+  /** Toggle the viewer's reaction; undefined while reactions are unavailable. */
+  onReact?: (emoji: string) => void;
 };
 
 const NO_MEMBERS: ChatMember[] = [];
@@ -69,6 +76,7 @@ export function MessageRow({
   isAdmin,
   isEditing,
   votes,
+  reactions,
   members = NO_MEMBERS,
   currentUserId = null,
   replyTo,
@@ -81,6 +89,7 @@ export function MessageRow({
   onOpenImage,
   onReply,
   onJumpTo,
+  onReact,
 }: MessageRowProps) {
   const initials = initialsFromEmail(message.sender_email);
   const name = shortNameFromEmail(message.sender_email);
@@ -88,99 +97,170 @@ export function MessageRow({
   const meta = tagged ? KIND_META[message.kind as Exclude<MessageKind, "message">] : null;
   const isDone = Boolean(message.done_at);
   const canEdit = useEditWindowOpen(message.created_at, isMe);
+  // The action bar's emoji picker; closes when the pointer leaves the message.
+  const [picking, setPicking] = useState(false);
 
   return (
     <div
-      className={`chat-message-row group flex gap-2 ${isMe ? "flex-row-reverse" : "flex-row"}`}
+      className={`chat-message-row group flex flex-col ${isMe ? "items-end" : "items-start"}`}
       data-chat-message-id={message.id}
+      onMouseLeave={picking ? () => setPicking(false) : undefined}
     >
-      <div className="w-7 shrink-0">
-        {showHeader ? (
+      {tagged && meta ? (
+        <div className={`mb-1 inline-flex items-center gap-1.5 ${isMe ? "mr-9 flex-row-reverse" : "ml-9"}`}>
           <span
-            className={`grid h-7 w-7 place-items-center rounded-full text-[11px] font-semibold ${
-              isMe
-                ? "bg-gradient-to-br from-accent-from to-accent-to text-slate-950"
-                : "bg-gradient-to-br from-neutral to-panel text-ink"
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.badgeBorder} ${meta.badgeBg} ${meta.badgeText} ${
+              isDone ? "opacity-60 saturate-50" : ""
             }`}
-            aria-hidden
           >
-            {initials}
+            <meta.Icon className="h-3 w-3" />
+            {meta.shortLabel}
           </span>
-        ) : null}
-      </div>
-      <div className={`flex min-w-0 max-w-[78%] flex-col ${isMe ? "items-end" : "items-start"}`}>
-        {showHeader ? (
-          <p className="mb-0.5 text-[11px] text-ink-4">
-            {isMe ? "You" : name} · {formatChatTimestamp(message.created_at)}
-            {message.edited_at ? <span className="ml-1 italic text-ink-5">(edited)</span> : null}
-          </p>
-        ) : null}
-
-        {tagged && meta ? (
-          <div className={`mb-1 inline-flex items-center gap-1.5 ${isMe ? "flex-row-reverse" : ""}`}>
+          {isDone ? (
             <span
-              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.badgeBorder} ${meta.badgeBg} ${meta.badgeText} ${
-                isDone ? "opacity-60 saturate-50" : ""
-              }`}
+              className="inline-flex items-center gap-1 rounded-full border border-emerald-300/55 bg-emerald-400/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-positive"
+              title="Marked as done by an admin"
             >
-              <meta.Icon className="h-3 w-3" />
-              {meta.shortLabel}
+              <CheckIcon className="h-3 w-3" /> Done
             </span>
-            {isDone ? (
-              <span
-                className="inline-flex items-center gap-1 rounded-full border border-emerald-300/55 bg-emerald-400/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-positive"
-                title="Marked as done by an admin"
-              >
-                <CheckIcon className="h-3 w-3" /> Done
-              </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Avatar and bubble share one row, so the picture sits level with the
+          top of the message instead of with a caption above it. */}
+      <div className={`flex w-full items-start gap-2 ${isMe ? "flex-row-reverse" : "flex-row"}`}>
+        <div className="w-7 shrink-0">
+          {showHeader ? (
+            <span
+              className={`grid h-7 w-7 place-items-center rounded-full text-[11px] font-semibold ${
+                isMe
+                  ? "bg-gradient-to-br from-accent-from to-accent-to text-slate-950"
+                  : "bg-gradient-to-br from-neutral to-panel text-ink"
+              }`}
+              aria-hidden
+            >
+              {initials}
+            </span>
+          ) : null}
+        </div>
+        <div className={`flex min-w-0 max-w-[78%] flex-col ${isMe ? "items-end" : "items-start"}`}>
+          {/* Relative wrapper: anchors the floating action bar to the bubble itself. */}
+          <div className="relative min-w-0 max-w-full">
+            <div
+              className={`chat-bubble rounded-2xl px-3 py-2 text-sm leading-relaxed transition ${
+                isMe
+                  ? `${showHeader ? "rounded-tr-sm" : ""} bg-accent/90 text-slate-900`
+                  : `${showHeader ? "rounded-tl-sm" : ""} bg-glass/8 text-ink`
+              } ${isDone ? "opacity-65 saturate-50" : ""}`}
+            >
+              {showHeader ? (
+                <p className="mb-0.5 flex items-baseline gap-1.5 text-[11px] leading-snug">
+                  <span className={`font-semibold ${isMe ? "text-slate-900/80" : "text-ink-2"}`}>{isMe ? "You" : name}</span>
+                  <span className={isMe ? "text-slate-900/60" : "text-ink-4"}>{formatChatTimestamp(message.created_at)}</span>
+                </p>
+              ) : null}
+              {replyTo ? <ReplyQuote target={replyTo} darkText={isMe} currentUserId={currentUserId} onJumpTo={onJumpTo} /> : null}
+              {isEditing ? (
+                <EditField initialBody={message.body ?? ""} onSave={onSaveEdit} onCancel={onCancelEdit} />
+              ) : message.body ? (
+                <p
+                  className={`whitespace-pre-wrap break-words ${
+                    isDone ? "line-through decoration-ink-4/70 decoration-2" : ""
+                  }`}
+                >
+                  <MessageBody body={message.body} members={members} darkText={isMe} currentUserId={currentUserId} />
+                  {message.edited_at ? (
+                    <span className={`ml-1.5 text-[10px] italic ${isMe ? "text-slate-900/55" : "text-ink-5"}`}>(edited)</span>
+                  ) : null}
+                </p>
+              ) : null}
+              {message.attachment_path ? (
+                <AttachmentBlock message={message} darkText={isMe} onOpenImage={onOpenImage} />
+              ) : null}
+            </div>
+
+            {/* Action row: votes + per-message actions, floats over the bubble. */}
+            {!isEditing ? (
+              <MessageActions
+                isMe={isMe}
+                canEdit={canEdit}
+                isAdmin={isAdmin}
+                isDone={isDone}
+                kind={message.kind}
+                votes={votes}
+                picking={picking}
+                onTogglePicker={onReact ? () => setPicking((p) => !p) : undefined}
+                onPick={(emoji) => {
+                  setPicking(false);
+                  onReact?.(emoji);
+                }}
+                onVote={onVote}
+                onStartEdit={onStartEdit}
+                onDelete={onDelete}
+                onMarkDone={onMarkDone}
+                onReply={onReply}
+              />
             ) : null}
           </div>
-        ) : null}
 
-        {/* Relative wrapper: anchors the floating action bar to the bubble itself. */}
-        <div className="relative min-w-0 max-w-full">
-          <div
-            className={`chat-bubble rounded-2xl px-3 py-2 text-sm leading-relaxed transition ${
-              isMe
-                ? "rounded-br-sm bg-accent/90 text-slate-900"
-                : "rounded-bl-sm bg-glass/8 text-ink"
-            } ${isDone ? "opacity-65 saturate-50" : ""}`}
-          >
-            {replyTo ? <ReplyQuote target={replyTo} darkText={isMe} currentUserId={currentUserId} onJumpTo={onJumpTo} /> : null}
-            {isEditing ? (
-              <EditField initialBody={message.body ?? ""} onSave={onSaveEdit} onCancel={onCancelEdit} />
-            ) : message.body ? (
-              <p
-                className={`whitespace-pre-wrap break-words ${
-                  isDone ? "line-through decoration-ink-4/70 decoration-2" : ""
-                }`}
-              >
-                <MessageBody body={message.body} members={members} darkText={isMe} currentUserId={currentUserId} />
-              </p>
-            ) : null}
-            {message.attachment_path ? (
-              <AttachmentBlock message={message} darkText={isMe} onOpenImage={onOpenImage} />
-            ) : null}
-          </div>
-
-          {/* Action row: votes + per-message actions, floats over the bubble. */}
-          {!isEditing ? (
-            <MessageActions
+          {reactions && reactions.length > 0 ? (
+            <ReactionChips
+              reactions={reactions}
               isMe={isMe}
-              canEdit={canEdit}
-              isAdmin={isAdmin}
-              isDone={isDone}
-              kind={message.kind}
-              votes={votes}
-              onVote={onVote}
-              onStartEdit={onStartEdit}
-              onDelete={onDelete}
-              onMarkDone={onMarkDone}
-              onReply={onReply}
+              members={members}
+              currentUserId={currentUserId}
+              onReact={onReact}
             />
           ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** The emoji under a message: one chip per emoji with its count; the viewer's are lit and tap to take back. */
+function ReactionChips({
+  reactions,
+  isMe,
+  members,
+  currentUserId,
+  onReact,
+}: {
+  reactions: ReactionGroup[];
+  isMe: boolean;
+  members: ChatMember[];
+  currentUserId: string | null;
+  onReact?: (emoji: string) => void;
+}) {
+  const nameOf = (id: string) =>
+    id === currentUserId ? "You" : (members.find((m) => m.id === id)?.name ?? "Someone");
+  return (
+    <div className={`mt-1 flex flex-wrap gap-1 ${isMe ? "justify-end" : "justify-start"}`}>
+      {reactions.map((group) => {
+        const who = group.userIds.map(nameOf).join(", ");
+        return (
+          <button
+            key={group.emoji}
+            type="button"
+            onClick={onReact ? () => onReact(group.emoji) : undefined}
+            disabled={!onReact}
+            aria-pressed={group.mine}
+            aria-label={`${group.emoji} ${group.userIds.length}: ${who}. ${group.mine ? "Remove your reaction" : "React with this too"}`}
+            title={who}
+            className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs leading-none transition ${
+              group.mine
+                ? "border-accent/60 bg-accent/15 text-ink"
+                : "border-glass/12 bg-glass/5 text-ink-3 hover:border-glass/20 hover:bg-glass/10"
+            }`}
+          >
+            <span aria-hidden>{group.emoji}</span>
+            <span className="text-[11px] tabular-nums" aria-hidden>
+              {group.userIds.length}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -276,6 +356,9 @@ function MessageActions({
   isDone,
   kind,
   votes,
+  picking,
+  onTogglePicker,
+  onPick,
   onVote,
   onStartEdit,
   onDelete,
@@ -289,6 +372,11 @@ function MessageActions({
   isDone: boolean;
   kind: MessageKind;
   votes?: VoteSummary;
+  /** The emoji picker is showing in place of the actions. */
+  picking: boolean;
+  /** Undefined while reactions are unavailable (no React button). */
+  onTogglePicker?: () => void;
+  onPick: (emoji: string) => void;
   onVote: (next: -1 | 1) => void;
   onStartEdit: () => void;
   onDelete: () => void;
@@ -297,11 +385,56 @@ function MessageActions({
 }) {
   const showVotes = isVotableKind(kind);
   const showMark = isMarkableKind(kind) && isAdmin;
-  if (!showVotes && !showMark && !isMe && !onReply) return null;
+  if (!showVotes && !showMark && !isMe && !onReply && !onTogglePicker) return null;
+
+  if (picking && onTogglePicker) {
+    return (
+      <div className={`chat-actions-row ${isMe ? "is-me" : "is-other"}`} role="group" aria-label="React">
+        {CHAT_REACTIONS.map((emoji) => (
+          <button
+            key={emoji}
+            type="button"
+            onClick={() => onPick(emoji)}
+            aria-label={`React with ${emoji}`}
+            className="inline-flex items-center justify-center rounded-md px-1 py-0.5 text-base leading-none transition hover:bg-glass/10"
+          >
+            {emoji}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={(e) => {
+            // On the phone a tap in the list closes the actions; this one only closes the picker.
+            e.stopPropagation();
+            onTogglePicker();
+          }}
+          aria-label="Close reactions"
+          className={`${ACTION_PILL_BASE} hover:border-glass/20 hover:bg-glass/10`}
+        >
+          <XMarkIcon className="h-3 w-3" />
+        </button>
+      </div>
+    );
+  }
 
   const mine = votes?.mine ?? 0;
   return (
     <div className={`chat-actions-row ${isMe ? "is-me" : "is-other"}`}>
+      {onTogglePicker ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            // On the phone a tap in the list closes the actions; this one swaps them for the picker.
+            e.stopPropagation();
+            onTogglePicker();
+          }}
+          aria-label="Add a reaction"
+          className={`${ACTION_PILL_BASE} hover:border-glass/20 hover:bg-glass/10`}
+        >
+          <SmileIcon className="h-3 w-3" />
+          <span>React</span>
+        </button>
+      ) : null}
       {onReply ? (
         <button
           type="button"

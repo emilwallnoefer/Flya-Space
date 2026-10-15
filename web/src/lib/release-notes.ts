@@ -20,6 +20,17 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-15-chat-reactions",
+    date: "Oct 15, 2026",
+    title: "Team chat: emoji reactions",
+    highlights: [
+      "React to any message with an emoji: hover it (long-press on the phone) and pick React",
+      "Tap a reaction under a message to add yours or take it back",
+      "Reactions never count as new messages",
+      "Name and time now sit inside the message, with the picture beside it",
+    ],
+  },
+  {
     version: "2026-10-15-chat-long-press",
     date: "Oct 15, 2026",
     title: "Phone chat: long-press for actions",
