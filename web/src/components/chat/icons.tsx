@@ -150,3 +150,12 @@ export function ReplyIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+export function SmileIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.5 14.5a4.5 4.5 0 007 0M9 9.5h.01M15 9.5h.01" />
+    </svg>
+  );
+}

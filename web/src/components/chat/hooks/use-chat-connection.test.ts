@@ -46,6 +46,7 @@ vi.mock("@/lib/chat", async (importOriginal) => {
       return serverHistory;
     }),
     fetchVotesForMessages: vi.fn(async () => []),
+    fetchReactionsForMessages: vi.fn(async () => []),
     subscribeToChat: vi.fn(async (handlers: { onReconnect: () => void }) => {
       triggerReconnect = handlers.onReconnect;
       return {
@@ -96,6 +97,7 @@ describe("chat reconnect re-sync", () => {
         broadcastTypingRef: { current: null },
         setMessages,
         setVotes: noop,
+        setReactions: noop,
         setPresence: noop,
         applyTypingEvent: () => {},
         setUnread: noop,

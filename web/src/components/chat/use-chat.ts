@@ -16,6 +16,7 @@ import {
   editChatMessage,
   fetchChatHistory,
   fetchChatMembers,
+  fetchReactionsForMessages,
   fetchVotesForMessages,
   markMessageDone,
   notifyMentions,
@@ -35,6 +36,7 @@ import {
   type ChatMember,
   type MentionToken,
 } from "@/lib/chat-mentions";
+import { mergeReactions } from "@/lib/chat-reactions";
 import { playUiSound } from "@/lib/ui-sounds";
 import { writeViewParams } from "@/lib/view-params";
 import {
@@ -49,6 +51,7 @@ import { saveLastReadAt } from "./hooks/chat-last-read";
 import { useChatConnection } from "./hooks/use-chat-connection";
 import { useChatTyping } from "./hooks/use-chat-typing";
 import { useChatUndoDelete } from "./hooks/use-chat-undo-delete";
+import { useChatReactions } from "./hooks/use-chat-reactions";
 import { useChatVotes } from "./hooks/use-chat-votes";
 
 /** All Team Chat widget state. The realtime subscription, typing indicators,
@@ -125,6 +128,7 @@ export function useChat({ isAdmin = false, onClose, pillHidden = false }: ChatWi
     otherTypingNames,
   } = useChatTyping(currentUserId);
   const { setVotes, voteSummary, handleVote } = useChatVotes(currentUserId, reportError);
+  const { setReactions, reactionSummary, handleReact } = useChatReactions(currentUserId, reportError);
   const { pendingUndo, handleDelete, handleUndoDelete } = useChatUndoDelete(setMessages, reportError);
 
   useChatConnection({
@@ -134,6 +138,7 @@ export function useChat({ isAdmin = false, onClose, pillHidden = false }: ChatWi
     broadcastTypingRef,
     setMessages,
     setVotes,
+    setReactions,
     setPresence,
     applyTypingEvent,
     setUnread,
@@ -310,6 +315,8 @@ export function useChat({ isAdmin = false, onClose, pillHidden = false }: ChatWi
           return additions.length > 0 ? [...prev, ...additions] : prev;
         });
       }
+      const olderReactions = await fetchReactionsForMessages(older.map((m) => m.id));
+      if (olderReactions.length > 0) setReactions((prev) => mergeReactions(prev, olderReactions));
       setHasMoreHistory(older.length >= CHAT_PAGE_SIZE);
       // Preserve visible position by adjusting scrollTop for the height delta.
       requestAnimationFrame(() => {
@@ -322,7 +329,7 @@ export function useChat({ isAdmin = false, onClose, pillHidden = false }: ChatWi
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMoreHistory, setVotes]);
+  }, [loadingMore, hasMoreHistory, setVotes, setReactions]);
 
   const visibleMessages = useMemo(() => {
     if (filter === "all") return messages;
@@ -741,6 +748,7 @@ export function useChat({ isAdmin = false, onClose, pillHidden = false }: ChatWi
     visibleMessages,
     messagesById,
     voteSummary,
+    reactionSummary,
     hasMoreHistory,
     loadingMore,
     handleLoadOlder,
@@ -792,6 +800,7 @@ export function useChat({ isAdmin = false, onClose, pillHidden = false }: ChatWi
     handleSaveEdit,
     handleDelete,
     handleVote,
+    handleReact,
     handleMarkDone,
     // undo + lightbox
     pendingUndo,

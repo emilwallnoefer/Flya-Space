@@ -4,6 +4,7 @@ import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import type { CertificateRequestInput } from "@/lib/certificate-request";
 import type { ChatMember } from "@/lib/chat-mentions";
+import type { ChatReactionRow } from "@/lib/chat-reactions";
 
 /**
  * Team Chat client helpers.
@@ -236,6 +237,73 @@ export async function fetchVotesForMessages(messageIds: string[]): Promise<ChatV
   return out;
 }
 
+/**
+ * Reactions arrived with `supabase/2026-10-15-chat-reactions.sql`. Until it is
+ * applied the table is missing; the first such answer switches reactions off
+ * for this page load (the UI hides them) instead of failing the chat.
+ */
+let reactionsAvailable = true;
+export function chatReactionsAvailable(): boolean {
+  return reactionsAvailable;
+}
+function isMissingReactionsTable(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  // 42P01 from Postgres, PGRST205 from PostgREST's schema cache.
+  return (error.code === "42P01" || error.code === "PGRST205") && /chat_message_reactions/.test(error.message ?? "");
+}
+
+/** Reactions on the loaded messages only, chunked like the vote fetch. */
+export async function fetchReactionsForMessages(messageIds: string[]): Promise<ChatReactionRow[]> {
+  if (!reactionsAvailable) return [];
+  const supabase = client();
+  if (messageIds.length === 0) {
+    // Still ask once, so a missing table is known before the realtime channel
+    // subscribes to it (a postgres_changes join on an unknown table fails the join).
+    const { error } = await supabase.from("chat_message_reactions").select("message_id").limit(1);
+    if (isMissingReactionsTable(error)) reactionsAvailable = false;
+    return [];
+  }
+  const CHUNK = 200;
+  const out: ChatReactionRow[] = [];
+  for (let i = 0; i < messageIds.length; i += CHUNK) {
+    const chunk = messageIds.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from("chat_message_reactions")
+      .select("message_id, user_id, emoji")
+      .in("message_id", chunk);
+    if (isMissingReactionsTable(error)) {
+      reactionsAvailable = false;
+      return [];
+    }
+    if (error) throw error;
+    out.push(...((data ?? []) as ChatReactionRow[]));
+  }
+  return out;
+}
+
+/** Add or take back the viewer's reaction. A reaction is its own row, so it never reads as a new message. */
+export async function setMessageReaction(messageId: string, emoji: string, on: boolean): Promise<void> {
+  const supabase = client();
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr || !userData.user) throw userErr ?? new Error("Not signed in");
+  const userId = userData.user.id;
+  if (on) {
+    const { error } = await supabase
+      .from("chat_message_reactions")
+      .insert({ message_id: messageId, user_id: userId, emoji });
+    // Already there (a double tap, another tab): that is the state we wanted.
+    if (error && error.code !== "23505") throw error;
+    return;
+  }
+  const { error } = await supabase
+    .from("chat_message_reactions")
+    .delete()
+    .eq("message_id", messageId)
+    .eq("user_id", userId)
+    .eq("emoji", emoji);
+  if (error) throw error;
+}
+
 type SendInput = {
   /**
    * Optional client-generated UUID. When provided, it is used as the row's
@@ -463,6 +531,9 @@ export type ChatChannelHandlers = {
   onVoteInsert: (row: ChatVoteRow) => void;
   onVoteUpdate: (row: ChatVoteRow) => void;
   onVoteDelete: (row: { message_id: string; user_id: string }) => void;
+  /** Reactions only touch the reaction state — never unread, sound or the "new" pill. */
+  onReactionInsert?: (row: ChatReactionRow) => void;
+  onReactionDelete?: (row: ChatReactionRow) => void;
   onPresence: (users: ChatPresenceUser[]) => void;
   onTyping: (payload: TypingPayload) => void;
   /** Fires every time the channel transitions back to SUBSCRIBED *after* the
@@ -475,6 +546,7 @@ export type ChatChannelHandlers = {
  * Subscribes to:
  *   - Postgres INSERT/UPDATE/DELETE on `public.chat_messages`
  *   - Postgres INSERT/UPDATE/DELETE on `public.chat_message_votes`
+ *   - Postgres INSERT/DELETE on `public.chat_message_reactions`
  *   - Realtime presence on `CHAT_REALTIME_TOPIC` (online users)
  *   - Broadcast events on `typing` (typing indicators)
  *
@@ -539,6 +611,24 @@ export async function subscribeToChat(handlers: ChatChannelHandlers): Promise<{
       }
     },
   );
+
+  if (reactionsAvailable) {
+    channel.on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "chat_message_reactions" },
+      (payload) => handlers.onReactionInsert?.(payload.new as ChatReactionRow),
+    );
+    channel.on(
+      "postgres_changes",
+      { event: "DELETE", schema: "public", table: "chat_message_reactions" },
+      (payload) => {
+        const old = payload.old as Partial<ChatReactionRow>;
+        if (old?.message_id && old.user_id && old.emoji) {
+          handlers.onReactionDelete?.({ message_id: old.message_id, user_id: old.user_id, emoji: old.emoji });
+        }
+      },
+    );
+  }
 
   channel.on("presence", { event: "sync" }, () => {
     const state = channel.presenceState<{ user_id: string; email: string; online_at: string }>();

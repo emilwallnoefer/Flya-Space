@@ -5,6 +5,7 @@ import { type ReactNode, useRef } from "react";
 import { Toast } from "@/components/ui";
 import { useFocusTrap } from "@/lib/use-focus-trap";
 import {
+  chatReactionsAvailable,
   chatRepliesAvailable,
   dayKeyFromIso,
   formatDaySeparator,
@@ -55,6 +56,7 @@ export function ChatWidget(props: ChatWidgetProps) {
     visibleMessages,
     messagesById,
     voteSummary,
+    reactionSummary,
     hasMoreHistory,
     loadingMore,
     handleLoadOlder,
@@ -99,6 +101,7 @@ export function ChatWidget(props: ChatWidgetProps) {
     handleSaveEdit,
     handleDelete,
     handleVote,
+    handleReact,
     handleMarkDone,
     pendingUndo,
     handleUndoDelete,
@@ -306,9 +309,11 @@ export function ChatWidget(props: ChatWidgetProps) {
                                   isAdmin={isAdmin}
                                   isEditing={editingId === msg.id}
                                   votes={voteSummary.get(msg.id)}
+                                  reactions={reactionSummary.get(msg.id)}
                                   members={members}
                                   currentUserId={currentUserId}
                                   replyTo={msg.reply_to ? (messagesById.get(msg.reply_to) ?? "missing") : undefined}
+                                  onReact={chatReactionsAvailable() ? (emoji) => handleReact(msg.id, emoji) : undefined}
                                   onReply={chatRepliesAvailable() ? () => startReply(msg) : undefined}
                                   onJumpTo={jumpToMessage}
                                   onStartEdit={() => setEditingId(msg.id)}

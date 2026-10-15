@@ -4,6 +4,7 @@ import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } 
 import {
   CHAT_PAGE_SIZE,
   fetchChatHistory,
+  fetchReactionsForMessages,
   fetchVotesForMessages,
   shortNameFromEmail,
   subscribeToChat,
@@ -12,6 +13,7 @@ import {
   type ChatVoteRow,
   type TypingPayload,
 } from "@/lib/chat";
+import { addReaction, removeReaction, type ChatReactionRow } from "@/lib/chat-reactions";
 import { playUiSound } from "@/lib/ui-sounds";
 import { votableMessageIds } from "../types";
 import { readLastReadAt, saveLastReadAt } from "./chat-last-read";
@@ -24,6 +26,7 @@ export type ChatConnectionParams = {
   broadcastTypingRef: MutableRefObject<((isTyping: boolean) => Promise<void>) | null>;
   setMessages: Dispatch<SetStateAction<ChatMessageRow[]>>;
   setVotes: Dispatch<SetStateAction<ChatVoteRow[]>>;
+  setReactions: Dispatch<SetStateAction<ChatReactionRow[]>>;
   setPresence: Dispatch<SetStateAction<ChatPresenceUser[]>>;
   applyTypingEvent: (payload: TypingPayload) => void;
   setUnread: Dispatch<SetStateAction<number>>;
@@ -38,7 +41,7 @@ export type ChatConnectionParams = {
 
 /**
  * Realtime subscription concern: the one mount effect that loads the initial
- * history + votes, opens the Supabase Realtime channel, routes every incoming
+ * history, votes and reactions, opens the Supabase Realtime channel, routes every incoming
  * event (message insert/update/delete, vote changes, presence, typing,
  * reconnect re-sync), seeds the unread badge from the persisted last-read mark,
  * and tears everything down on unmount.
@@ -51,6 +54,7 @@ export function useChatConnection(params: ChatConnectionParams) {
     broadcastTypingRef,
     setMessages,
     setVotes,
+    setReactions,
     setPresence,
     applyTypingEvent,
     setUnread,
@@ -75,6 +79,10 @@ export function useChatConnection(params: ChatConnectionParams) {
         const initialVotes = await fetchVotesForMessages(votableMessageIds(history));
         if (cancelled) return;
         setVotes(initialVotes);
+        // Before subscribing: this also learns whether the reactions table exists.
+        const initialReactions = await fetchReactionsForMessages(history.map((m) => m.id));
+        if (cancelled) return;
+        setReactions(initialReactions);
         // If the initial page is full, assume there's more history to page in.
         setHasMoreHistory(history.length >= CHAT_PAGE_SIZE);
         setLoading(false);
@@ -137,6 +145,9 @@ export function useChatConnection(params: ChatConnectionParams) {
               prev.filter((v) => !(v.message_id === message_id && v.user_id === user_id)),
             );
           },
+          // Reactions change the chips only: no unread, no sound, no "new" pill.
+          onReactionInsert: (row) => setReactions((prev) => addReaction(prev, row)),
+          onReactionDelete: (row) => setReactions((prev) => removeReaction(prev, row)),
           onPresence: (users) => setPresence(users),
           // Patch up any messages/votes that were missed during a disconnect.
           onReconnect: () => {
@@ -166,6 +177,10 @@ export function useChatConnection(params: ChatConnectionParams) {
                 const loadedIds = votableMessageIds([...messagesRef.current, ...missed]);
                 const freshVotes = await fetchVotesForMessages(loadedIds);
                 setVotes(freshVotes);
+                const freshReactions = await fetchReactionsForMessages(
+                  [...messagesRef.current, ...missed].map((m) => m.id),
+                );
+                setReactions(freshReactions);
               } catch {
                 // Best-effort: a failed re-sync just leaves the state as-is.
               }
