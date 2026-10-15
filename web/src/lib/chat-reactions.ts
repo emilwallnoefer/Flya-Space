@@ -1,11 +1,12 @@
 /**
  * Emoji reactions on team-chat messages: the allowed set and the pure
  * reducers. The table is `chat_message_reactions`
- * (`supabase/2026-10-15-chat-reactions.sql`), whose check constraint lists the
+ * (`supabase/2026-10-15-chat-reactions.sql`), whose check constraint (latest:
+ * `2026-10-15-chat-reactions-fire.sql`) lists the
  * same emoji — change both together.
  */
 
-export const CHAT_REACTIONS = ["👍", "❤️", "😂", "🎉", "😮", "🙏"] as const;
+export const CHAT_REACTIONS = ["👍", "❤️", "😂", "🔥", "😮", "🙏"] as const;
 export type ChatReactionEmoji = (typeof CHAT_REACTIONS)[number];
 
 export function isChatReaction(value: unknown): value is ChatReactionEmoji {
