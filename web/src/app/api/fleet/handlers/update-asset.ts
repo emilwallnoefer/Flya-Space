@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { recordAssetEvent } from "@/lib/fleet-queries";
+import { normalizeKindKey } from "@/lib/fleet-rules";
 import type { FleetActionContext } from "./shared";
 import type { FleetPayload } from "./schemas";
 
@@ -24,6 +25,8 @@ export async function handleUpdateAsset(
   }
   // Moving a unit into the pool means nobody holds it any more.
   if (patch.pooled === true) patch.current_holder_label = null;
+  // One spelling per kind, whatever was typed.
+  if ("kind_key" in patch) patch.kind_key = normalizeKindKey(patch.kind_key as string | null);
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ ok: true, message: "Nothing to change." });
   }

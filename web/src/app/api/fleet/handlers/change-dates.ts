@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
-import { fetchAdminUserIds, fetchAssetSpans, fetchReliability, fetchUserNames, recordAssetEvent } from "@/lib/fleet-queries";
+import {
+  fetchAdminUserIds,
+  fetchAssetSpans,
+  fetchFreeSiblings,
+  fetchReliability,
+  fetchUserNames,
+  recordAssetEvent,
+} from "@/lib/fleet-queries";
 import { sendFleetNotice } from "@/lib/fleet-notify";
 import { classifyDateChange, dateChangeErrorMessage } from "@/lib/fleet-requests";
 import { checkReservation, formatDayLong, formatSpan, parseDateKey, toDateKey } from "@/lib/fleet-rules";
@@ -148,6 +155,12 @@ export async function handleChangeDates(
     // Tell the person who has to answer — or the admins, when the target
     // booking has no account behind it.
     const recipients = target.user_id ? [target.user_id] : await fetchAdminUserIds(admin);
+    const siblings = await fetchFreeSiblings(admin, {
+      assetId: reservation.asset_id,
+      startDate: target.start_date,
+      endDate: target.end_date,
+      today,
+    });
     await sendFleetNotice(admin, {
       input: {
         kind: "extension_request",
@@ -157,6 +170,7 @@ export async function handleChangeDates(
         targetStart: target.start_date,
         targetEnd: target.end_date,
         linkReservationId: target.id,
+        alternatives: siblings.map((s) => s.name),
       },
       reservationId: target.id,
       assetId: reservation.asset_id,

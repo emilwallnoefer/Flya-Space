@@ -92,6 +92,7 @@ export function MobileFleetScreen({ initialBoard }: { initialBoard: FleetBoardRe
               requests={board?.requests ?? []}
               busy={busy}
               onRespond={(requestId, reply) => void post({ action: "respond_request", request_id: requestId, reply })}
+              onMove={(reservationId, assetId) => void post({ action: "move_booking", reservation_id: reservationId, asset_id: assetId })}
             />
             <MyMaterialList state={state} onBrowse={() => setView("book")} />
           </>

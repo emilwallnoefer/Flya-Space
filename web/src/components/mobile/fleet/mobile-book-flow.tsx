@@ -63,7 +63,7 @@ export function MobileBookFlow({ state, onBooked }: { state: FleetState; onBooke
 }
 
 function DatePickerSheet({ state, asset, onClose, onBooked }: { state: FleetState; asset: FleetAsset | null; onClose: () => void; onBooked: () => void }) {
-  const { reservations, today, board, busy, post, setWindowStart } = state;
+  const { reservations, today, board, busy, post, alternatives, setWindowStart } = state;
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
   const [month, setMonth] = useState<string>(() => today.slice(0, 7));
@@ -111,11 +111,11 @@ function DatePickerSheet({ state, asset, onClose, onBooked }: { state: FleetStat
     setWindowStart(mondayOf(`${next}-01`));
   }
 
-  async function book(waitlist: boolean) {
-    if (!asset || !start) return;
+  async function book(waitlist: boolean, assetId: string = asset?.id ?? "") {
+    if (!asset || !start || !assetId) return;
     const ok = await post({
       action: "reserve",
-      asset_id: asset.id,
+      asset_id: assetId,
       start_date: start,
       end_date: end ?? start,
       destination: destination.trim() || undefined,
@@ -155,6 +155,12 @@ function DatePickerSheet({ state, asset, onClose, onBooked }: { state: FleetStat
               Join the waitlist
             </MobileButton>
           ) : null}
+          {/* Offered by the server with a clash: same days, a free unit of the same kind. */}
+          {alternatives.map((alt) => (
+            <MobileButton key={alt.asset_id} disabled={busy} onClick={() => void book(false, alt.asset_id)}>
+              Book {alt.name} instead{alt.location ? ` · ${alt.location}` : ""}
+            </MobileButton>
+          ))}
         </div>
       }
     >

@@ -106,6 +106,13 @@ export function ManageMaterial({
     () => [...new Set(assets.map((a) => a.model).filter(Boolean) as string[])].sort(),
     [assets],
   );
+  const kinds = useMemo(
+    () => [...new Set(assets.map((a) => a.kind_key).filter(Boolean) as string[])].sort(),
+    [assets],
+  );
+  // Pooled units with no kind can never be offered as an alternative. Shown so
+  // the gap is visible to the people who can close it.
+  const withoutKind = useMemo(() => assets.filter((a) => a.pooled && !a.kind_key).length, [assets]);
 
   return (
     <div className="space-y-3">
@@ -127,6 +134,11 @@ export function ManageMaterial({
           />
         </div>
         <span className="text-[11px] text-ink-5">{assets.length} active</span>
+        {withoutKind > 0 ? (
+          <span className="text-[11px] text-warn" title="Set “Interchangeable with” on a unit so it can be offered when another of its kind is taken">
+            {withoutKind} pooled unit{withoutKind === 1 ? "" : "s"} without a kind
+          </span>
+        ) : null}
       </div>
 
       {/* -------------------------------------------------------------- list */}
@@ -264,6 +276,7 @@ export function ManageMaterial({
           locations={locations}
           ownerGroups={ownerGroups}
           models={models}
+          kinds={kinds}
           busy={busy}
           onSave={(draft) => (dialog.asset ? onUpdate(dialog.asset.id, draft) : onCreate(draft))}
           onClose={() => setDialog(null)}

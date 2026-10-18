@@ -38,6 +38,8 @@ export type FleetRequestView = {
   incoming: boolean;
   /** The viewer asked this one. */
   outgoing: boolean;
+  /** Free units of the same kind the recipient could move their booking to (pending incoming only). */
+  alternatives: Array<{ asset_id: string; name: string; location: string | null }>;
 };
 
 export type DateChange =

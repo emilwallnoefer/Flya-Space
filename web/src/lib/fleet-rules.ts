@@ -417,6 +417,80 @@ export function expiryFor(span: ReservationSpan, today: string): "no_show" | "ex
   return null;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Interchangeable units                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The slug admins give a kind of unit ("elios-3"). Lower-cased, trimmed,
+ * runs of anything that is not a letter or digit become one dash, so "Elios 3"
+ * and " elios-3 " are the same kind. Empty → null (no kind).
+ */
+export function normalizeKindKey(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const slug = raw
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug.length > 0 ? slug : null;
+}
+
+export type SiblingAsset = {
+  id: string;
+  name: string;
+  kind_key: string | null;
+  pooled: boolean;
+  status: string;
+  active?: boolean;
+  current_location?: string | null;
+};
+
+export type FreeSibling = { asset_id: string; name: string; location: string | null };
+
+/**
+ * Other units of the same kind that are free for the whole span: bookable
+ * (pooled, not retired or in repair), still active, and with no live booking
+ * on any of the days — an overdue unit still out counts as taken through today
+ * (`blockedUntil`). A unit with no kind has no siblings; nothing is guessed
+ * from the model text.
+ */
+export function freeSiblings(args: {
+  asset: Pick<SiblingAsset, "id" | "kind_key">;
+  startDate: string;
+  endDate: string;
+  today: string;
+  assets: SiblingAsset[];
+  spans: ReservationSpan[];
+}): FreeSibling[] {
+  const { asset, startDate, endDate, today, assets, spans } = args;
+  if (!asset.kind_key) return [];
+  const candidate: ReservationSpan = {
+    id: "candidate",
+    asset_id: "",
+    user_id: null,
+    start_date: startDate,
+    end_date: endDate,
+    status: "reserved",
+  };
+  return assets
+    .filter(
+      (a) =>
+        a.id !== asset.id &&
+        a.kind_key === asset.kind_key &&
+        a.active !== false &&
+        isBookable(a) &&
+        !spans.some(
+          (s) =>
+            s.asset_id === a.id &&
+            isBlocking(s.status) &&
+            spansOverlap({ ...s, end_date: blockedUntil(s, today) }, candidate),
+        ),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+    .map((a) => ({ asset_id: a.id, name: a.name, location: a.current_location ?? null }));
+}
+
 /** How late a completed return was; 0 when it landed on or before the due date. */
 export function lateDays(span: ReservationSpan): number {
   if (span.status !== "returned" || !span.returned_on) return 0;

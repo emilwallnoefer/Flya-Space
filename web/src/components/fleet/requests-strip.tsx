@@ -17,10 +17,13 @@ export function RequestsStrip({
   requests,
   busy,
   onRespond,
+  onMove,
 }: {
   requests: FleetRequestView[];
   busy: boolean;
   onRespond: (requestId: string, reply: RequestReply) => void;
+  /** Move the recipient's own booking to a free unit of the same kind; the request is granted by that. */
+  onMove: (reservationId: string, assetId: string) => void;
 }) {
   if (requests.length === 0) return null;
   const incoming = requests.filter((r) => r.incoming);
@@ -50,8 +53,14 @@ export function RequestsStrip({
               </div>
               {pending ? (
                 <div className="flex shrink-0 flex-wrap gap-1.5">
+                  {/* Best answer when it exists: keep your days, on another unit. */}
+                  {r.alternatives.map((alt) => (
+                    <Button key={alt.asset_id} size="xs" variant="accent" disabled={busy} onClick={() => onMove(r.target_reservation_id, alt.asset_id)}>
+                      Move to {alt.name}{alt.location ? ` · ${alt.location}` : ""}
+                    </Button>
+                  ))}
                   {laterStart ? (
-                    <Button size="xs" variant="accent" disabled={busy} onClick={() => onRespond(r.id, "shorten")}>
+                    <Button size="xs" variant={r.alternatives.length > 0 ? "glass" : "accent"} disabled={busy} onClick={() => onRespond(r.id, "shorten")}>
                       Start {formatDayLong(laterStart)} instead
                     </Button>
                   ) : null}

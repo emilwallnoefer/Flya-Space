@@ -49,6 +49,8 @@ export type FleetAsset = {
   active: boolean;
   /** True when the unit is part of the shared bookable pool (and so, the calendar). */
   pooled: boolean;
+  /** Admin-set slug grouping interchangeable units ("elios-3"); null = no siblings. */
+  kind_key: string | null;
   holder_name: string | null;
   location_age_days: number | null;
   location_stale: boolean;

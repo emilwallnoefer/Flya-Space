@@ -1,6 +1,6 @@
 # Fleet edge cases — masterplan
 
-Status: approved 2026-10-18, not yet implemented. Each phase below is one PR; tick the phase heading when its PR merges, and keep this file as the record of *why* each rule exists.
+Status: approved 2026-10-18. P1 (#252), P2 (#253), P3 (#254) merged 2026-10-18; P4 + P5 merged 2026-10-19. One deviation from the plan below: `kind_key` is a slug on `fleet_assets` picked from the keys in use (no separate `fleet_kinds` table). Keep this file as the record of *why* each rule exists.
 
 Decided with Emil 2026-10-18: collisions are resolved by the **next booker, never automatically**; interchangeable units are grouped by an **admin-set `kind_key`** on each asset. Implemented phase by phase, one PR each (see Phases).
 

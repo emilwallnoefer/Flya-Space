@@ -32,6 +32,8 @@ const SHOW_PAST_KEY = "fleet:show-past";
 
 export type FleetTab = "calendar" | "mine" | "material" | "manage";
 export type FleetNotice = { tone: NoticeTone; text: string } | null;
+/** A free unit of the same kind, as the server offers it with a refusal. */
+export type FleetAlternative = { asset_id: string; name: string; location: string | null };
 
 /** Holder filter: everyone. */
 export const HOLDER_ANY = "__any__";
@@ -44,6 +46,12 @@ export function useFleet(initialBoard: FleetBoardResponse | null) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<FleetNotice>(null);
   const [busy, setBusy] = useState(false);
+  /**
+   * Free units of the same kind the server offered with its last refusal
+   * ("SVA-257 is taken — SVA-330 is free"). Cleared by the next write, so an
+   * offer never outlives the situation it answered.
+   */
+  const [alternatives, setAlternatives] = useState<FleetAlternative[]>([]);
 
   const [tab, setTab] = useState<FleetTab>("calendar");
   const [windowStart, setWindowStart] = useState<string>(
@@ -129,6 +137,7 @@ export function useFleet(initialBoard: FleetBoardResponse | null) {
       }
       setBusy(true);
       setNotice(null);
+      setAlternatives([]);
       try {
         // The window travels with the write so the server can hand back the
         // board for the days actually on screen.
@@ -144,9 +153,11 @@ export function useFleet(initialBoard: FleetBoardResponse | null) {
           error?: string;
           message?: string;
           board?: FleetBoardResponse;
+          alternatives?: FleetAlternative[];
         } | null;
         if (!response.ok) {
           setNotice({ tone: "warn", text: data?.error ?? "That did not go through." });
+          if (Array.isArray(data?.alternatives)) setAlternatives(data.alternatives);
           return false;
         }
         if (data?.message) setNotice({ tone: "neutral", text: data.message });
@@ -292,6 +303,7 @@ export function useFleet(initialBoard: FleetBoardResponse | null) {
     busy,
     load,
     post,
+    alternatives,
 
     tab,
     setTab,

@@ -9,7 +9,7 @@ import {
   recordAssetEvent,
   todayInZurich,
 } from "@/lib/fleet-queries";
-import { blockedUntil, closureStatusFor, isBlocking } from "@/lib/fleet-rules";
+import { addDays, blockedUntil, checkReservation, closureStatusFor, formatDayLong, isBlocking } from "@/lib/fleet-rules";
 import { sendFleetNotice } from "@/lib/fleet-notify";
 
 /**
@@ -204,6 +204,104 @@ export async function promoteWaitlist(
     return promoted;
   }
   return null;
+}
+
+/**
+ * Once every request for an extension has been answered yes, the requester's
+ * booking grows — re-checked against the live spans at that moment, because
+ * bookings may have moved while people were deciding. Writes the `extended`
+ * and `extension_resolved` events and tells the requester either way.
+ *
+ * Shared by `respond_request` (shorten / cancel) and `move_booking` (the
+ * target moved out of the way), so the two cannot disagree about when an
+ * extension is "ready".
+ */
+export async function applyExtensionIfReady(
+  admin: Admin,
+  args: {
+    reservationId: string;
+    requestedEnd: string;
+    today: string;
+    actorUserId: string | null;
+    /** Who said yes, for the audit note and the notice. */
+    answerer: string;
+    reply: "shorten" | "cancel" | "move";
+    origin: string;
+    requesterId: string | null;
+  },
+): Promise<{ applied: boolean; waitingOn: number }> {
+  const { data: stillPending } = await admin
+    .from("fleet_booking_requests")
+    .select("id")
+    .eq("reservation_id", args.reservationId)
+    .eq("requested_end_date", args.requestedEnd)
+    .eq("status", "pending");
+  const waitingOn = (stillPending ?? []).length;
+  if (waitingOn > 0) return { applied: false, waitingOn };
+
+  const booking = await loadReservation(admin, args.reservationId);
+  if (!booking) return { applied: false, waitingOn: 0 };
+
+  let applied = false;
+  if ((booking.status === "reserved" || booking.status === "picked_up") && booking.end_date < args.requestedEnd) {
+    const existing = await fetchAssetSpans(admin, booking.asset_id);
+    const dayAfter = addDays(booking.end_date, 1);
+    const check = checkReservation({
+      startDate: dayAfter > args.today ? dayAfter : args.today,
+      endDate: args.requestedEnd,
+      today: args.today,
+      horizonDays: 365,
+      existing,
+      ignoreId: booking.id,
+    });
+    if (check.ok) {
+      const { error } = await admin
+        .from("fleet_reservations")
+        .update({ end_date: args.requestedEnd })
+        .eq("id", booking.id)
+        .in("status", ["reserved", "picked_up"]);
+      if (!error) {
+        applied = true;
+        await recordAssetEvent(admin, {
+          asset_id: booking.asset_id,
+          reservation_id: booking.id,
+          kind: "extended",
+          actor_user_id: args.actorUserId,
+          note: `Last day moved from ${booking.end_date} to ${args.requestedEnd} after ${args.answerer} agreed`,
+        });
+      }
+    }
+  }
+
+  await recordAssetEvent(admin, {
+    asset_id: booking.asset_id,
+    reservation_id: booking.id,
+    kind: "extension_resolved",
+    actor_user_id: args.actorUserId,
+    note: applied
+      ? `${args.answerer} agreed (${args.reply}); extended to ${formatDayLong(args.requestedEnd)}`
+      : `${args.answerer} agreed (${args.reply}), but the days are still taken — not extended`,
+  });
+
+  if (args.requesterId) {
+    await sendFleetNotice(admin, {
+      input: {
+        kind: "extension_accepted",
+        assetName: booking.asset?.name ?? "Fleet material",
+        answererName: args.answerer,
+        requestedEnd: args.requestedEnd,
+        applied,
+        linkReservationId: booking.id,
+      },
+      reservationId: booking.id,
+      assetId: booking.asset_id,
+      recipientIds: [args.requesterId],
+      sentForDate: args.today,
+      origin: args.origin,
+      actorUserId: args.actorUserId,
+    });
+  }
+  return { applied, waitingOn: 0 };
 }
 
 /**

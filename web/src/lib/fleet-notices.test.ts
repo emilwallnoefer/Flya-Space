@@ -28,6 +28,19 @@ describe("fleet notices", () => {
     expect(unclaimed.email.text).toMatch(/ask an admin/i);
   });
 
+  it("points at a free sibling when there is one", () => {
+    const r = renderFleetNotice(
+      { kind: "unit_not_back", assetName: "SVA-257", holderName: "Charles", dueDate: "2026-09-12", nextStart: "2026-09-14", nextEnd: "2026-09-16", linkReservationId: link, alternatives: ["SVA-330"] },
+      base,
+    );
+    expect(r.email.text).toContain("SVA-330 is free for those days");
+    const q = renderFleetNotice(
+      { kind: "extension_request", assetName: "SVA-257", requesterName: "Mel", requestedEnd: "2026-09-18", targetStart: "2026-09-17", targetEnd: "2026-09-19", linkReservationId: link, alternatives: ["SVA-330", "SVA-400"] },
+      base,
+    );
+    expect(q.email.text).toContain("SVA-330 and SVA-400 are free");
+  });
+
   it("phrases the request as a question with the three answers", () => {
     const r = renderFleetNotice(
       { kind: "extension_request", assetName: "SVA-257", requesterName: "Mel", requestedEnd: "2026-09-18", targetStart: "2026-09-17", targetEnd: "2026-09-19", linkReservationId: link },

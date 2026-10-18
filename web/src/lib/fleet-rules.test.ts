@@ -12,6 +12,8 @@ import {
   daysOverdue,
   describeDays,
   expiryFor,
+  freeSiblings,
+  normalizeKindKey,
   NO_SHOW_PENALTY,
   NO_SHOW_PENALTY_CAP,
   OVERDUE_REMINDER_DAYS,
@@ -44,6 +46,7 @@ import {
   tierFor,
   weekdayIndex,
   type ReservationSpan,
+  type SiblingAsset,
 } from "./fleet-rules";
 
 function span(partial: Partial<ReservationSpan> & { start_date: string; end_date: string }): ReservationSpan {
@@ -666,6 +669,51 @@ describe("an overdue unit keeps blocking until it is back", () => {
       existing: [noShow],
     });
     expect(check.ok).toBe(true);
+  });
+});
+
+describe("interchangeable units", () => {
+  const today = "2026-09-14";
+  const unit = (id: string, kind_key: string | null, extra: Partial<SiblingAsset> = {}): SiblingAsset => ({
+    id,
+    name: id.toUpperCase(),
+    kind_key,
+    pooled: true,
+    status: "available",
+    current_location: "Lausanne",
+    ...extra,
+  });
+
+  it("normalises a kind into one slug", () => {
+    expect(normalizeKindKey("Elios 3")).toBe("elios-3");
+    expect(normalizeKindKey("  elios-3 ")).toBe("elios-3");
+    expect(normalizeKindKey("LiDAR Rev 7")).toBe("lidar-rev-7");
+    expect(normalizeKindKey("")).toBeNull();
+    expect(normalizeKindKey("---")).toBeNull();
+    expect(normalizeKindKey(null)).toBeNull();
+  });
+
+  it("offers only free, bookable units of the same kind — never the unit itself", () => {
+    const assets = [
+      unit("sva-257", "elios-3"),
+      unit("sva-330", "elios-3"),
+      unit("sva-400", "elios-3", { status: "in_repair" }),
+      unit("sva-500", "elios-3", { pooled: false }),
+      unit("sva-600", "elios-3", { active: false }),
+      unit("rev-7", "lidar-rev-7"),
+      unit("sva-700", null),
+    ];
+    const spans = [span({ id: "x", asset_id: "sva-330", start_date: "2026-09-10", end_date: "2026-09-13", status: "returned", returned_on: "2026-09-13" })];
+    const free = freeSiblings({ asset: assets[0], startDate: "2026-09-14", endDate: "2026-09-16", today, assets, spans });
+    expect(free).toEqual([{ asset_id: "sva-330", name: "SVA-330", location: "Lausanne" }]);
+  });
+
+  it("treats an overdue sibling as taken through today, and a unit with no kind as having none", () => {
+    const assets = [unit("a", "elios-3"), unit("b", "elios-3"), unit("c", null), unit("d", null)];
+    const overdue = span({ id: "o", asset_id: "b", start_date: "2026-09-08", end_date: "2026-09-10", status: "picked_up" });
+    expect(freeSiblings({ asset: assets[0], startDate: today, endDate: today, today, assets, spans: [overdue] })).toEqual([]);
+    expect(freeSiblings({ asset: assets[0], startDate: "2026-09-15", endDate: "2026-09-15", today, assets, spans: [overdue] })).toHaveLength(1);
+    expect(freeSiblings({ asset: assets[2], startDate: today, endDate: today, today, assets, spans: [] })).toEqual([]);
   });
 });
 
