@@ -1,4 +1,7 @@
+import type { FleetRequestView } from "@/lib/fleet-requests";
 import type { ClosedReason, ReliabilityScore, ReservationSource, ReservationStatus } from "@/lib/fleet-rules";
+
+export type { FleetRequestView };
 
 /** Wire types for `/api/fleet`. Mirrors `src/lib/fleet-queries.ts`. */
 
@@ -86,6 +89,8 @@ export type FleetBoardResponse = {
   window_days: number;
   assets: FleetAsset[];
   reservations: FleetReservation[];
+  /** Extension requests the viewer asked or has to answer (admins: all). */
+  requests: FleetRequestView[];
   me: ReliabilityScore & { user_id: string };
   standings: Array<{ user_id: string; name: string; score: ReliabilityScore }>;
   /** Holder names with live bookings and no account behind them. */

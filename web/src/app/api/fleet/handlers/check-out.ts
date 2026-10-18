@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchUserNames, recordAssetEvent } from "@/lib/fleet-queries";
-import { loadReservation, type FleetActionContext } from "./shared";
+import { loadReservation, settleRequestsFor, type FleetActionContext } from "./shared";
 import type { FleetPayload } from "./schemas";
 
 export async function handleCheckOut(
@@ -59,14 +59,18 @@ export async function handleCheckOut(
   if (resError) throw new Error(resError.message);
   if (assetError) throw new Error(assetError.message);
 
-  await recordAssetEvent(admin, {
-    asset_id: reservation.asset_id,
-    reservation_id: reservation.id,
-    kind: "checked_out",
-    actor_user_id: viewer.id,
-    from_location: asset?.current_location ?? null,
-    to_location: destination,
-  });
+  await Promise.all([
+    recordAssetEvent(admin, {
+      asset_id: reservation.asset_id,
+      reservation_id: reservation.id,
+      kind: "checked_out",
+      actor_user_id: viewer.id,
+      from_location: asset?.current_location ?? null,
+      to_location: destination,
+    }),
+    // The unit is in this person's hands now; nobody can extend into it any more.
+    settleRequestsFor(admin, reservation.id, { asTarget: "expired" }),
+  ]);
 
   return NextResponse.json({ ok: true });
 }

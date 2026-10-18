@@ -11,6 +11,7 @@ import { ManageMaterial } from "./manage-material";
 import { MaterialList } from "./material-list";
 import { MyMaterial } from "./my-material";
 import { ReliabilityBadge } from "./reliability-badge";
+import { RequestsStrip } from "./requests-strip";
 import { ReservationDetail } from "./reservation-detail";
 import { Standings } from "./standings";
 import { useFleet, type FleetTab } from "./use-fleet";
@@ -146,24 +147,32 @@ export function FleetPanel({ initialBoard = null }: { initialBoard?: FleetBoardR
           {tab === "material" ? <MaterialList assets={visibleAssets} /> : null}
 
           {tab === "mine" ? (
-            <MyMaterial
-              reservations={myReservations}
-              assets={assets}
-              today={today}
-              busy={busy}
-              score={board?.me ?? null}
-              onCheckOut={(id) => void post({ action: "check_out", reservation_id: id })}
-              onCheckIn={(id, location, returnedOn) =>
-                void post({
-                  action: "check_in",
-                  reservation_id: id,
-                  location: location || undefined,
-                  returned_on: returnedOn || undefined,
-                })
-              }
-              onCancel={(id) => void post({ action: "cancel", reservation_id: id })}
-              onBrowse={() => setTab("calendar")}
-            />
+            <div className="space-y-4">
+              <RequestsStrip
+                requests={board?.requests ?? []}
+                busy={busy}
+                onRespond={(requestId, reply) => void post({ action: "respond_request", request_id: requestId, reply })}
+              />
+              <MyMaterial
+                reservations={myReservations}
+                assets={assets}
+                today={today}
+                busy={busy}
+                score={board?.me ?? null}
+                onCheckOut={(id) => void post({ action: "check_out", reservation_id: id })}
+                onCheckIn={(id, location, returnedOn) =>
+                  void post({
+                    action: "check_in",
+                    reservation_id: id,
+                    location: location || undefined,
+                    returned_on: returnedOn || undefined,
+                  })
+                }
+                onCancel={(id) => void post({ action: "cancel", reservation_id: id })}
+                onChangeDates={(id, endDate) => void post({ action: "change_dates", reservation_id: id, end_date: endDate })}
+                onBrowse={() => setTab("calendar")}
+              />
+            </div>
           ) : null}
 
           {tab === "manage" && board?.is_admin ? (
@@ -199,6 +208,9 @@ export function FleetPanel({ initialBoard = null }: { initialBoard?: FleetBoardR
             }}
             onCancel={async (id) => {
               if (await post({ action: "cancel", reservation_id: id })) setDetail(null);
+            }}
+            onChangeDates={async (id, endDate) => {
+              if (await post({ action: "change_dates", reservation_id: id, end_date: endDate })) setDetail(null);
             }}
           />
         ) : null}

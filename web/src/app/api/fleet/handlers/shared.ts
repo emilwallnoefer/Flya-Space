@@ -175,6 +175,49 @@ export async function promoteWaitlist(admin: Admin, assetId: string): Promise<st
 }
 
 /**
+ * Settles the extension requests a booking is party to, when that booking
+ * changes in a way that makes them moot.
+ *
+ * - `asRequester`: requests THIS booking filed (it wanted to grow). Cancelled or
+ *   checked in → withdrawn (`cancelled`); shortened → withdrawn too.
+ * - `asTarget`: requests that wanted THIS booking to give way. Once it is picked
+ *   up, cancelled or checked in there is nothing left to decide → `expired`.
+ *
+ * Best effort: a missing table (migration not applied yet) is not an error here.
+ */
+export async function settleRequestsFor(
+  admin: Admin,
+  reservationId: string,
+  outcomes: { asRequester?: "cancelled"; asTarget?: "expired" },
+): Promise<void> {
+  const now = new Date().toISOString();
+  const jobs: Array<PromiseLike<{ error: { message: string; code?: string } | null }>> = [];
+  if (outcomes.asRequester) {
+    jobs.push(
+      admin
+        .from("fleet_booking_requests")
+        .update({ status: outcomes.asRequester, resolved_at: now })
+        .eq("reservation_id", reservationId)
+        .eq("status", "pending"),
+    );
+  }
+  if (outcomes.asTarget) {
+    jobs.push(
+      admin
+        .from("fleet_booking_requests")
+        .update({ status: outcomes.asTarget, resolved_at: now })
+        .eq("target_reservation_id", reservationId)
+        .eq("status", "pending"),
+    );
+  }
+  for (const result of await Promise.all(jobs)) {
+    if (result.error && result.error.code !== "42P01") {
+      console.error("fleet_booking_requests settle failed", result.error.message);
+    }
+  }
+}
+
+/**
  * Closes every live booking on an asset, because the asset is moving between
  * the shared pool and a fixed assignment and cannot stay booked either way.
  *

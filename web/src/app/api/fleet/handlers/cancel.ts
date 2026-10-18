@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { recordAssetEvent } from "@/lib/fleet-queries";
-import { loadReservation, promoteWaitlist, type FleetActionContext } from "./shared";
+import { loadReservation, promoteWaitlist, settleRequestsFor, type FleetActionContext } from "./shared";
 import type { FleetPayload } from "./schemas";
 
 export async function handleCancel(
@@ -40,6 +40,8 @@ export async function handleCancel(
       actor_user_id: viewer.id,
     }),
     promoteWaitlist(admin, reservation.asset_id),
+    // A cancelled booking neither wants to grow nor stands in anyone's way.
+    settleRequestsFor(admin, reservation.id, { asRequester: "cancelled", asTarget: "expired" }),
   ]);
   return NextResponse.json({ ok: true, promoted });
 }

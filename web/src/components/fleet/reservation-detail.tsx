@@ -1,9 +1,9 @@
 "use client";
 
 import { m } from "framer-motion";
-import { useEffect, useRef } from "react";
-import { Badge, Button } from "@/components/ui";
-import { dueLabel, formatDayLong, formatSpan, occupiedUntil } from "@/lib/fleet-rules";
+import { useEffect, useRef, useState } from "react";
+import { Badge, Button, Input } from "@/components/ui";
+import { addDays, dueLabel, formatDayLong, formatSpan, MAX_RESERVATION_DAYS, occupiedUntil } from "@/lib/fleet-rules";
 import { useFocusTrap } from "@/lib/use-focus-trap";
 import { AssetIcon } from "./asset-icon";
 import { useHolderRgb } from "./holder-colors";
@@ -24,6 +24,7 @@ export function ReservationDetail({
   onClose,
   onCheckIn,
   onCancel,
+  onChangeDates,
 }: {
   reservation: FleetReservation;
   asset: FleetAsset | null;
@@ -32,10 +33,14 @@ export function ReservationDetail({
   onClose: () => void;
   onCheckIn: (id: string) => void;
   onCancel: (id: string) => void;
+  /** Move the booking's last day (own live bookings only). */
+  onChangeDates?: (id: string, endDate: string) => void;
 }) {
   const rgbOf = useHolderRgb();
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(dialogRef, true);
+  const [changing, setChanging] = useState(false);
+  const [newEnd, setNewEnd] = useState(reservation.end_date);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -141,6 +146,39 @@ export function ReservationDetail({
                 Cancel booking
               </Button>
             )}
+            {onChangeDates ? (
+              <Button size="xs" variant="ghost" disabled={busy} aria-expanded={changing} onClick={() => setChanging((v) => !v)}>
+                Change dates
+              </Button>
+            ) : null}
+            {onChangeDates && changing ? (
+              <div className="flex basis-full flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[11px] text-ink-4">Last day</span>
+                <Input
+                  type="date"
+                  value={newEnd}
+                  autoFocus
+                  min={reservation.start_date > today ? reservation.start_date : today}
+                  max={addDays(reservation.start_date, MAX_RESERVATION_DAYS - 1)}
+                  onChange={(event) => setNewEnd(event.target.value)}
+                  className="text-xs"
+                  aria-label="New last day"
+                />
+                <Button
+                  size="xs"
+                  variant="accent"
+                  disabled={busy || !newEnd || newEnd === reservation.end_date}
+                  onClick={() => onChangeDates(reservation.id, newEnd)}
+                >
+                  {newEnd > reservation.end_date ? "Keep it longer" : "Give days back"}
+                </Button>
+                {newEnd > reservation.end_date ? (
+                  <span className="basis-full text-[11px] text-ink-5">
+                    If someone has it booked for those days, they are asked first — nothing changes until they answer.
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
           </footer>
         ) : null}
       </m.div>

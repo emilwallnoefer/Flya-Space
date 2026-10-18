@@ -145,11 +145,27 @@ const setStatusSchema = z.object({
   note: z.string().trim().max(280).optional(),
 });
 
+/** Move a booking's last day. Shortens freely; extends when free, else files requests. */
+const changeDatesSchema = z.object({
+  action: z.literal("change_dates"),
+  reservation_id: z.string().uuid(),
+  end_date: dateKey,
+});
+
+/** The next booker's answer to an extension request. */
+const respondRequestSchema = z.object({
+  action: z.literal("respond_request"),
+  request_id: z.string().uuid(),
+  reply: z.enum(["shorten", "cancel", "decline"]),
+});
+
 export const postSchema = z.discriminatedUnion("action", [
   reserveSchema,
   cancelSchema,
   checkOutSchema,
   checkInSchema,
+  changeDatesSchema,
+  respondRequestSchema,
   moveSchema,
   confirmSchema,
   setStatusSchema,

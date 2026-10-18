@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchReliability, recordAssetEvent } from "@/lib/fleet-queries";
-import { loadReservation, promoteWaitlist, type FleetActionContext } from "./shared";
+import { loadReservation, promoteWaitlist, settleRequestsFor, type FleetActionContext } from "./shared";
 import type { FleetPayload } from "./schemas";
 
 export async function handleCheckIn(
@@ -95,6 +95,8 @@ export async function handleCheckIn(
     }),
     promoteWaitlist(admin, reservation.asset_id),
     fetchReliability(admin, reservation.user_id, today),
+    // Back on the shelf: it no longer wants more days, and blocks nobody.
+    settleRequestsFor(admin, reservation.id, { asRequester: "cancelled", asTarget: "expired" }),
   ]);
   return NextResponse.json({ ok: true, promoted, score });
 }

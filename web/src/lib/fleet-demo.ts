@@ -191,6 +191,7 @@ export function buildDemoBoard(args: {
     window_days: windowDays,
     assets,
     reservations,
+    requests: [],
     me: { ...computeReliability(spansByUser.get(viewerId) ?? [], today), user_id: viewerId },
     standings,
     unclaimed_holders: [
