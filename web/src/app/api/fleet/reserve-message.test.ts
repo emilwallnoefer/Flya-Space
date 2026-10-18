@@ -44,4 +44,16 @@ describe("reserveErrorMessage", () => {
     expect(message).toContain("SVA-257");
     expect(message).toMatch(/waitlist/i);
   });
+
+  it("names the free siblings on a clash, and still mentions the waitlist", () => {
+    const one = reserveErrorMessage({ ok: false, reason: "overlap", conflicting: [] }, reliability, "SVA-257", [{ name: "SVA-330" }]);
+    expect(one).toContain("SVA-330 is free for those days");
+    expect(one).toMatch(/waitlist/i);
+    const three = reserveErrorMessage({ ok: false, reason: "overlap", conflicting: [] }, reliability, "SVA-257", [
+      { name: "A" },
+      { name: "B" },
+      { name: "C" },
+    ]);
+    expect(three).toContain("A, B and 1 more are free");
+  });
 });

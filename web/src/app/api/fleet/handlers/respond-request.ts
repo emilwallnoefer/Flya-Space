@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { fetchAssetSpans, fetchUserNames, recordAssetEvent } from "@/lib/fleet-queries";
+import { fetchUserNames, recordAssetEvent } from "@/lib/fleet-queries";
 import { sendFleetNotice } from "@/lib/fleet-notify";
 import { requestExpired, shortenedStartFor, type RequestStatus } from "@/lib/fleet-requests";
-import { addDays, checkReservation, formatDayLong, formatSpan } from "@/lib/fleet-rules";
-import { loadReservation, promoteWaitlist, type Admin, type FleetActionContext } from "./shared";
+import { formatDayLong, formatSpan } from "@/lib/fleet-rules";
+import { applyExtensionIfReady, loadReservation, promoteWaitlist, type Admin, type FleetActionContext } from "./shared";
 import type { FleetPayload } from "./schemas";
 
 type RequestRow = {
@@ -24,9 +24,11 @@ type RequestRow = {
  *   - cancel  — their booking is cancelled (an ordinary cancellation, unscored)
  *   - decline — nothing changes; the requester is told to get in touch
  *
+ * (A fourth, moving their booking to a free sibling unit, is `move_booking`,
+ * which grants the request as a side effect.)
+ *
  * Once every request for the same extension is accepted, the requester's
- * booking grows — checked once more against the live spans, because the world
- * may have moved while people were deciding.
+ * booking grows — see `applyExtensionIfReady`.
  */
 export async function handleRespondRequest(
   ctx: FleetActionContext,
@@ -73,7 +75,6 @@ export async function handleRespondRequest(
   );
   const answerer = viewer.isAdmin && row.recipient_id !== viewer.id ? `${viewer.name} (admin)` : viewer.name;
   const requesterName = row.requester_id ? (names.get(row.requester_id) ?? "the requester") : "the requester";
-
   const assetName = requesterBooking.asset?.name ?? "Fleet material";
 
   if (payload.reply === "decline") {
@@ -144,88 +145,28 @@ export async function handleRespondRequest(
     await close(admin, row.id, "accepted", "cancel", viewer.id);
   }
 
-  // Everyone said yes? Then the requester's booking grows — re-checked, because
-  // bookings may have moved while people were deciding.
-  const { data: stillPending } = await admin
-    .from("fleet_booking_requests")
-    .select("id")
-    .eq("reservation_id", row.reservation_id)
-    .eq("requested_end_date", row.requested_end_date)
-    .eq("status", "pending");
-  if ((stillPending ?? []).length > 0) {
-    return NextResponse.json({ ok: true, reply: payload.reply, applied: false, waiting_on: (stillPending ?? []).length });
-  }
-
-  let applied = false;
-  if (
-    (requesterBooking.status === "reserved" || requesterBooking.status === "picked_up") &&
-    requesterBooking.end_date < row.requested_end_date
-  ) {
-    const existing = await fetchAssetSpans(admin, requesterBooking.asset_id);
-    const dayAfter = addDays(requesterBooking.end_date, 1);
-    const check = checkReservation({
-      startDate: dayAfter > today ? dayAfter : today,
-      endDate: row.requested_end_date,
-      today,
-      horizonDays: 365,
-      existing,
-      ignoreId: requesterBooking.id,
-    });
-    if (check.ok) {
-      const { error } = await admin
-        .from("fleet_reservations")
-        .update({ end_date: row.requested_end_date })
-        .eq("id", requesterBooking.id)
-        .in("status", ["reserved", "picked_up"]);
-      if (!error) {
-        applied = true;
-        await recordAssetEvent(admin, {
-          asset_id: requesterBooking.asset_id,
-          reservation_id: requesterBooking.id,
-          kind: "extended",
-          actor_user_id: viewer.id,
-          note: `Last day moved from ${requesterBooking.end_date} to ${row.requested_end_date} after ${answerer} agreed`,
-        });
-      }
-    }
-  }
-
-  await recordAssetEvent(admin, {
-    asset_id: requesterBooking.asset_id,
-    reservation_id: requesterBooking.id,
-    kind: "extension_resolved",
-    actor_user_id: viewer.id,
-    note: applied
-      ? `${answerer} agreed (${payload.reply}); extended to ${formatDayLong(row.requested_end_date)}`
-      : `${answerer} agreed (${payload.reply}), but the days are still taken — not extended`,
+  const outcome = await applyExtensionIfReady(admin, {
+    reservationId: row.reservation_id,
+    requestedEnd: row.requested_end_date,
+    today,
+    actorUserId: viewer.id,
+    answerer,
+    reply: payload.reply,
+    origin,
+    requesterId: row.requester_id,
   });
+  if (outcome.waitingOn > 0) {
+    return NextResponse.json({ ok: true, reply: payload.reply, applied: false, waiting_on: outcome.waitingOn });
+  }
   if (payload.reply === "cancel") {
     await promoteWaitlist(admin, target.asset_id, { origin, today, actorUserId: viewer.id });
-  }
-  if (row.requester_id) {
-    await sendFleetNotice(admin, {
-      input: {
-        kind: "extension_accepted",
-        assetName,
-        answererName: answerer,
-        requestedEnd: row.requested_end_date,
-        applied,
-        linkReservationId: requesterBooking.id,
-      },
-      reservationId: requesterBooking.id,
-      assetId: requesterBooking.asset_id,
-      recipientIds: [row.requester_id],
-      sentForDate: today,
-      origin,
-      actorUserId: viewer.id,
-    });
   }
 
   return NextResponse.json({
     ok: true,
     reply: payload.reply,
-    applied,
-    message: applied
+    applied: outcome.applied,
+    message: outcome.applied
       ? `${requesterName} now has the unit until ${formatDayLong(row.requested_end_date)}.`
       : "Thanks — recorded. The extension could not be applied yet because the days are still taken.",
   });

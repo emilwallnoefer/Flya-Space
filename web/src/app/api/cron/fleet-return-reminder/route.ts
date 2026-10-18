@@ -5,7 +5,7 @@ import { guardAdmin } from "@/lib/admin-guard";
 import { checkRateLimit, createRateLimitHeaders, getClientIp } from "@/lib/security/rate-limit";
 import { isResendConfigured, sendEmailViaResend } from "@/lib/email/resend";
 import { isAdminEmail } from "@/lib/admin";
-import { displayNameFor, fetchRemindersEnabled, recordAssetEvent, todayInZurich } from "@/lib/fleet-queries";
+import { displayNameFor, fetchFreeSiblings, fetchRemindersEnabled, recordAssetEvent, todayInZurich } from "@/lib/fleet-queries";
 import { sendFleetNotice, type FleetNoticeResult } from "@/lib/fleet-notify";
 import {
   addDays,
@@ -487,6 +487,12 @@ export async function GET(request: Request) {
       if (next?.user_id) {
         const delta = daysBetween(today, next.start_date);
         if (delta <= 2) {
+          const siblings = await fetchFreeSiblings(admin, {
+            assetId: row.asset_id,
+            startDate: next.start_date,
+            endDate: next.end_date,
+            today,
+          });
           const results = await sendFleetNotice(admin, {
             input: {
               kind: "unit_not_back",
@@ -496,6 +502,7 @@ export async function GET(request: Request) {
               nextStart: next.start_date,
               nextEnd: next.end_date,
               linkReservationId: next.id,
+              alternatives: siblings.map((s) => s.name),
             },
             reservationId: next.id,
             assetId: row.asset_id,

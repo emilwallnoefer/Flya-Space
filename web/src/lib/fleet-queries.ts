@@ -5,12 +5,15 @@ import {
   computeReliability,
   daysOverdue,
   dueDateOf,
+  freeSiblings,
   holderLabelMatchesPerson,
   isBlocking,
   isBookable,
   mondayOf,
   normalizeHolderLabel,
   orderQueue,
+  type FreeSibling,
+  type SiblingAsset,
   type ReliabilityScore,
   type ClosedReason,
   type ReservationSource,
@@ -93,6 +96,8 @@ export type FleetAssetRow = {
   active: boolean;
   /** True when the unit is part of the shared bookable pool (and so, the calendar). */
   pooled: boolean;
+  /** Admin-set slug grouping interchangeable units ("elios-3"); null = no siblings. */
+  kind_key: string | null;
 };
 
 export type FleetReservationRow = {
@@ -320,7 +325,7 @@ export async function fetchFleetBoard(
     admin
       .from("fleet_assets")
       .select(
-        "id, serial_number, name, category, model, owner_group, status, home_location, current_location, current_holder_user_id, current_holder_label, location_confirmed_at, notes, active, pooled",
+        "id, serial_number, name, category, model, owner_group, status, home_location, current_location, current_holder_user_id, current_holder_label, location_confirmed_at, notes, active, pooled, kind_key",
       )
       .eq("active", true)
       .order("name", { ascending: true }),
@@ -337,7 +342,7 @@ export async function fetchFleetBoard(
       ? admin
           .from("fleet_assets")
           .select(
-            "id, serial_number, name, category, model, owner_group, status, home_location, current_location, current_holder_user_id, current_holder_label, location_confirmed_at, notes, active, pooled",
+            "id, serial_number, name, category, model, owner_group, status, home_location, current_location, current_holder_user_id, current_holder_label, location_confirmed_at, notes, active, pooled, kind_key",
           )
           .eq("active", false)
           .order("name", { ascending: true })
@@ -565,6 +570,20 @@ export async function fetchFleetBoard(
           target_end_date: target.end_date,
           incoming,
           outgoing: row.requester_id === args.viewerId,
+          // What the recipient could move to instead of giving up days: free
+          // units of the same kind for THEIR whole booking. Only computed where
+          // someone can act on it.
+          alternatives:
+            incoming && row.status === "pending"
+              ? freeSiblings({
+                  asset: { id: target.asset_id, kind_key: assetById.get(target.asset_id)?.kind_key ?? null },
+                  startDate: target.start_date,
+                  endDate: target.end_date,
+                  today,
+                  assets,
+                  spans: reservations.map(toSpan),
+                })
+              : [],
         },
       ];
     })
@@ -689,6 +708,48 @@ export async function fetchUserContacts(admin: AnySupabase, ids: string[]): Prom
     });
   }
   return contacts;
+}
+
+/**
+ * Other units of the same kind as `assetId` that are free for the whole span.
+ * Empty when the unit has no kind. Reads the kind's units and their live
+ * bookings; the rule itself is `freeSiblings` in fleet-rules.
+ */
+export async function fetchFreeSiblings(
+  admin: AnySupabase,
+  args: { assetId: string; startDate: string; endDate: string; today: string },
+): Promise<FreeSibling[]> {
+  const { data: asset } = await admin
+    .from("fleet_assets")
+    .select("id, kind_key")
+    .eq("id", args.assetId)
+    .maybeSingle();
+  const kindKey = (asset as { kind_key?: string | null } | null)?.kind_key ?? null;
+  if (!kindKey) return [];
+
+  const { data: units } = await admin
+    .from("fleet_assets")
+    .select("id, name, kind_key, pooled, status, active, current_location")
+    .eq("kind_key", kindKey)
+    .eq("active", true);
+  const assets = (units ?? []) as SiblingAsset[];
+  const ids = assets.map((a) => a.id).filter((id) => id !== args.assetId);
+  if (ids.length === 0) return [];
+
+  const { data: rows } = await admin
+    .from("fleet_reservations")
+    .select("id, asset_id, user_id, holder_label, source, start_date, end_date, status, returned_on, closed_reason")
+    .in("asset_id", ids)
+    .in("status", ["reserved", "picked_up"]);
+  const spans = ((rows ?? []) as FleetReservationRow[]).map(toSpan);
+  return freeSiblings({
+    asset: { id: args.assetId, kind_key: kindKey },
+    startDate: args.startDate,
+    endDate: args.endDate,
+    today: args.today,
+    assets,
+    spans,
+  });
 }
 
 /** The auth user ids behind `ADMIN_EMAILS`, for notices that go to the admins. */

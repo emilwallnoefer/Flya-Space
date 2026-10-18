@@ -32,6 +32,8 @@ export type FleetNoticeInput =
       nextStart: string;
       nextEnd: string;
       linkReservationId: string;
+      /** Names of free units of the same kind for the reader's days, if any. */
+      alternatives?: string[];
     }
   | {
       kind: "extension_request";
@@ -41,6 +43,8 @@ export type FleetNoticeInput =
       targetStart: string;
       targetEnd: string;
       linkReservationId: string;
+      /** Names of free units of the same kind the reader could move to, if any. */
+      alternatives?: string[];
     }
   | {
       kind: "extension_accepted";
@@ -114,32 +118,45 @@ function day(dateKey: string): string {
   }
 }
 
+/** "SVA-330 is free for those days" / "SVA-330 and SVA-400 are free for those days", or null. */
+function freeLine(alternatives: string[] | undefined): string | null {
+  if (!alternatives || alternatives.length === 0) return null;
+  const list = alternatives.length <= 2 ? alternatives.join(" and ") : `${alternatives.slice(0, 2).join(", ")} and ${alternatives.length - 2} more`;
+  return `${list} ${alternatives.length === 1 ? "is" : "are"} free for those days — you can move your booking there in Fleet.`;
+}
+
 /** One sentence each: what happened, what it means for the reader, what to do. */
 function compose(input: FleetNoticeInput): { title: string; lines: string[]; cta: string } {
   switch (input.kind) {
     case "unit_not_back": {
       const who = input.holderName ?? "the previous holder";
+      const free = freeLine(input.alternatives);
       return {
         title: `${input.assetName} has not come back yet`,
         lines: [
           `${who} was due to return ${input.assetName} on ${day(input.dueDate)}, and it has not been checked in.`,
           `Your booking runs ${formatSpan(input.nextStart, input.nextEnd)}.`,
-          input.holderName
-            ? `Get in touch with ${input.holderName} to find a solution — or book another unit if one is free.`
-            : "That booking has no account behind it, so ask an admin — or book another unit if one is free.",
+          free ??
+            (input.holderName
+              ? `Get in touch with ${input.holderName} to find a solution — or book another unit if one is free.`
+              : "That booking has no account behind it, so ask an admin — or book another unit if one is free."),
         ],
         cta: "Open my booking",
       };
     }
-    case "extension_request":
+    case "extension_request": {
+      const free = freeLine(input.alternatives);
       return {
         title: `${input.requesterName} needs ${input.assetName} until ${day(input.requestedEnd)}`,
         lines: [
           `That runs into your booking ${formatSpan(input.targetStart, input.targetEnd)}.`,
-          "Nothing changes until you answer: start later, cancel your booking, or decline and get in touch.",
+          free
+            ? `Nothing changes until you answer. ${free}`
+            : "Nothing changes until you answer: start later, cancel your booking, or decline and get in touch.",
         ],
         cta: "Answer in Fleet",
       };
+    }
     case "extension_accepted":
       return input.applied
         ? {

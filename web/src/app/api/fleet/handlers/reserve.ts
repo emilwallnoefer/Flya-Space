@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchAssetSpans, fetchReliability, recordAssetEvent } from "@/lib/fleet-queries";
+import { fetchAssetSpans, fetchFreeSiblings, fetchReliability, recordAssetEvent } from "@/lib/fleet-queries";
 import { checkReservation, isBookable, parseDateKey, toDateKey } from "@/lib/fleet-rules";
 import { reserveErrorMessage } from "../reserve-message";
 import type { FleetActionContext } from "./shared";
@@ -80,7 +80,16 @@ export async function handleReserve(
         message: `Added to the waitlist for ${asset.name}. Position is set by reliability score.`,
       });
     }
-    return NextResponse.json({ error: reserveErrorMessage(check, reliability, asset.name) }, { status: 409 });
+    // A clash is the one refusal with a way out other than waiting: another
+    // unit of the same kind that is free for those days.
+    const alternatives =
+      check.reason === "overlap"
+        ? await fetchFreeSiblings(admin, { assetId: asset.id, startDate, endDate, today })
+        : [];
+    return NextResponse.json(
+      { error: reserveErrorMessage(check, reliability, asset.name, alternatives), alternatives },
+      { status: 409 },
+    );
   }
 
   const { data: row, error } = await admin

@@ -111,9 +111,18 @@ const assetFields = {
   current_location: z.string().trim().max(160).nullable().optional(),
   current_holder_label: z.string().trim().max(160).nullable().optional(),
   notes: z.string().trim().max(500).nullable().optional(),
+  /** Which units can stand in for this one; normalised to a slug by the handler. */
+  kind_key: z.string().trim().max(60).nullable().optional(),
 };
 
 const createAssetSchema = z.object({ action: z.literal("create_asset"), ...assetFields });
+
+/** Move a booking to another unit for the same days (own booking, not yet picked up). */
+const moveBookingSchema = z.object({
+  action: z.literal("move_booking"),
+  reservation_id: z.string().uuid(),
+  asset_id: z.string().uuid(),
+});
 
 const updateAssetSchema = z.object({
   action: z.literal("update_asset"),
@@ -129,6 +138,7 @@ const updateAssetSchema = z.object({
   current_location: assetFields.current_location,
   current_holder_label: assetFields.current_holder_label,
   notes: assetFields.notes,
+  kind_key: assetFields.kind_key,
 });
 
 const archiveAssetSchema = z.object({
@@ -166,6 +176,7 @@ export const postSchema = z.discriminatedUnion("action", [
   checkInSchema,
   changeDatesSchema,
   respondRequestSchema,
+  moveBookingSchema,
   moveSchema,
   confirmSchema,
   setStatusSchema,

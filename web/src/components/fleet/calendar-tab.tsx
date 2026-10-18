@@ -32,6 +32,7 @@ export function CalendarTab({
     loading,
     busy,
     post,
+    alternatives,
     windowStart,
     // Set in the toolbar, read here: the grid is what it changes.
     showPast,
@@ -51,11 +52,11 @@ export function CalendarTab({
   const selectedAsset = selection ? (assets.find((a) => a.id === selection.assetId) ?? null) : null;
   const daysSelected = selection ? spanLength(selection.startDate, selection.endDate) : 0;
 
-  async function confirmBooking(waitlist: boolean) {
-    if (!selection) return;
+  async function confirmBooking(waitlist: boolean, assetId: string = selection?.assetId ?? "") {
+    if (!selection || !assetId) return;
     const ok = await post({
       action: "reserve",
-      asset_id: selection.assetId,
+      asset_id: assetId,
       start_date: selection.startDate,
       end_date: selection.endDate,
       destination: destination.trim() || undefined,
@@ -190,6 +191,13 @@ export function CalendarTab({
             <Button size="sm" variant="glass" onClick={() => void confirmBooking(true)} disabled={busy}>
               Join waitlist instead
             </Button>
+            {/* Offered by the server with a clash: the same days on a free
+                unit of the same kind. One tap books it there instead. */}
+            {alternatives.map((alt) => (
+              <Button key={alt.asset_id} size="sm" variant="accent" disabled={busy} onClick={() => void confirmBooking(false, alt.asset_id)}>
+                Book {alt.name} instead{alt.location ? ` · ${alt.location}` : ""}
+              </Button>
+            ))}
           </div>
         </div>
       ) : null}

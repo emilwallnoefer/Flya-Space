@@ -20,6 +20,17 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-19-fleet-alternatives",
+    date: "Oct 19, 2026",
+    title: "Fleet: when a unit is taken, take its twin",
+    highlights: [
+      "Booking a unit that is taken now names the free units of the same kind, with a one-tap Book instead",
+      "Asked to free your days? If a twin unit is free, Move to it and keep your dates — the request is granted by that",
+      "Notices about a late unit or an extension request say which twin is free",
+      "Admins: set “Interchangeable with” on each unit in Fleet → Manage; units without a kind are never offered",
+    ],
+  },
+  {
     version: "2026-10-19-fleet-notices",
     date: "Oct 19, 2026",
     title: "Fleet: you hear about bookings that touch yours",

@@ -170,6 +170,7 @@ export function FleetPanel({ initialBoard = null }: { initialBoard?: FleetBoardR
                 requests={board?.requests ?? []}
                 busy={busy}
                 onRespond={(requestId, reply) => void post({ action: "respond_request", request_id: requestId, reply })}
+                onMove={(reservationId, assetId) => void post({ action: "move_booking", reservation_id: reservationId, asset_id: assetId })}
               />
               <MyMaterial
                 reservations={myReservations}
@@ -259,5 +260,6 @@ function assetFields(draft: AssetDraft) {
     current_location: draft.current_location.trim(),
     current_holder_label: draft.current_holder_label.trim(),
     notes: draft.notes.trim(),
+    kind_key: draft.kind_key.trim(),
   };
 }

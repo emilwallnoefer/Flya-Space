@@ -193,6 +193,7 @@ export function pooledAsset(overrides: Record<string, unknown> = {}) {
     current_holder_label: null,
     location_confirmed_at: null,
     notes: null,
+    kind_key: null,
     ...overrides,
   };
 }

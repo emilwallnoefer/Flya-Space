@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { recordAssetEvent } from "@/lib/fleet-queries";
+import { normalizeKindKey } from "@/lib/fleet-rules";
 import type { FleetActionContext } from "./shared";
 import type { FleetPayload } from "./schemas";
 
@@ -36,6 +37,7 @@ export async function handleCreateAsset(
       current_location: payload.current_location?.trim() || payload.home_location?.trim() || null,
       current_holder_label: pooled ? null : holder,
       notes: payload.notes?.trim() || null,
+      kind_key: normalizeKindKey(payload.kind_key),
       location_confirmed_at: new Date().toISOString(),
     })
     .select("id, name")

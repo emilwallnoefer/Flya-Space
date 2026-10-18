@@ -26,6 +26,7 @@ import { handleArchiveAsset } from "./handlers/archive-asset";
 import { handleRegisterMember } from "./handlers/register-member";
 import { handleChangeDates } from "./handlers/change-dates";
 import { handleRespondRequest } from "./handlers/respond-request";
+import { handleMoveBooking } from "./handlers/move-booking";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -209,5 +210,7 @@ async function dispatch(ctx: FleetActionContext, payload: PostPayload): Promise<
       return await handleChangeDates(ctx, payload);
     case "respond_request":
       return await handleRespondRequest(ctx, payload);
+    case "move_booking":
+      return await handleMoveBooking(ctx, payload);
   }
 }

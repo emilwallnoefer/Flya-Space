@@ -88,6 +88,7 @@ export function buildDemoBoard(args: {
     active: true,
     // Mirrors the backfill: anything already out is an assignment, not pool stock.
     pooled: asset.status !== "out",
+    kind_key: null,
     holder_name: asset.status === "out" ? "On mission" : null,
     location_age_days: asset.confirmedDaysAgo,
     location_stale: asset.confirmedDaysAgo == null || asset.confirmedDaysAgo > 42,
