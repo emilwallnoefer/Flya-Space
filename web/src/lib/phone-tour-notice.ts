@@ -2,7 +2,8 @@ import "server-only";
 
 import { getAdminEmails, isAdminEmail } from "@/lib/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isPushConfigured, sendPush, type PushSubscriptionRow } from "@/lib/push/send";
+import { isPushConfigured } from "@/lib/push/send";
+import { pushToUsers } from "@/lib/push/notify-users";
 import { renderPhoneTourPush } from "@/lib/phone-tour-notice-email";
 
 /**
@@ -34,30 +35,11 @@ async function adminUserIds(admin: Admin): Promise<string[]> {
 async function pushAdmins(admin: Admin, payload: ReturnType<typeof renderPhoneTourPush>): Promise<{ sent: number; error: string | null }> {
   const ids = await adminUserIds(admin);
   if (ids.length === 0) return { sent: 0, error: "No admin accounts found." };
-  const { data: devices, error } = await admin
-    .from("push_subscriptions")
-    .select("id, user_id, endpoint, p256dh, auth")
-    .in("user_id", ids);
-  if (error) return { sent: 0, error: error.message };
-  if (!devices || devices.length === 0) return { sent: 0, error: "No admin device has notifications on." };
-
-  let sent = 0;
-  const goneIds: string[] = [];
-  const failures: string[] = [];
-  await Promise.all(
-    (devices as Array<PushSubscriptionRow & { id: string; user_id: string }>).map(async (device) => {
-      const result = await sendPush(device, payload, { ttlSeconds: 6 * 60 * 60 });
-      if (result.ok) sent += 1;
-      else if (result.gone) goneIds.push(device.id);
-      else failures.push(result.error);
-    }),
-  );
-  if (goneIds.length > 0) await admin.from("push_subscriptions").delete().in("id", goneIds);
-  if (sent > 0) {
-    const okIds = devices.filter((d) => !goneIds.includes(d.id)).map((d) => d.id);
-    await admin.from("push_subscriptions").update({ last_used_at: new Date().toISOString() }).in("id", okIds);
+  const result = await pushToUsers(admin, ids, payload, { ttlSeconds: 6 * 60 * 60 });
+  if (result.devices === 0) {
+    return { sent: 0, error: result.errors[0] ?? "No admin device has notifications on." };
   }
-  return { sent, error: failures.length > 0 ? failures.join("; ") : null };
+  return { sent: result.sent, error: result.errors.length > 0 ? result.errors.join("; ") : null };
 }
 
 export async function notifyAdminsOfPhoneTourCompletion(params: {

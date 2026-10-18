@@ -4,9 +4,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { guardAdmin } from "@/lib/admin-guard";
 import { checkRateLimit, createRateLimitHeaders, getClientIp } from "@/lib/security/rate-limit";
 import { isResendConfigured, sendEmailViaResend } from "@/lib/email/resend";
+import { isAdminEmail } from "@/lib/admin";
 import { displayNameFor, fetchRemindersEnabled, recordAssetEvent, todayInZurich } from "@/lib/fleet-queries";
+import { sendFleetNotice, type FleetNoticeResult } from "@/lib/fleet-notify";
 import {
+  addDays,
   computeReliability,
+  daysBetween,
   dueDateOf,
   daysOverdue,
   expiryFor,
@@ -396,12 +400,19 @@ export async function GET(request: Request) {
       entry.kind !== null,
     );
 
-  if (due.length === 0 && !isPreview) {
-    return NextResponse.json({ ok: true, today, considered: live.length, due: 0, swept, outcomes: [] });
+  // Material that is out past its due date: the next booker and, after a week,
+  // the admins get told (edge cases P3). Independent of today's reminder.
+  const overdueOut = live
+    .filter((row) => row.status === "picked_up")
+    .map((row) => ({ row, lateDays: daysOverdue({ ...row, status: row.status }, today) }))
+    .filter((entry) => entry.lateDays > 0);
+
+  if (due.length === 0 && overdueOut.length === 0 && !isPreview) {
+    return NextResponse.json({ ok: true, today, considered: live.length, due: 0, swept, outcomes: [], notices: [] });
   }
 
   // Resolve asset names and recipient emails for just the reservations in play.
-  const assetIds = [...new Set(due.map((d) => d.row.asset_id))];
+  const assetIds = [...new Set([...due.map((d) => d.row.asset_id), ...overdueOut.map((o) => o.row.asset_id)])];
   const { data: assetRows } = await admin
     .from("fleet_assets")
     .select("id, name, model, current_location")
@@ -420,6 +431,7 @@ export async function GET(request: Request) {
       {
         email: u.email ?? null,
         name: displayNameFor({ email: u.email, identities: u.identities }),
+        isAdmin: isAdminEmail(u.email ?? null),
       },
     ]),
   );
@@ -446,12 +458,82 @@ export async function GET(request: Request) {
     allSpansByUser.set(row.user_id, list);
   }
 
-  const dashboardUrl = `${appBaseUrl(request)}/dashboard?module=fleet`;
+  const origin = appBaseUrl(request);
+  const dashboardUrl = `${origin}/dashboard?module=fleet`;
 
   /** Display name for a reservation's holder, account-backed or not. */
   function holderNameOf(row: LiveReservation): string {
     if (row.user_id) return users.get(row.user_id)?.name ?? "there";
     return row.holder_label ?? "there";
+  }
+
+  // Notices about material that has not come back. Two of them:
+  //  - the NEXT booker, when their first day is two days out and again on the
+  //    day itself ("contact the holder, or book another unit");
+  //  - the admins, once, when a unit is a week overdue — the holder has had
+  //    daily mail by then, so it is a person problem, not a reminder problem.
+  // Both key their claim on a date, so a double-fired cron sends neither twice.
+  // Skipped on a preview render, a test send and a dry run.
+  const notices: Array<FleetNoticeResult & { kind: string; reservation_id: string }> = [];
+  if (!isPreview && !sendTestTo && !isDryRun) {
+    const adminIds = [...users.entries()].filter(([, u]) => u.isAdmin).map(([id]) => id);
+    for (const { row, lateDays } of overdueOut) {
+      const assetName = assets.get(row.asset_id)?.name ?? "Fleet material";
+      const holderName = row.user_id ? (users.get(row.user_id)?.name ?? null) : (row.holder_label ?? null);
+      const next = live
+        .filter((r) => r.asset_id === row.asset_id && r.id !== row.id && r.status === "reserved" && r.user_id && r.start_date >= today)
+        .sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
+
+      if (next?.user_id) {
+        const delta = daysBetween(today, next.start_date);
+        if (delta <= 2) {
+          const results = await sendFleetNotice(admin, {
+            input: {
+              kind: "unit_not_back",
+              assetName,
+              holderName: row.user_id ? holderName : null,
+              dueDate: dueDateOf(row),
+              nextStart: next.start_date,
+              nextEnd: next.end_date,
+              linkReservationId: next.id,
+            },
+            reservationId: next.id,
+            assetId: row.asset_id,
+            recipientIds: [next.user_id],
+            // One warning in the two days before, one on the day itself.
+            sentForDate: delta === 0 ? next.start_date : addDays(next.start_date, -2),
+            origin,
+          });
+          notices.push(...results.map((r) => ({ ...r, kind: "unit_not_back", reservation_id: next.id })));
+        }
+      }
+
+      if (lateDays === 7 && adminIds.length > 0) {
+        const results = await sendFleetNotice(admin, {
+          input: {
+            kind: "overdue_escalation",
+            assetName,
+            holderName: holderName ?? "an unclaimed holder",
+            holderHasAccount: Boolean(row.user_id),
+            dueDate: dueDateOf(row),
+            daysLate: lateDays,
+            nextHolderName: next?.user_id ? (users.get(next.user_id)?.name ?? null) : null,
+            nextStart: next?.start_date ?? null,
+            linkReservationId: row.id,
+          },
+          reservationId: row.id,
+          assetId: row.asset_id,
+          recipientIds: adminIds,
+          sentForDate: today,
+          origin,
+        });
+        notices.push(...results.map((r) => ({ ...r, kind: "overdue_escalation", reservation_id: row.id })));
+      }
+    }
+  }
+
+  if (due.length === 0 && !isPreview) {
+    return NextResponse.json({ ok: true, today, considered: live.length, due: 0, swept, notices, outcomes: [] });
   }
 
   function composeFor(entry: (typeof due)[number], recipientName: string) {
@@ -624,6 +706,7 @@ export async function GET(request: Request) {
     sent: outcomes.filter((o) => o.status === "sent").length,
     swept,
     expired_requests: expiredRequests,
+    notices,
     outcomes,
   });
 }

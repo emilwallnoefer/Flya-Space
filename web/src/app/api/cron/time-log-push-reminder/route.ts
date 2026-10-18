@@ -7,7 +7,8 @@ import { checkRateLimit, createRateLimitHeaders, getClientIp } from "@/lib/secur
 import { serverError } from "@/lib/api-errors";
 import { normalizeUserRole } from "@/lib/user-role";
 import { displayNameFor } from "@/lib/fleet-queries";
-import { isPushConfigured, sendPush, type PushSubscriptionRow } from "@/lib/push/send";
+import { isPushConfigured, type PushSubscriptionRow } from "@/lib/push/send";
+import { pushToDevices } from "@/lib/push/notify-users";
 import {
   WEEK_UNLOGGED_KIND,
   hasLoggedAnyDay,
@@ -86,33 +87,11 @@ async function notifyUser(
   devices: SubscriptionRow[],
   payload: ReturnType<typeof weekUnloggedPayload>,
 ): Promise<{ sent: number; gone: number; failed: number }> {
-  let sent = 0;
-  let gone = 0;
-  let failed = 0;
-  const goneIds: string[] = [];
-  await Promise.all(
-    devices.map(async (device) => {
-      const result = await sendPush(device, payload);
-      if (result.ok) {
-        sent += 1;
-      } else if (result.gone) {
-        gone += 1;
-        goneIds.push(device.id);
-      } else {
-        failed += 1;
-        console.warn("[push-reminder] send failed", { user: device.user_id, error: result.error });
-      }
-    }),
-  );
-  if (goneIds.length > 0) {
-    const { error } = await admin.from("push_subscriptions").delete().in("id", goneIds);
-    if (error) console.error("[push-reminder] pruning dead subscriptions failed", error);
+  const result = await pushToDevices(admin, devices, payload);
+  for (const error of result.errors) {
+    console.warn("[push-reminder] send failed", { user: devices[0]?.user_id, error });
   }
-  if (sent > 0) {
-    const okIds = devices.filter((d) => !goneIds.includes(d.id)).map((d) => d.id);
-    await admin.from("push_subscriptions").update({ last_used_at: new Date().toISOString() }).in("id", okIds);
-  }
-  return { sent, gone, failed };
+  return { sent: result.sent, gone: result.gone, failed: result.failed };
 }
 
 type AuthUser = NonNullable<Awaited<ReturnType<SupabaseClient["auth"]["admin"]["getUserById"]>>["data"]["user"]>;

@@ -1,7 +1,8 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isPushConfigured, sendPush, type PushSubscriptionRow } from "@/lib/push/send";
+import { isPushConfigured } from "@/lib/push/send";
+import { pushToUsers } from "@/lib/push/notify-users";
 import { excerpt } from "@/lib/chat-mentions";
 
 /** Where a tap on the notification lands: the dashboard with the chat open. */
@@ -46,16 +47,6 @@ export async function notifyChatMentions(params: {
   if (targets.length === 0 || !isPushConfigured()) return { sent: 0, devices: 0 };
 
   const admin = createAdminClient();
-  const { data: devices, error } = await admin
-    .from("push_subscriptions")
-    .select("id, user_id, endpoint, p256dh, auth")
-    .in("user_id", targets);
-  if (error) {
-    console.warn("Chat mention notice: could not read subscriptions:", error.message);
-    return { sent: 0, devices: 0 };
-  }
-  if (!devices || devices.length === 0) return { sent: 0, devices: 0 };
-
   const payload = renderMentionPush({
     messageId: params.messageId,
     senderName: params.senderName,
@@ -63,21 +54,8 @@ export async function notifyChatMentions(params: {
     attachmentName: params.attachmentName,
   });
 
-  let sent = 0;
-  const goneIds: string[] = [];
-  await Promise.all(
-    (devices as Array<PushSubscriptionRow & { id: string; user_id: string }>).map(async (device) => {
-      // A mention that could not be delivered within a few hours is old news.
-      const result = await sendPush(device, payload, { ttlSeconds: 6 * 60 * 60 });
-      if (result.ok) sent += 1;
-      else if (result.gone) goneIds.push(device.id);
-      else console.warn("Chat mention notice: push failed:", result.error);
-    }),
-  );
-  if (goneIds.length > 0) await admin.from("push_subscriptions").delete().in("id", goneIds);
-  if (sent > 0) {
-    const okIds = devices.filter((d) => !goneIds.includes(d.id)).map((d) => d.id);
-    await admin.from("push_subscriptions").update({ last_used_at: new Date().toISOString() }).in("id", okIds);
-  }
-  return { sent, devices: devices.length };
+  // A mention that could not be delivered within a few hours is old news.
+  const result = await pushToUsers(admin, targets, payload, { ttlSeconds: 6 * 60 * 60 });
+  for (const error of result.errors) console.warn("Chat mention notice: push failed:", error);
+  return { sent: result.sent, devices: result.devices };
 }

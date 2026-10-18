@@ -18,6 +18,7 @@ import {
   type ReservationStatus,
 } from "@/lib/fleet-rules";
 import type { FleetRequestView, RequestResolution, RequestStatus } from "@/lib/fleet-requests";
+import { isAdminEmail } from "@/lib/admin";
 
 /**
  * Fleet reads.
@@ -650,6 +651,51 @@ export async function fetchUserNames(admin: AnySupabase, ids: string[]): Promise
     if (name !== undefined) names.set(id, name);
   }
   return names;
+}
+
+/** What a notice needs to know about a recipient. */
+export type UserContact = {
+  id: string;
+  email: string | null;
+  name: string;
+  /** Settings → Notifications → Fleet. Default on; `user_metadata.fleet_notices === false` turns it off. */
+  fleetNotices: boolean;
+  isAdmin: boolean;
+};
+
+/**
+ * Resolves users to the e-mail, name and fleet-notice preference a notice
+ * needs, in one `listUsers` call. Not cached: a preference change must take
+ * effect on the next notice, not within a TTL.
+ */
+export async function fetchUserContacts(admin: AnySupabase, ids: string[]): Promise<Map<string, UserContact>> {
+  const wanted = new Set(ids.filter(Boolean));
+  const contacts = new Map<string, UserContact>();
+  if (wanted.size === 0) return contacts;
+  const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (error || !data) return contacts;
+  for (const user of data.users) {
+    if (!wanted.has(user.id)) continue;
+    const prefs =
+      user.user_metadata && typeof user.user_metadata === "object" && !Array.isArray(user.user_metadata)
+        ? (user.user_metadata as Record<string, unknown>)
+        : {};
+    contacts.set(user.id, {
+      id: user.id,
+      email: user.email ?? null,
+      name: displayNameFor({ email: user.email, identities: user.identities }),
+      fleetNotices: prefs.fleet_notices !== false,
+      isAdmin: isAdminEmail(user.email ?? null),
+    });
+  }
+  return contacts;
+}
+
+/** The auth user ids behind `ADMIN_EMAILS`, for notices that go to the admins. */
+export async function fetchAdminUserIds(admin: AnySupabase): Promise<string[]> {
+  const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (error || !data) return [];
+  return data.users.filter((user) => isAdminEmail(user.email ?? null)).map((user) => user.id);
 }
 
 /** All reservations for one user, for the score and "my material" list. */

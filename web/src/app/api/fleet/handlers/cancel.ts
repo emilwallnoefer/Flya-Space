@@ -7,7 +7,7 @@ export async function handleCancel(
   ctx: FleetActionContext,
   payload: FleetPayload<"cancel">,
 ): Promise<NextResponse> {
-  const { admin, viewer } = ctx;
+  const { admin, viewer, today, origin } = ctx;
   const reservation = await loadReservation(admin, payload.reservation_id);
   if (!reservation) return NextResponse.json({ error: "Reservation not found." }, { status: 404 });
   if (reservation.user_id !== viewer.id && !viewer.isAdmin) {
@@ -39,9 +39,9 @@ export async function handleCancel(
       kind: "cancelled",
       actor_user_id: viewer.id,
     }),
-    promoteWaitlist(admin, reservation.asset_id),
+    promoteWaitlist(admin, reservation.asset_id, { origin, today, actorUserId: viewer.id }),
     // A cancelled booking neither wants to grow nor stands in anyone's way.
     settleRequestsFor(admin, reservation.id, { asRequester: "cancelled", asTarget: "expired" }),
   ]);
-  return NextResponse.json({ ok: true, promoted });
+  return NextResponse.json({ ok: true, promoted: promoted?.id ?? null });
 }

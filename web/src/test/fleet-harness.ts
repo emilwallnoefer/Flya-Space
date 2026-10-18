@@ -58,6 +58,8 @@ const EMPTY_TABLES: Tables = {
   fleet_holder_directory: [],
   fleet_settings: [],
   fleet_booking_requests: [],
+  fleet_notice_sends: [],
+  push_subscriptions: [],
 };
 
 /** Seeds every table the module reads, so an unseeded table is a real bug. */

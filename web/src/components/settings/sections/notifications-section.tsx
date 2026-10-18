@@ -22,6 +22,43 @@ export function NotificationsSection() {
   const [support, setSupport] = useState<PushSupport | null>(null);
   const [state, setState] = useState<State>("checking");
   const [error, setError] = useState<string | null>(null);
+  // Fleet notices: a per-PERSON preference (not per device), kept on the server.
+  const [fleet, setFleet] = useState<boolean | null>(null);
+  const [fleetBusy, setFleetBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/settings/fleet-notices")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { enabled?: boolean } | null) => {
+        if (!cancelled) setFleet(data?.enabled !== false);
+      })
+      .catch(() => {
+        if (!cancelled) setFleet(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function toggleFleet() {
+    if (fleet === null || fleetBusy) return;
+    const next = !fleet;
+    setFleetBusy(true);
+    setFleet(next);
+    try {
+      const res = await fetch("/api/settings/fleet-notices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: next }),
+      });
+      if (!res.ok) setFleet(!next);
+    } catch {
+      setFleet(!next);
+    } finally {
+      setFleetBusy(false);
+    }
+  }
 
   // Both answers come from the browser (and, for "on", from the server), so
   // they are read after mount and applied together once known.
@@ -98,11 +135,49 @@ export function NotificationsSection() {
       </div>
 
       <div className="rounded-xl border border-glass/15 bg-overlay/40 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 pr-1">
+            <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-ink-4/90">Fleet notices</p>
+            <p className="mt-1.5 text-[15px] font-semibold leading-none text-ink">
+              {fleet === null ? "Checking…" : fleet ? "On" : "Off"}
+            </p>
+            <p className="mt-2 text-[11px] leading-snug tracking-wide text-ink-4/90">
+              About bookings that touch yours. Sent to your devices above, or by e-mail when none is switched on. This is one
+              setting for you, on every device.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={fleet === true}
+            aria-label={fleet ? "Turn Fleet notices off" : "Turn Fleet notices on"}
+            aria-busy={fleetBusy}
+            disabled={fleet === null || fleetBusy}
+            onClick={() => void toggleFleet()}
+            className={`ui-switch relative h-6 w-10 shrink-0 rounded-full border p-0.5 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/80 disabled:opacity-50 ${
+              fleet ? "border-accent-deep/25 bg-accent-deep/40" : "border-glass/15 bg-glass/[0.08]"
+            }`}
+          >
+            <span
+              className={`block h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform duration-200 ease-out ${
+                fleet ? "translate-x-4" : "translate-x-0"
+              }`}
+              aria-hidden
+            />
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-glass/15 bg-overlay/40 p-4">
         <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-ink-4/90">What you will receive</p>
         <ul className="mt-2 space-y-1.5 text-[13px] leading-snug text-ink-2">
           <li>
             <span className="font-medium text-ink">Friday, 19:00</span> — a reminder when none of this week&apos;s days has been logged
             in the Time Tracker yet.
+          </li>
+          <li>
+            <span className="font-medium text-ink">Fleet</span> — when a unit you booked has not come back, when someone asks to keep a
+            unit into your days or answers your request, when a waitlist spot becomes yours, and when a unit comes back early.
           </li>
         </ul>
       </div>

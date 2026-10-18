@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge, Button, Card, Notice } from "@/components/ui";
+import { writeViewParams } from "@/lib/view-params";
 import type { AssetDraft } from "./asset-dialog";
 import { CalendarTab } from "./calendar-tab";
 import { FleetToolbar } from "./fleet-toolbar";
@@ -59,6 +60,23 @@ export function FleetPanel({ initialBoard = null }: { initialBoard?: FleetBoardR
   } = state;
 
   const [detail, setDetail] = useState<FleetReservation | null>(null);
+
+  // Opened from a notice (`?module=fleet&reservation=<id>`): land on that
+  // booking's dialog once the board that holds it is here, then drop the param
+  // so a reload does not reopen it.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("reservation");
+    if (!id) return;
+    const match = state.reservations.find((r) => r.id === id);
+    if (!match) return;
+    // Next frame, as the phone shell does for `?chat=open`: the URL is only
+    // known in the browser, and the state change must not run inside render.
+    const frame = requestAnimationFrame(() => {
+      setDetail(match);
+      writeViewParams({ reservation: null });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [state.reservations]);
 
   const tabs: Array<[FleetTab, string, number | null]> = [
     ["calendar", "Calendar", bookableAssets.length || null],

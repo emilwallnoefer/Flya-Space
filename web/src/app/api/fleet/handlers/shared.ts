@@ -10,6 +10,7 @@ import {
   todayInZurich,
 } from "@/lib/fleet-queries";
 import { blockedUntil, closureStatusFor, isBlocking } from "@/lib/fleet-rules";
+import { sendFleetNotice } from "@/lib/fleet-notify";
 
 /**
  * Types and database helpers shared by the `/api/fleet` action handlers.
@@ -119,7 +120,14 @@ export async function loadReservation(admin: Admin, id: string) {
  * Mon–Wed cancellation as someone waiting for Mon–Wed, and matching on the
  * exact start date left them waiting for a unit that was already free.
  */
-export async function promoteWaitlist(admin: Admin, assetId: string): Promise<string | null> {
+export type Promoted = { id: string; user_id: string; start_date: string; end_date: string };
+
+export async function promoteWaitlist(
+  admin: Admin,
+  assetId: string,
+  /** When given, the promoted person is told (push, else e-mail) that the unit is theirs. */
+  notify?: { origin: string; today: string; actorUserId: string | null },
+): Promise<Promoted | null> {
   const { data: waiting, error } = await admin
     .from("fleet_reservations")
     .select("id, user_id, start_date, end_date, created_at")
@@ -169,7 +177,31 @@ export async function promoteWaitlist(admin: Admin, assetId: string): Promise<st
       actor_user_id: candidate.row.user_id,
       note: "Promoted from the waitlist",
     });
-    return candidate.row.id;
+    const promoted: Promoted = {
+      id: candidate.row.id,
+      user_id: candidate.row.user_id,
+      start_date: candidate.row.start_date,
+      end_date: candidate.row.end_date,
+    };
+    if (notify && promoted.user_id) {
+      const { data: asset } = await admin.from("fleet_assets").select("name").eq("id", assetId).maybeSingle();
+      await sendFleetNotice(admin, {
+        input: {
+          kind: "waitlist_promoted",
+          assetName: asset?.name ?? "Fleet material",
+          startDate: promoted.start_date,
+          endDate: promoted.end_date,
+          linkReservationId: promoted.id,
+        },
+        reservationId: promoted.id,
+        assetId,
+        recipientIds: [promoted.user_id],
+        sentForDate: notify.today,
+        origin: notify.origin,
+        actorUserId: notify.actorUserId,
+      });
+    }
+    return promoted;
   }
   return null;
 }
