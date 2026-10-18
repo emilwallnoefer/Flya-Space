@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { fetchAssetSpans, fetchReliability, fetchUserNames, recordAssetEvent } from "@/lib/fleet-queries";
+import { fetchAdminUserIds, fetchAssetSpans, fetchReliability, fetchUserNames, recordAssetEvent } from "@/lib/fleet-queries";
+import { sendFleetNotice } from "@/lib/fleet-notify";
 import { classifyDateChange, dateChangeErrorMessage } from "@/lib/fleet-requests";
 import { checkReservation, formatDayLong, formatSpan, parseDateKey, toDateKey } from "@/lib/fleet-rules";
 import { loadReservation, promoteWaitlist, settleRequestsFor, type FleetActionContext } from "./shared";
@@ -19,7 +20,7 @@ export async function handleChangeDates(
   ctx: FleetActionContext,
   payload: FleetPayload<"change_dates">,
 ): Promise<NextResponse> {
-  const { admin, viewer, today } = ctx;
+  const { admin, viewer, today, origin } = ctx;
   const newEnd = toDateKey(parseDateKey(payload.end_date));
 
   const reservation = await loadReservation(admin, payload.reservation_id);
@@ -59,7 +60,7 @@ export async function handleChangeDates(
         note: `Last day moved from ${reservation.end_date} to ${newEnd}`,
       }),
       settleRequestsFor(admin, reservation.id, { asRequester: "cancelled" }),
-      promoteWaitlist(admin, reservation.asset_id),
+      promoteWaitlist(admin, reservation.asset_id, { origin, today, actorUserId: viewer.id }),
     ]);
     return NextResponse.json({ ok: true, change: "shortened", end_date: newEnd });
   }
@@ -143,6 +144,26 @@ export async function handleChangeDates(
       kind: "extension_requested",
       actor_user_id: viewer.id,
       note: `Asked ${holder} to free ${formatSpan(change.added.start_date, newEnd)} (their booking ${formatSpan(target.start_date, target.end_date)})`,
+    });
+    // Tell the person who has to answer — or the admins, when the target
+    // booking has no account behind it.
+    const recipients = target.user_id ? [target.user_id] : await fetchAdminUserIds(admin);
+    await sendFleetNotice(admin, {
+      input: {
+        kind: "extension_request",
+        assetName,
+        requesterName: viewer.isAdmin && reservation.user_id !== viewer.id ? `${viewer.name} (admin)` : viewer.name,
+        requestedEnd: newEnd,
+        targetStart: target.start_date,
+        targetEnd: target.end_date,
+        linkReservationId: target.id,
+      },
+      reservationId: target.id,
+      assetId: reservation.asset_id,
+      recipientIds: recipients,
+      sentForDate: today,
+      origin,
+      actorUserId: viewer.id,
     });
   }
 

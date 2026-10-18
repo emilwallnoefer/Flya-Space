@@ -20,6 +20,17 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-19-fleet-notices",
+    date: "Oct 19, 2026",
+    title: "Fleet: you hear about bookings that touch yours",
+    highlights: [
+      "A notice when a unit you booked has not come back, two days before your start and on the day",
+      "When someone asks to keep a unit into your days, and when they answer your request",
+      "When a waitlist spot becomes yours, and when a unit comes back early",
+      "On your phone if notifications are on, by e-mail otherwise; each one opens the booking. Switch off under Settings → Notifications",
+    ],
+  },
+  {
     version: "2026-10-19-fleet-change-dates",
     date: "Oct 19, 2026",
     title: "Fleet: keep material longer, or give days back",

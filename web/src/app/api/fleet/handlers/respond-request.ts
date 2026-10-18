@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchAssetSpans, fetchUserNames, recordAssetEvent } from "@/lib/fleet-queries";
+import { sendFleetNotice } from "@/lib/fleet-notify";
 import { requestExpired, shortenedStartFor, type RequestStatus } from "@/lib/fleet-requests";
 import { addDays, checkReservation, formatDayLong, formatSpan } from "@/lib/fleet-rules";
 import { loadReservation, promoteWaitlist, type Admin, type FleetActionContext } from "./shared";
@@ -31,7 +32,7 @@ export async function handleRespondRequest(
   ctx: FleetActionContext,
   payload: FleetPayload<"respond_request">,
 ): Promise<NextResponse> {
-  const { admin, viewer, today } = ctx;
+  const { admin, viewer, today, origin } = ctx;
 
   const { data: request, error: readError } = await admin
     .from("fleet_booking_requests")
@@ -73,6 +74,8 @@ export async function handleRespondRequest(
   const answerer = viewer.isAdmin && row.recipient_id !== viewer.id ? `${viewer.name} (admin)` : viewer.name;
   const requesterName = row.requester_id ? (names.get(row.requester_id) ?? "the requester") : "the requester";
 
+  const assetName = requesterBooking.asset?.name ?? "Fleet material";
+
   if (payload.reply === "decline") {
     await close(admin, row.id, "declined", null, viewer.id);
     await recordAssetEvent(admin, {
@@ -82,6 +85,23 @@ export async function handleRespondRequest(
       actor_user_id: viewer.id,
       note: `${answerer} declined to free ${formatSpan(target.start_date, target.end_date)}`,
     });
+    if (row.requester_id) {
+      await sendFleetNotice(admin, {
+        input: {
+          kind: "extension_declined",
+          assetName,
+          answererName: answerer,
+          currentEnd: requesterBooking.end_date,
+          linkReservationId: requesterBooking.id,
+        },
+        reservationId: requesterBooking.id,
+        assetId: requesterBooking.asset_id,
+        recipientIds: [row.requester_id],
+        sentForDate: today,
+        origin,
+        actorUserId: viewer.id,
+      });
+    }
     return NextResponse.json({ ok: true, reply: "declined", applied: false });
   }
 
@@ -179,7 +199,27 @@ export async function handleRespondRequest(
       ? `${answerer} agreed (${payload.reply}); extended to ${formatDayLong(row.requested_end_date)}`
       : `${answerer} agreed (${payload.reply}), but the days are still taken — not extended`,
   });
-  if (payload.reply === "cancel") await promoteWaitlist(admin, target.asset_id);
+  if (payload.reply === "cancel") {
+    await promoteWaitlist(admin, target.asset_id, { origin, today, actorUserId: viewer.id });
+  }
+  if (row.requester_id) {
+    await sendFleetNotice(admin, {
+      input: {
+        kind: "extension_accepted",
+        assetName,
+        answererName: answerer,
+        requestedEnd: row.requested_end_date,
+        applied,
+        linkReservationId: requesterBooking.id,
+      },
+      reservationId: requesterBooking.id,
+      assetId: requesterBooking.asset_id,
+      recipientIds: [row.requester_id],
+      sentForDate: today,
+      origin,
+      actorUserId: viewer.id,
+    });
+  }
 
   return NextResponse.json({
     ok: true,

@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AssetIcon } from "@/components/fleet/asset-icon";
+import { writeViewParams } from "@/lib/view-params";
 import { HolderColorProvider, useHolderRgb } from "@/components/fleet/holder-colors";
 import { IdentityPrompt } from "@/components/fleet/identity-prompt";
 import { ReliabilityBadge } from "@/components/fleet/reliability-badge";
@@ -27,6 +28,22 @@ export function MobileFleetScreen({ initialBoard }: { initialBoard: FleetBoardRe
   const { board, loading, error, notice, busy, load, post, windowStart, myReservations, claimableByMe, unclaimedHolders, myDisplayName, holderRoster } = state;
   const [view, setView] = useState<FleetView>(myReservations.length > 0 ? "mine" : "book");
   const [detail, setDetail] = useState<FleetReservation | null>(null);
+
+  // Opened from a notice (`?module=fleet&reservation=<id>`): open that booking's
+  // sheet once the board is here, then drop the param so a reload does not.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("reservation");
+    if (!id) return;
+    const match = state.reservations.find((r) => r.id === id);
+    if (!match) return;
+    // Next frame, as the shell does for `?chat=open`: this screen is
+    // server-rendered and the URL is only known in the browser.
+    const frame = requestAnimationFrame(() => {
+      setDetail(match);
+      writeViewParams({ reservation: null });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [state.reservations]);
 
   return (
     <HolderColorProvider roster={holderRoster}>
