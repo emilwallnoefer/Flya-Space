@@ -20,6 +20,17 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-19-fleet-change-dates",
+    date: "Oct 19, 2026",
+    title: "Fleet: keep material longer, or give days back",
+    highlights: [
+      "Change dates on any of your bookings from Mine (desktop and phone): pick a new last day",
+      "If the extra days are free, done. If someone has them booked, they get asked — nothing changes until they answer",
+      "Asked to free days? Start later, cancel your booking, or decline and get in touch. Your call, always",
+      "Giving days back is instant and hands them to whoever is waiting",
+    ],
+  },
+  {
     version: "2026-10-19-fleet-honest-board",
     date: "Oct 19, 2026",
     title: "Fleet: the board tells the truth about late material",

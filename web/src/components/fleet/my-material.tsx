@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Badge, Button, Input } from "@/components/ui";
-import { dueLabel, formatSpan, occupiedUntil } from "@/lib/fleet-rules";
+import { addDays, dueLabel, formatSpan, MAX_RESERVATION_DAYS, occupiedUntil } from "@/lib/fleet-rules";
 import { AssetIcon } from "./asset-icon";
 import { ReliabilityCard } from "./reliability-badge";
 import { EmptyState, Row } from "./ui";
@@ -24,6 +24,7 @@ export function MyMaterial({
   onCheckOut,
   onCheckIn,
   onCancel,
+  onChangeDates,
   onBrowse,
 }: {
   reservations: FleetReservation[];
@@ -35,6 +36,8 @@ export function MyMaterial({
   /** `returnedOn` is set only when the person backdated an overdue return. */
   onCheckIn: (id: string, location: string, returnedOn?: string) => void;
   onCancel: (id: string) => void;
+  /** Move the booking's last day; the server decides whether that is free, a request, or a shortening. */
+  onChangeDates: (id: string, endDate: string) => void;
   /** Sends an empty-handed reader to the calendar rather than a dead end. */
   onBrowse: () => void;
 }) {
@@ -45,6 +48,9 @@ export function MyMaterial({
   /** The backdated return day to send, or undefined when today is right. */
   const backdated = (reservation: FleetReservation) =>
     reservation.days_overdue > 0 && returnedOn && returnedOn !== today ? returnedOn : undefined;
+  // "Change dates": which booking is being edited, and the new last day.
+  const [changingId, setChangingId] = useState<string | null>(null);
+  const [newEnd, setNewEnd] = useState("");
 
   return (
     <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_17rem]">
@@ -65,6 +71,8 @@ export function MyMaterial({
           const asset = assets.find((a) => a.id === reservation.asset_id);
           const overdue = reservation.days_overdue > 0;
           const returning = returningId === reservation.id;
+          const changing = changingId === reservation.id;
+          const live = reservation.status === "reserved" || reservation.status === "picked_up";
 
           return (
             <Row key={reservation.id} tone={overdue ? "alert" : "default"}>
@@ -146,8 +154,61 @@ export function MyMaterial({
                       Bring back
                     </Button>
                   ) : null}
+                  {live ? (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      disabled={busy}
+                      aria-expanded={changing}
+                      onClick={() => {
+                        setChangingId(changing ? null : reservation.id);
+                        setNewEnd(reservation.end_date);
+                        setReturningId(null);
+                      }}
+                    >
+                      Change dates
+                    </Button>
+                  ) : null}
                 </div>
               </div>
+
+              {changing ? (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-glass/10 pt-2">
+                  <span className="text-[11px] text-ink-4">Last day</span>
+                  <Input
+                    type="date"
+                    value={newEnd}
+                    autoFocus
+                    min={reservation.start_date > today ? reservation.start_date : today}
+                    max={addDays(reservation.start_date, MAX_RESERVATION_DAYS - 1)}
+                    onChange={(event) => setNewEnd(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") setChangingId(null);
+                    }}
+                    className="text-xs"
+                    aria-label="New last day"
+                  />
+                  <Button
+                    size="xs"
+                    variant="accent"
+                    disabled={busy || !newEnd || newEnd === reservation.end_date}
+                    onClick={() => {
+                      onChangeDates(reservation.id, newEnd);
+                      setChangingId(null);
+                    }}
+                  >
+                    {newEnd > reservation.end_date ? "Keep it longer" : "Give days back"}
+                  </Button>
+                  <Button size="xs" variant="ghost" onClick={() => setChangingId(null)}>
+                    Cancel
+                  </Button>
+                  {newEnd > reservation.end_date ? (
+                    <span className="basis-full text-[11px] text-ink-5">
+                      If someone has it booked for those days, they are asked first — nothing changes until they answer.
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
 
               {returning ? (
                 <div className="mt-2 flex flex-wrap gap-1.5 border-t border-glass/10 pt-2">

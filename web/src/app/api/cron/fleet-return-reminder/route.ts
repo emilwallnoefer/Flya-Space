@@ -262,6 +262,7 @@ export async function GET(request: Request) {
   // notification, so it runs even while reminders are paused — but it honours
   // `?dry=1`, and a preview render touches nothing.
   const swept: Swept[] = [];
+  let expiredRequests = 0;
   if (!isPreview) {
     const { data: staleRows, error: staleError } = await admin
       .from("fleet_reservations")
@@ -311,6 +312,39 @@ export async function GET(request: Request) {
             : "Waitlist entry lapsed",
       });
       swept.push({ reservation_id: row.id, asset_id: row.asset_id, reason, applied: true });
+    }
+
+    // Extension requests lapse once the booking they asked to shrink has begun:
+    // the person is at the shelf, there is nothing left to decide. A missing
+    // table (phase-2 migration not applied) is silence, not an error.
+    const { data: pendingRows, error: pendingError } = await admin
+      .from("fleet_booking_requests")
+      .select("id, target_reservation_id")
+      .eq("status", "pending");
+    if (pendingError && pendingError.code !== "42P01") {
+      console.error("fleet reminder: pending requests read failed", pendingError.message);
+    }
+    const pending = (pendingRows ?? []) as Array<{ id: string; target_reservation_id: string }>;
+    if (pending.length > 0) {
+      const { data: targets } = await admin
+        .from("fleet_reservations")
+        .select("id, start_date, status")
+        .in("id", [...new Set(pending.map((p) => p.target_reservation_id))]);
+      const lapsed = new Set(
+        ((targets ?? []) as Array<{ id: string; start_date: string; status: string }>)
+          .filter((t) => t.start_date <= today || t.status !== "reserved")
+          .map((t) => t.id),
+      );
+      const toExpire = pending.filter((p) => lapsed.has(p.target_reservation_id)).map((p) => p.id);
+      if (toExpire.length > 0 && !isDryRun) {
+        const { error: expireError } = await admin
+          .from("fleet_booking_requests")
+          .update({ status: "expired", resolved_at: new Date().toISOString() })
+          .in("id", toExpire)
+          .eq("status", "pending");
+        if (expireError) console.error("fleet reminder: request expiry failed", expireError.message);
+      }
+      expiredRequests = toExpire.length;
     }
   }
 
@@ -589,6 +623,7 @@ export async function GET(request: Request) {
     due: due.length,
     sent: outcomes.filter((o) => o.status === "sent").length,
     swept,
+    expired_requests: expiredRequests,
     outcomes,
   });
 }

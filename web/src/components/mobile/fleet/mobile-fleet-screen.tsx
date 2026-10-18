@@ -5,10 +5,11 @@ import { AssetIcon } from "@/components/fleet/asset-icon";
 import { HolderColorProvider, useHolderRgb } from "@/components/fleet/holder-colors";
 import { IdentityPrompt } from "@/components/fleet/identity-prompt";
 import { ReliabilityBadge } from "@/components/fleet/reliability-badge";
+import { RequestsStrip } from "@/components/fleet/requests-strip";
 import { CATEGORY_LABEL, categoryRank, type FleetAsset, type FleetBoardResponse, type FleetReservation } from "@/components/fleet/types";
 import { useFleet, type FleetState } from "@/components/fleet/use-fleet";
 import { Notice } from "@/components/ui";
-import { blockedUntil, dueLabel, formatDay, formatSpan, isBlocking, occupiedUntil } from "@/lib/fleet-rules";
+import { addDays, blockedUntil, dueLabel, formatDay, formatSpan, isBlocking, MAX_RESERVATION_DAYS, occupiedUntil } from "@/lib/fleet-rules";
 import { cn } from "@/lib/cn";
 import { MobileButton, MobileEmpty, MobileGroup, MobileSegmented, MobileSheet } from "../primitives";
 import { MobileBookFlow } from "./mobile-book-flow";
@@ -68,7 +69,16 @@ export function MobileFleetScreen({ initialBoard }: { initialBoard: FleetBoardRe
           ]}
         />
 
-        {view === "mine" ? <MyMaterialList state={state} onBrowse={() => setView("book")} /> : null}
+        {view === "mine" ? (
+          <>
+            <RequestsStrip
+              requests={board?.requests ?? []}
+              busy={busy}
+              onRespond={(requestId, reply) => void post({ action: "respond_request", request_id: requestId, reply })}
+            />
+            <MyMaterialList state={state} onBrowse={() => setView("book")} />
+          </>
+        ) : null}
         {view === "book" ? <MobileBookFlow state={state} onBooked={() => setView("mine")} /> : null}
         {view === "who" ? <WhoHasWhat state={state} onOpen={setDetail} /> : null}
 
@@ -86,6 +96,9 @@ function MyMaterialList({ state, onBrowse }: { state: FleetState; onBrowse: () =
   const [returnTo, setReturnTo] = useState("");
   // Only asked for when the booking is overdue: the day it actually came back.
   const [returnedOn, setReturnedOn] = useState("");
+  // "Change dates": the booking being edited and its new last day.
+  const [changing, setChanging] = useState<FleetReservation | null>(null);
+  const [newEnd, setNewEnd] = useState("");
 
   if (myReservations.length === 0) {
     return (
@@ -146,6 +159,11 @@ function MyMaterialList({ state, onBrowse }: { state: FleetState; onBrowse: () =
                     Bring back
                   </MobileButton>
                 ) : null}
+                {r.status === "reserved" || r.status === "picked_up" ? (
+                  <MobileButton className="min-h-10 w-auto flex-none px-4 text-sm" variant="ghost" disabled={busy} onClick={() => { setChanging(r); setNewEnd(r.end_date); }}>
+                    Dates
+                  </MobileButton>
+                ) : null}
               </div>
             </div>
           );
@@ -192,6 +210,43 @@ function MyMaterialList({ state, onBrowse }: { state: FleetState; onBrowse: () =
               onChange={(e) => setReturnedOn(e.target.value)}
               className="mt-2 min-h-12 w-full rounded-xl border border-glass/15 bg-glass/8 px-3 text-base text-ink focus:border-accent/40 focus:outline-none"
             />
+          </>
+        ) : null}
+      </MobileSheet>
+
+      <MobileSheet
+        open={changing !== null}
+        onClose={() => setChanging(null)}
+        title="Change the dates"
+        footer={
+          <MobileButton
+            disabled={busy || !changing || !newEnd || newEnd === changing.end_date}
+            onClick={async () => {
+              if (!changing) return;
+              if (await post({ action: "change_dates", reservation_id: changing.id, end_date: newEnd })) setChanging(null);
+            }}
+          >
+            {busy ? "Saving…" : changing && newEnd > changing.end_date ? "Keep it longer" : "Give days back"}
+          </MobileButton>
+        }
+      >
+        {changing ? (
+          <>
+            <p className="text-sm text-ink-3">
+              {assets.find((a) => a.id === changing.asset_id)?.name ?? "This unit"} is yours {formatSpan(changing.start_date, changing.end_date)}. Pick the new last day.
+            </p>
+            <input
+              type="date"
+              value={newEnd}
+              min={changing.start_date > today ? changing.start_date : today}
+              max={addDays(changing.start_date, MAX_RESERVATION_DAYS - 1)}
+              onChange={(e) => setNewEnd(e.target.value)}
+              className="mt-3 min-h-12 w-full rounded-xl border border-glass/15 bg-glass/8 px-3 text-base text-ink focus:border-accent/40 focus:outline-none"
+              aria-label="New last day"
+            />
+            {newEnd > changing.end_date ? (
+              <p className="mt-3 text-xs text-ink-5">If someone has it booked for those days, they are asked first — nothing changes until they answer.</p>
+            ) : null}
           </>
         ) : null}
       </MobileSheet>

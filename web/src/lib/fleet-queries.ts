@@ -17,6 +17,7 @@ import {
   type ReservationSpan,
   type ReservationStatus,
 } from "@/lib/fleet-rules";
+import type { FleetRequestView, RequestResolution, RequestStatus } from "@/lib/fleet-requests";
 
 /**
  * Fleet reads.
@@ -112,6 +113,20 @@ export type FleetReservationRow = {
   created_at: string;
 };
 
+/** One row of `fleet_booking_requests`, as the board reads it. */
+type FleetRequestRow = {
+  id: string;
+  reservation_id: string;
+  target_reservation_id: string;
+  requested_end_date: string;
+  requester_id: string | null;
+  recipient_id: string | null;
+  status: RequestStatus;
+  resolution: RequestResolution | null;
+  created_at: string;
+  resolved_at: string | null;
+};
+
 /** A reservation decorated with everything the calendar needs to render it. */
 export type FleetReservationView = FleetReservationRow & {
   holder_name: string;
@@ -142,6 +157,8 @@ export type FleetBoard = {
   window_days: number;
   assets: FleetAssetView[];
   reservations: FleetReservationView[];
+  /** Extension requests the viewer asked or has to answer (admins: all). */
+  requests: FleetRequestView[];
   /** The signed-in user's own standing. */
   me: ReliabilityScore & { user_id: string };
   /** Everyone's standing, for the leaderboard. Admins see all; others see it too — visibility is the incentive. */
@@ -274,6 +291,8 @@ export async function fetchFleetBoard(
     viewerEmail?: string | null;
     /** Admins additionally receive the archived units. */
     includeArchived?: boolean;
+    /** Admins see every extension request, not only their own. */
+    isAdmin?: boolean;
     /** Result of `autoLinkHolder`, when this load performed one. */
     autoLinked?: { label: string; bookings: number; assets: number } | null;
     windowStart?: string;
@@ -295,6 +314,7 @@ export async function fetchFleetBoard(
     myAliasResult,
     directory,
     archivedResult,
+    requestsResult,
   ] = await Promise.all([
     admin
       .from("fleet_assets")
@@ -321,6 +341,11 @@ export async function fetchFleetBoard(
           .eq("active", false)
           .order("name", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
+    admin
+      .from("fleet_booking_requests")
+      .select(
+        "id, reservation_id, target_reservation_id, requested_end_date, requester_id, recipient_id, status, resolution, created_at, resolved_at",
+      ),
   ]);
 
   if (assetsResult.error) throw new Error(`fleet_assets read failed: ${assetsResult.error.message}`);
@@ -335,10 +360,21 @@ export async function fetchFleetBoard(
   );
   const reservations = (reservationsResult.data ?? []) as FleetReservationRow[];
 
+  // Extension requests. A missing table means phase 2's migration is not applied
+  // yet; the board must still render, so that reads as "no requests".
+  if (requestsResult.error && requestsResult.error.code !== "42P01") {
+    throw new Error(`fleet_booking_requests read failed: ${requestsResult.error.message}`);
+  }
+  const requestRows = (requestsResult.error ? [] : (requestsResult.data ?? [])) as FleetRequestRow[];
+
   // Resolve the names behind every user id we are about to render, in one call.
   const userIds = new Set<string>([args.viewerId]);
   for (const row of reservations) if (row.user_id) userIds.add(row.user_id);
   for (const asset of assets) if (asset.current_holder_user_id) userIds.add(asset.current_holder_user_id);
+  for (const row of requestRows) {
+    if (row.requester_id) userIds.add(row.requester_id);
+    if (row.recipient_id) userIds.add(row.recipient_id);
+  }
   const names = await fetchUserNames(admin, [...userIds]);
 
   // Waitlist positions, computed per (asset, start_date) group so a contested
@@ -485,12 +521,61 @@ export async function fetchFleetBoard(
         a.label.localeCompare(b.label),
     );
 
+  // Each viewer sees the requests they asked or must answer; admins see all,
+  // because a target booking with no account behind it is theirs to answer.
+  // Settled requests stay visible for two weeks so the outcome is seen once.
+  const recentCutoff = new Date(now.getTime() - 14 * 86_400_000).toISOString();
+  const reservationById = new Map(reservations.map((r) => [r.id, r]));
+  const assetById = new Map(assets.map((a) => [a.id, a]));
+  const requestViews: FleetRequestView[] = requestRows
+    .filter((row) => row.status === "pending" || (row.resolved_at ?? row.created_at) >= recentCutoff)
+    .filter(
+      (row) =>
+        args.isAdmin || row.requester_id === args.viewerId || row.recipient_id === args.viewerId,
+    )
+    .flatMap((row) => {
+      const booking = reservationById.get(row.reservation_id);
+      const target = reservationById.get(row.target_reservation_id);
+      if (!booking || !target) return [];
+      const incoming =
+        row.recipient_id === args.viewerId || (Boolean(args.isAdmin) && row.recipient_id === null);
+      return [
+        {
+          id: row.id,
+          status: row.status,
+          resolution: row.resolution,
+          requested_end_date: row.requested_end_date,
+          created_at: row.created_at,
+          resolved_at: row.resolved_at,
+          requester_id: row.requester_id,
+          requester_name: row.requester_id
+            ? (names.get(row.requester_id) ?? "Unknown")
+            : (booking.holder_label ?? "Unknown"),
+          recipient_id: row.recipient_id,
+          recipient_name: row.recipient_id
+            ? (names.get(row.recipient_id) ?? "Unknown")
+            : (target.holder_label ?? "an unclaimed booking"),
+          reservation_id: booking.id,
+          asset_id: booking.asset_id,
+          asset_name: assetById.get(booking.asset_id)?.name ?? "Material",
+          current_end_date: booking.end_date,
+          target_reservation_id: target.id,
+          target_start_date: target.start_date,
+          target_end_date: target.end_date,
+          incoming,
+          outgoing: row.requester_id === args.viewerId,
+        },
+      ];
+    })
+    .sort((a, b) => Number(b.status === "pending") - Number(a.status === "pending") || b.created_at.localeCompare(a.created_at));
+
   return {
     today,
     window_start: windowStart,
     window_days: windowDays,
     assets: assetViews,
     reservations: reservationViews,
+    requests: requestViews,
     me: { ...mine, user_id: args.viewerId },
     standings,
     unclaimed_holders: unclaimedHolders,

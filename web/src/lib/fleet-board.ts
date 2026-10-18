@@ -44,6 +44,7 @@ export async function buildFleetBoard(
     viewerName: viewer.name,
     viewerEmail: viewer.email,
     includeArchived: viewer.isAdmin,
+    isAdmin: viewer.isAdmin,
     autoLinked:
       auto && auto.linked ? { label: auto.label, bookings: auto.bookings, assets: auto.assets } : null,
     windowStart: boardWindow.windowStart,

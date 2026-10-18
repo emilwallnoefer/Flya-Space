@@ -24,6 +24,8 @@ import { handleCreateAsset } from "./handlers/create-asset";
 import { handleUpdateAsset } from "./handlers/update-asset";
 import { handleArchiveAsset } from "./handlers/archive-asset";
 import { handleRegisterMember } from "./handlers/register-member";
+import { handleChangeDates } from "./handlers/change-dates";
+import { handleRespondRequest } from "./handlers/respond-request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -203,5 +205,9 @@ async function dispatch(ctx: FleetActionContext, payload: PostPayload): Promise<
       return await handleArchiveAsset(ctx, payload);
     case "register_member":
       return await handleRegisterMember(ctx);
+    case "change_dates":
+      return await handleChangeDates(ctx, payload);
+    case "respond_request":
+      return await handleRespondRequest(ctx, payload);
   }
 }
