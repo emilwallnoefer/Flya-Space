@@ -21,6 +21,16 @@ All `npm` commands run from `web/`.
 
 Tests (run from `web/`): `npm run test` — Vitest unit suite (`src/**/*.test.ts`, colocated with sources); `npm run test:e2e` — Playwright smoke (`e2e/`, needs `.env.local` with the public Supabase vars and a one-time `npx playwright install chromium`; runs a desktop and an iPhone-sized Chromium project, and `E2E_WEBKIT=1` adds real WebKit after `npx playwright install webkit`); `npm run test:rls` — RLS smoke script. New pure-logic modules should get a colocated `*.test.ts`.
 
+## Working in loops (decide this before starting any task)
+
+A prompt describes the result once and hopes. A loop gives the work a goal, a check a machine can run, and a stop rule, then iterates until the check passes. Decide which one a task is *before* editing, and say so in the first line of work:
+
+1. **Name the check first.** State what will prove the task done without a human judging it: a Vitest file, `npm run lint`, the Playwright smoke, `npm run test:rls`, `npm run build`, a measurement script. If none exists and the logic is pure, write the failing test first (colocated `*.test.ts`, as above). If none *can* exist (copy, visual taste), say so explicitly and fall back to a screenshot the user judges — that task is a prompt, and it is fine to call it one.
+2. **Iterate until green; don't ask in between.** Run the check, fix, rerun. Report when it passes, or when a fixed budget runs out (three failing rounds on the same error is the default) — then stop and show the output rather than thrash.
+3. **A check that went green too easily is a weak check.** Strengthen the test before touching the code or the instructions again.
+4. **Outer loops are proposed, not started.** `/loop` (polling across turns) and `/schedule` (cloud routines) keep running after the task ends and are billed, so the user starts them. When a task is really a recurring chore, recommend one and name its trigger, its check and its stop rule. The chores that already qualify are in **Housekeeping** below, plus the weekly `next` Dependabot bump and a red daily security-baseline run.
+5. **The one outer loop Claude may start on its own:** polling CI or a Vercel deployment for a PR *this session* opened, with a stated budget (30 minutes unless the user says otherwise), stopping on green or when the budget ends. Nothing else recurring starts without the user saying so.
+
 ## Dependencies & CI
 
 `.github/workflows/security-baseline.yml` is the only CI job. On every PR touching `web/**` it runs `npm ci`, `npm run lint`, then `npm audit --omit=dev --audit-level=high`. That last gate fails the **whole PR** on any high-severity advisory in a production dependency — including PRs that only touch markdown. A red check on an unrelated PR usually means the gate is failing on `main`, not that the PR broke something.
@@ -112,7 +122,7 @@ The `web/README.md` has the most detailed env-var reference and the cron/team-ch
 
 ## Housekeeping (do this without being asked)
 
-Handle these when they come up — right after a merge, or when a session notices the state is stale. Do not queue them up for the user to prompt. Every step has a verification that comes **first**; report what you verified alongside what you removed.
+Handle these when they come up — right after a merge, or when a session notices the state is stale. Do not queue them up for the user to prompt. Every step has a verification that comes **first**; report what you verified alongside what you removed. These are also the canonical candidates for a scheduled outer loop (see **Working in loops**): each has a trigger, a check and a stop rule already written down.
 
 **After a PR you opened gets merged**
 
