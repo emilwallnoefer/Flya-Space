@@ -246,6 +246,14 @@ export type ReservationStatus =
 /** Where a reservation came from. Imported rows are provisional — see `computeReliability`. */
 export type ReservationSource = "app" | "sheet_import";
 
+/**
+ * Why a booking is closed. `returned` and `cancelled` mirror the status; the
+ * rest say *how* it got there, which the score needs: a `no_show` (booked,
+ * never collected, span passed) is scored mildly, while an `expired` waitlist
+ * entry or a `moved`/`shortened` booking judges nobody.
+ */
+export type ClosedReason = "returned" | "cancelled" | "no_show" | "expired" | "moved" | "shortened";
+
 export type ReservationSpan = {
   id: string;
   asset_id: string;
@@ -262,6 +270,8 @@ export type ReservationSpan = {
   holder_label?: string | null;
   /** Defaults to "app" when absent, so existing callers are unaffected. */
   source?: ReservationSource;
+  /** Set when the booking closed; null/absent while live or for rows older than the column. */
+  closed_reason?: ClosedReason | null;
 };
 
 /** Half-open comparison on inclusive day spans. */
@@ -364,12 +374,47 @@ export function occupiedUntil(span: ReservationSpan): string {
 }
 
 /**
- * Days overdue as of `today`. 0 while still within the booked span, and 0 once
- * the material is back — a late return is history, not a live debt.
+ * The last day a booking BLOCKS the asset, as of `today`.
+ *
+ * Normally the end date. But material that was picked up and is past due is
+ * still physically out, so the unit is not on the shelf for anyone else: the
+ * booking keeps blocking, day by day, until it is checked in. Without this the
+ * grid drew the days after the due date as free, and the next person could
+ * book — and even "pick up" — a unit that had not come back.
+ *
+ * Only `picked_up` stretches. A `reserved` booking past its end date was never
+ * collected; it is a no-show, closed by the daily cron, and blocks nothing
+ * beyond its own span.
+ */
+export function blockedUntil(span: ReservationSpan, today: string): string {
+  if (span.status === "picked_up" && span.end_date < today) return today;
+  return span.end_date;
+}
+
+/**
+ * Days overdue as of `today`: material that was picked up and is still out past
+ * its due date. 0 within the booked span, 0 once it is back (a late return is
+ * history, not a live debt), and 0 for a booking that was never collected — a
+ * no-show is not "out", and is closed by the cron as one.
  */
 export function daysOverdue(span: ReservationSpan, today: string): number {
-  if (span.status === "returned" || span.status === "cancelled") return 0;
+  if (span.status !== "picked_up") return 0;
   return Math.max(0, daysBetween(dueDateOf(span), today));
+}
+
+/**
+ * Whether a live-looking row should be closed by the daily sweep.
+ *
+ * - `no_show`: reserved, never picked up, and the whole span is in the past.
+ *   Left alone it would be scored as "still out" forever and mailed "check it
+ *   in" for material that never left the shelf.
+ * - `expired`: a waitlist entry whose span has passed can never be promoted.
+ */
+export function expiryFor(span: ReservationSpan, today: string): "no_show" | "expired" | null {
+  if (span.end_date >= today) return null;
+  if (span.status === "reserved") return "no_show";
+  if (span.status === "waitlisted") return "expired";
+  return null;
 }
 
 /** How late a completed return was; 0 when it landed on or before the due date. */
@@ -424,8 +469,12 @@ export function checkReservation(args: {
     end_date: endDate,
     status: "reserved",
   };
+  // An overdue unit still out blocks up to today, not just to its due date.
   const conflicting = existing.filter(
-    (span) => span.id !== ignoreId && isBlocking(span.status) && spansOverlap(span, candidate),
+    (span) =>
+      span.id !== ignoreId &&
+      isBlocking(span.status) &&
+      spansOverlap({ ...span, end_date: blockedUntil(span, today) }, candidate),
   );
   if (conflicting.length > 0) return { ok: false, reason: "overlap", conflicting };
 
@@ -449,6 +498,8 @@ export type ReliabilityScore = {
   late: number;
   /** Currently past due and still out. */
   overdue: number;
+  /** Bookings that were never collected and lapsed. */
+  noShows: number;
   /** Human-readable one-liner for the UI badge. */
   summary: string;
 };
@@ -493,6 +544,15 @@ function overduePenalty(d: number): number {
 }
 
 /**
+ * Penalty for a booking that was never collected. Mild and flat: nobody was
+ * deprived of material that stayed on the shelf, but the days were held from
+ * everyone else, so it is not free either. Capped so a run of forgotten
+ * bookings cannot sink someone the way a month-late return does.
+ */
+export const NO_SHOW_PENALTY = 3;
+export const NO_SHOW_PENALTY_CAP = 15;
+
+/**
  * Computes one person's reliability from their reservation history.
  *
  * Scoring is intentionally simple and explainable — people have to trust it,
@@ -502,6 +562,7 @@ function overduePenalty(d: number): number {
  *   + 2  per on-time return   (rewards a long clean record, capped at 100)
  *   − latePenalty(days)       per late return
  *   − overduePenalty(days)    per item currently out past its due date
+ *   − NO_SHOW_PENALTY         per booking never collected (capped)
  *
  * Someone with no completed reservations and nothing overdue is `PROVISIONAL_SCORE`.
  *
@@ -515,12 +576,17 @@ export function computeReliability(spans: ReservationSpan[], today: string): Rel
   let onTime = 0;
   let late = 0;
   let overdue = 0;
+  let noShows = 0;
   let penalty = 0;
   let bonus = 0;
 
   for (const span of spans) {
-    if (span.status === "cancelled") continue;
     if (span.source === "sheet_import") continue;
+    if (span.status === "cancelled") {
+      // A cancellation judges nobody — unless the booking lapsed uncollected.
+      if (span.closed_reason === "no_show") noShows += 1;
+      continue;
+    }
 
     if (span.status === "returned") {
       const d = lateDays(span);
@@ -541,7 +607,11 @@ export function computeReliability(spans: ReservationSpan[], today: string): Rel
     }
   }
 
+  penalty += Math.min(NO_SHOW_PENALTY_CAP, noShows * NO_SHOW_PENALTY);
+
   const completed = onTime + late;
+  // A no-show does not lift anyone off the provisional start — otherwise a
+  // forgotten first booking would score better than no booking at all.
   const base = completed === 0 && overdue === 0 ? PROVISIONAL_SCORE : 100;
   const score = clamp(Math.round(base + bonus - penalty), 0, 100);
   const { tier, horizonDays } = tierFor(score);
@@ -554,7 +624,8 @@ export function computeReliability(spans: ReservationSpan[], today: string): Rel
     onTime,
     late,
     overdue,
-    summary: summarize({ score, completed, onTime, late, overdue, tier }),
+    noShows,
+    summary: summarize({ score, completed, onTime, late, overdue, noShows, tier }),
   };
 }
 
@@ -564,14 +635,16 @@ function summarize(s: {
   onTime: number;
   late: number;
   overdue: number;
+  noShows: number;
   tier: ReliabilityTier;
 }): string {
   if (s.overdue > 0) {
     return `${s.overdue} item${s.overdue === 1 ? "" : "s"} still out past the due date`;
   }
-  if (s.completed === 0) return "No return history yet";
-  if (s.late === 0) return `${s.onTime} return${s.onTime === 1 ? "" : "s"}, all on time`;
-  return `${s.onTime}/${s.completed} returns on time`;
+  const noShowNote = s.noShows > 0 ? `, ${s.noShows} booking${s.noShows === 1 ? "" : "s"} never collected` : "";
+  if (s.completed === 0) return s.noShows > 0 ? `No returns yet${noShowNote}` : "No return history yet";
+  if (s.late === 0) return `${s.onTime} return${s.onTime === 1 ? "" : "s"}, all on time${noShowNote}`;
+  return `${s.onTime}/${s.completed} returns on time${noShowNote}`;
 }
 
 export function clamp(value: number, min: number, max: number): number {
@@ -618,8 +691,12 @@ export type ReminderKind = "due_soon" | "due_today" | "overdue";
  * - `due_today` — on the due date, once.
  * - `overdue`   — every day at first, then easing to every 3rd day after a week,
  *                 so a forgotten item keeps nagging without becoming noise the
- *                 recipient filters out.
+ *                 recipient filters out. Stops after `OVERDUE_REMINDER_DAYS`:
+ *                 a month of unanswered mail is a person problem for an admin
+ *                 (the cron escalates), not something a 31st e-mail fixes.
  */
+export const OVERDUE_REMINDER_DAYS = 30;
+
 export function reminderFor(span: ReservationSpan, today: string): ReminderKind | null {
   if (!isBlocking(span.status)) return null;
   const due = dueDateOf(span);
@@ -628,6 +705,7 @@ export function reminderFor(span: ReservationSpan, today: string): ReminderKind 
   if (delta === -1) return "due_soon";
   if (delta === 0) return "due_today";
   if (delta < 0) return null;
+  if (delta > OVERDUE_REMINDER_DAYS) return null;
   if (delta <= 7) return "overdue";
   return delta % 3 === 0 ? "overdue" : null;
 }

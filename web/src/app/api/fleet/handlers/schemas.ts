@@ -37,6 +37,12 @@ const checkInSchema = z.object({
   reservation_id: z.string().uuid(),
   location: z.string().trim().max(160).optional(),
   note: z.string().trim().max(280).optional(),
+  /**
+   * The day the material actually came back, when that was before today —
+   * material dropped on the shelf on Friday and checked in on Monday was not
+   * three days late. Bounded by the handler to [start_date, today].
+   */
+  returned_on: dateKey.optional(),
 });
 
 const moveSchema = z.object({

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { recordAssetEvent } from "@/lib/fleet-queries";
+import { fetchUserNames, recordAssetEvent } from "@/lib/fleet-queries";
 import { loadReservation, type FleetActionContext } from "./shared";
 import type { FleetPayload } from "./schemas";
 
@@ -18,6 +18,26 @@ export async function handleCheckOut(
   }
 
   const asset = reservation.asset;
+
+  // The unit has to be on the shelf. If it is recorded as out with somebody
+  // else — the previous holder is late and has not checked it in — "picking it
+  // up" would overwrite who has it and paint a missing unit as accounted for.
+  // The real fix is the other person's check-in (or an admin's); refusing here
+  // is what keeps the record honest about where the material is.
+  const heldBy = asset?.current_holder_user_id ?? null;
+  if (asset?.status === "out" && heldBy !== reservation.user_id) {
+    const holderName = heldBy
+      ? ((await fetchUserNames(admin, [heldBy])).get(heldBy) ?? "someone else")
+      : (asset.current_holder_label ?? "someone else");
+    return NextResponse.json(
+      {
+        error: `${asset.name} is still out with ${holderName} — it has not been checked in yet. Ask them to bring it back, or an admin to check it in.`,
+        held_by: holderName,
+      },
+      { status: 409 },
+    );
+  }
+
   const destination = payload.location ?? reservation.destination ?? null;
 
   const [{ error: resError }, { error: assetError }] = await Promise.all([

@@ -1,6 +1,13 @@
 import "server-only";
 
-import { addDays, computeReliability, daysOverdue, dueDateOf, type ReservationSpan } from "@/lib/fleet-rules";
+import {
+  addDays,
+  computeReliability,
+  daysOverdue,
+  dueDateOf,
+  type ClosedReason,
+  type ReservationSpan,
+} from "@/lib/fleet-rules";
 import type { FleetBoard } from "@/lib/fleet-queries";
 
 /**
@@ -153,6 +160,11 @@ export function buildDemoBoard(args: {
       picked_up_at: row.status === "picked_up" ? new Date().toISOString() : null,
       returned_at: span.returned_on ? `${span.returned_on}T16:00:00Z` : null,
       returned_on: span.returned_on ?? null,
+      closed_reason: (row.status === "returned"
+        ? "returned"
+        : row.status === "cancelled"
+          ? "cancelled"
+          : null) as ClosedReason | null,
       created_at: new Date(Date.parse(`${today}T00:00:00Z`) - 3 * 86_400_000).toISOString(),
       holder_name: row.name,
       is_mine: row.user === viewerId,
