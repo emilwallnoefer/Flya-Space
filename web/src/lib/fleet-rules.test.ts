@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addDays,
   assignHolderColors,
+  blockedUntil,
   calendarLayerFor,
   checkReservation,
   closureStatusFor,
@@ -10,6 +11,10 @@ import {
   daysBetween,
   daysOverdue,
   describeDays,
+  expiryFor,
+  NO_SHOW_PENALTY,
+  NO_SHOW_PENALTY_CAP,
+  OVERDUE_REMINDER_DAYS,
   dueDateOf,
   dueLabel,
   formatDay,
@@ -50,6 +55,7 @@ function span(partial: Partial<ReservationSpan> & { start_date: string; end_date
     returned_on: partial.returned_on ?? null,
     holder_label: partial.holder_label ?? null,
     source: partial.source,
+    closed_reason: partial.closed_reason ?? null,
     start_date: partial.start_date,
     end_date: partial.end_date,
   };
@@ -603,6 +609,107 @@ describe("reminder schedule", () => {
     expect(reminderFor(oneDay, "2026-08-29")).toBe("due_soon");
     expect(reminderFor(oneDay, "2026-08-30")).toBe("due_today");
     expect(reminderFor(oneDay, "2026-08-31")).toBe("overdue");
+  });
+
+  it("stops chasing after a month — by then it is an admin's problem, not a 31st e-mail's", () => {
+    expect(OVERDUE_REMINDER_DAYS).toBe(30);
+    expect(reminderFor(out, "2026-09-29")).toBe("overdue"); // +30, divisible by 3: the last one
+    expect(reminderFor(out, "2026-10-02")).toBeNull(); // +33 would have fired before
+    expect(reminderFor(out, "2026-12-01")).toBeNull();
+  });
+});
+
+describe("an overdue unit keeps blocking until it is back", () => {
+  const out = span({ start_date: "2026-08-24", end_date: "2026-08-28", status: "picked_up" });
+
+  it("blocks through today once past due, but only while the unit is actually out", () => {
+    expect(blockedUntil(out, "2026-08-26")).toBe("2026-08-28"); // within the span: the due date
+    expect(blockedUntil(out, "2026-09-02")).toBe("2026-09-02"); // overdue and still out: today
+    // Never collected: a no-show, blocks nothing past its own span.
+    expect(blockedUntil(span({ ...out, status: "reserved" }), "2026-09-02")).toBe("2026-08-28");
+    // Back: history, the due date stands.
+    expect(blockedUntil(span({ ...out, status: "returned", returned_on: "2026-09-01" }), "2026-09-02")).toBe(
+      "2026-08-28",
+    );
+  });
+
+  it("refuses to book today a unit that has not come back", () => {
+    const check = checkReservation({
+      startDate: "2026-09-02",
+      endDate: "2026-09-03",
+      today: "2026-09-02",
+      horizonDays: 56,
+      existing: [out],
+    });
+    expect(check.ok).toBe(false);
+    if (!check.ok) expect(check.reason).toBe("overlap");
+  });
+
+  it("still lets tomorrow be booked — the unit may well be back by then", () => {
+    const check = checkReservation({
+      startDate: "2026-09-03",
+      endDate: "2026-09-03",
+      today: "2026-09-02",
+      horizonDays: 56,
+      existing: [out],
+    });
+    expect(check.ok).toBe(true);
+  });
+
+  it("does not stretch a never-collected booking over the following days", () => {
+    const noShow = span({ ...out, status: "reserved" });
+    const check = checkReservation({
+      startDate: "2026-09-02",
+      endDate: "2026-09-02",
+      today: "2026-09-02",
+      horizonDays: 56,
+      existing: [noShow],
+    });
+    expect(check.ok).toBe(true);
+  });
+});
+
+describe("no-shows", () => {
+  const today = "2026-09-01";
+
+  it("is not 'overdue' — nothing is out", () => {
+    const lapsed = span({ start_date: "2026-08-24", end_date: "2026-08-28", status: "reserved" });
+    expect(daysOverdue(lapsed, today)).toBe(0);
+    expect(computeReliability([lapsed], today).overdue).toBe(0);
+  });
+
+  it("decides what the daily sweep closes", () => {
+    const reserved = span({ start_date: "2026-08-24", end_date: "2026-08-28", status: "reserved" });
+    expect(expiryFor(reserved, "2026-08-28")).toBeNull(); // the last day is still today
+    expect(expiryFor(reserved, "2026-08-29")).toBe("no_show");
+    expect(expiryFor(span({ ...reserved, status: "waitlisted" }), "2026-08-29")).toBe("expired");
+    // Material that is out is overdue, not expired — only a check-in closes it.
+    expect(expiryFor(span({ ...reserved, status: "picked_up" }), "2026-08-29")).toBeNull();
+    expect(expiryFor(span({ ...reserved, status: "returned", returned_on: "2026-08-28" }), "2026-08-29")).toBeNull();
+  });
+
+  it("costs a little, is capped, and never lifts anyone off the provisional start", () => {
+    const noShow = (id: string) =>
+      span({ id, start_date: "2026-08-01", end_date: "2026-08-02", status: "cancelled", closed_reason: "no_show" });
+
+    const first = computeReliability([noShow("a")], today);
+    expect(first.noShows).toBe(1);
+    expect(first.score).toBe(PROVISIONAL_SCORE - NO_SHOW_PENALTY);
+    expect(first.summary).toBe("No returns yet, 1 booking never collected");
+
+    const onTime = span({ id: "ok", start_date: "2026-08-10", end_date: "2026-08-11", status: "returned", returned_on: "2026-08-11" });
+    expect(computeReliability([onTime, noShow("a")], today).score).toBe(100 + 2 - NO_SHOW_PENALTY);
+
+    const many = ["a", "b", "c", "d", "e", "f", "g"].map(noShow);
+    expect(computeReliability([onTime, ...many], today).score).toBe(100 + 2 - NO_SHOW_PENALTY_CAP);
+  });
+
+  it("leaves an ordinary cancellation, and an expired waitlist entry, unscored", () => {
+    const plain = span({ start_date: "2026-08-01", end_date: "2026-08-02", status: "cancelled", closed_reason: "cancelled" });
+    const expired = span({ id: "w", start_date: "2026-08-01", end_date: "2026-08-02", status: "cancelled", closed_reason: "expired" });
+    const r = computeReliability([plain, expired], today);
+    expect(r.score).toBe(PROVISIONAL_SCORE);
+    expect(r.noShows).toBe(0);
   });
 });
 

@@ -20,6 +20,17 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-19-fleet-honest-board",
+    date: "Oct 19, 2026",
+    title: "Fleet: the board tells the truth about late material",
+    highlights: [
+      "A unit that is overdue and still out stays blocked on the calendar until it is checked in",
+      "You cannot pick up a unit that someone else still has; the message names who",
+      "Bringing back an overdue unit? Say which day it actually came back, so you are not scored for days it sat on the shelf",
+      "Bookings nobody picked up close by themselves once their days have passed, with a small score note instead of 'overdue' forever",
+    ],
+  },
+  {
     version: "2026-10-15-chat-reactions",
     date: "Oct 15, 2026",
     title: "Team chat: emoji reactions",

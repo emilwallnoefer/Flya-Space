@@ -153,8 +153,13 @@ export function FleetPanel({ initialBoard = null }: { initialBoard?: FleetBoardR
               busy={busy}
               score={board?.me ?? null}
               onCheckOut={(id) => void post({ action: "check_out", reservation_id: id })}
-              onCheckIn={(id, location) =>
-                void post({ action: "check_in", reservation_id: id, location: location || undefined })
+              onCheckIn={(id, location, returnedOn) =>
+                void post({
+                  action: "check_in",
+                  reservation_id: id,
+                  location: location || undefined,
+                  returned_on: returnedOn || undefined,
+                })
               }
               onCancel={(id) => void post({ action: "cancel", reservation_id: id })}
               onBrowse={() => setTab("calendar")}

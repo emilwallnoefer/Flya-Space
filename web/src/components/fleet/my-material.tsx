@@ -32,13 +32,19 @@ export function MyMaterial({
   busy: boolean;
   score: FleetBoardResponse["me"] | null;
   onCheckOut: (id: string) => void;
-  onCheckIn: (id: string, location: string) => void;
+  /** `returnedOn` is set only when the person backdated an overdue return. */
+  onCheckIn: (id: string, location: string, returnedOn?: string) => void;
   onCancel: (id: string) => void;
   /** Sends an empty-handed reader to the calendar rather than a dead end. */
   onBrowse: () => void;
 }) {
   const [returningId, setReturningId] = useState<string | null>(null);
   const [returnTo, setReturnTo] = useState("");
+  // Only asked for when the booking is overdue: the day it actually came back.
+  const [returnedOn, setReturnedOn] = useState("");
+  /** The backdated return day to send, or undefined when today is right. */
+  const backdated = (reservation: FleetReservation) =>
+    reservation.days_overdue > 0 && returnedOn && returnedOn !== today ? returnedOn : undefined;
 
   return (
     <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_17rem]">
@@ -134,6 +140,7 @@ export function MyMaterial({
                       onClick={() => {
                         setReturningId(returning ? null : reservation.id);
                         setReturnTo(asset?.home_location ?? "");
+                        setReturnedOn(today);
                       }}
                     >
                       Bring back
@@ -143,7 +150,7 @@ export function MyMaterial({
               </div>
 
               {returning ? (
-                <div className="mt-2 flex gap-1.5 border-t border-glass/10 pt-2">
+                <div className="mt-2 flex flex-wrap gap-1.5 border-t border-glass/10 pt-2">
                   <Input
                     value={returnTo}
                     autoFocus
@@ -151,20 +158,34 @@ export function MyMaterial({
                     onKeyDown={(event) => {
                       if (event.key === "Escape") setReturningId(null);
                       if (event.key === "Enter") {
-                        onCheckIn(reservation.id, returnTo.trim());
+                        onCheckIn(reservation.id, returnTo.trim(), backdated(reservation));
                         setReturningId(null);
                       }
                     }}
                     placeholder="Where are you leaving it?"
-                    className="text-xs"
+                    className="min-w-[10rem] flex-1 text-xs"
                     aria-label="Return location"
                   />
+                  {overdue ? (
+                    // Overdue only: a unit dropped off on Friday and checked in
+                    // on Monday was not three days late. Bounded to the booking.
+                    <Input
+                      type="date"
+                      value={returnedOn}
+                      min={reservation.start_date}
+                      max={today}
+                      onChange={(event) => setReturnedOn(event.target.value)}
+                      className="text-xs"
+                      aria-label="Day it actually came back"
+                      title="When did it actually come back?"
+                    />
+                  ) : null}
                   <Button
                     size="xs"
                     variant="accent"
                     disabled={busy}
                     onClick={() => {
-                      onCheckIn(reservation.id, returnTo.trim());
+                      onCheckIn(reservation.id, returnTo.trim(), backdated(reservation));
                       setReturningId(null);
                     }}
                   >

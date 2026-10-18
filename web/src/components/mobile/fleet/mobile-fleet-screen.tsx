@@ -8,7 +8,7 @@ import { ReliabilityBadge } from "@/components/fleet/reliability-badge";
 import { CATEGORY_LABEL, categoryRank, type FleetAsset, type FleetBoardResponse, type FleetReservation } from "@/components/fleet/types";
 import { useFleet, type FleetState } from "@/components/fleet/use-fleet";
 import { Notice } from "@/components/ui";
-import { dueLabel, formatDay, formatSpan, isBlocking, occupiedUntil } from "@/lib/fleet-rules";
+import { blockedUntil, dueLabel, formatDay, formatSpan, isBlocking, occupiedUntil } from "@/lib/fleet-rules";
 import { cn } from "@/lib/cn";
 import { MobileButton, MobileEmpty, MobileGroup, MobileSegmented, MobileSheet } from "../primitives";
 import { MobileBookFlow } from "./mobile-book-flow";
@@ -84,6 +84,8 @@ function MyMaterialList({ state, onBrowse }: { state: FleetState; onBrowse: () =
   const { myReservations, assets, today, busy, post } = state;
   const [returning, setReturning] = useState<FleetReservation | null>(null);
   const [returnTo, setReturnTo] = useState("");
+  // Only asked for when the booking is overdue: the day it actually came back.
+  const [returnedOn, setReturnedOn] = useState("");
 
   if (myReservations.length === 0) {
     return (
@@ -140,7 +142,7 @@ function MyMaterialList({ state, onBrowse }: { state: FleetState; onBrowse: () =
                   </MobileButton>
                 ) : null}
                 {r.status === "picked_up" ? (
-                  <MobileButton className="min-h-10 text-sm" variant={overdue ? "primary" : "secondary"} disabled={busy} onClick={() => { setReturning(r); setReturnTo(asset?.home_location ?? ""); }}>
+                  <MobileButton className="min-h-10 text-sm" variant={overdue ? "primary" : "secondary"} disabled={busy} onClick={() => { setReturning(r); setReturnTo(asset?.home_location ?? ""); setReturnedOn(today); }}>
                     Bring back
                   </MobileButton>
                 ) : null}
@@ -159,7 +161,8 @@ function MyMaterialList({ state, onBrowse }: { state: FleetState; onBrowse: () =
             disabled={busy}
             onClick={async () => {
               if (!returning) return;
-              if (await post({ action: "check_in", reservation_id: returning.id, location: returnTo.trim() || undefined })) setReturning(null);
+              const backdated = returning.days_overdue > 0 && returnedOn && returnedOn !== today ? returnedOn : undefined;
+              if (await post({ action: "check_in", reservation_id: returning.id, location: returnTo.trim() || undefined, returned_on: backdated })) setReturning(null);
             }}
           >
             {busy ? "Saving…" : "Checked in"}
@@ -173,6 +176,24 @@ function MyMaterialList({ state, onBrowse }: { state: FleetState; onBrowse: () =
           placeholder="Location (optional)"
           className="mt-3 min-h-12 w-full rounded-xl border border-glass/15 bg-glass/8 px-3 text-base text-ink focus:border-accent/40 focus:outline-none"
         />
+        {returning && returning.days_overdue > 0 ? (
+          <>
+            {/* Overdue only: a unit dropped off on Friday and checked in on
+                Monday was not three days late. Bounded to the booking's days. */}
+            <label className="mt-4 block text-sm text-ink-3" htmlFor="fleet-returned-on">
+              When did it actually come back?
+            </label>
+            <input
+              id="fleet-returned-on"
+              type="date"
+              value={returnedOn}
+              min={returning.start_date}
+              max={today}
+              onChange={(e) => setReturnedOn(e.target.value)}
+              className="mt-2 min-h-12 w-full rounded-xl border border-glass/15 bg-glass/8 px-3 text-base text-ink focus:border-accent/40 focus:outline-none"
+            />
+          </>
+        ) : null}
       </MobileSheet>
     </>
   );
@@ -194,7 +215,8 @@ function WhoHasWhat({ state, onOpen }: { state: FleetState; onOpen: (r: FleetRes
       .sort((a, b) => categoryRank(a.category) - categoryRank(b.category) || a.name.localeCompare(b.name))
       .map((asset) => {
         const live = reservations
-          .filter((r) => r.asset_id === asset.id && isBlocking(r.status) && r.start_date <= today && r.end_date >= today)
+          // An overdue unit still out is still "with" its holder past the due date.
+          .filter((r) => r.asset_id === asset.id && isBlocking(r.status) && r.start_date <= today && blockedUntil(r, today) >= today)
           .sort((a, b) => (a.status === "picked_up" ? -1 : 1) - (b.status === "picked_up" ? -1 : 1))[0];
         const next = live
           ? null

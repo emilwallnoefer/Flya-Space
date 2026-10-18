@@ -1,4 +1,4 @@
-import type { ReliabilityScore, ReservationSource, ReservationStatus } from "@/lib/fleet-rules";
+import type { ClosedReason, ReliabilityScore, ReservationSource, ReservationStatus } from "@/lib/fleet-rules";
 
 /** Wire types for `/api/fleet`. Mirrors `src/lib/fleet-queries.ts`. */
 
@@ -66,6 +66,8 @@ export type FleetReservation = {
   picked_up_at: string | null;
   returned_at: string | null;
   returned_on: string | null;
+  /** Why the booking closed; null while live (see `ClosedReason`). */
+  closed_reason: ClosedReason | null;
   created_at: string;
   holder_name: string;
   is_mine: boolean;

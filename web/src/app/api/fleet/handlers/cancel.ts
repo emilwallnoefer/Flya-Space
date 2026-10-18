@@ -25,7 +25,7 @@ export async function handleCancel(
 
   const { error } = await admin
     .from("fleet_reservations")
-    .update({ status: "cancelled" })
+    .update({ status: "cancelled", closed_reason: "cancelled" })
     .eq("id", payload.reservation_id);
   if (error) throw new Error(error.message);
 
@@ -39,7 +39,7 @@ export async function handleCancel(
       kind: "cancelled",
       actor_user_id: viewer.id,
     }),
-    promoteWaitlist(admin, reservation.asset_id, reservation.start_date),
+    promoteWaitlist(admin, reservation.asset_id),
   ]);
   return NextResponse.json({ ok: true, promoted });
 }

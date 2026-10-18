@@ -4,14 +4,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { guardAdmin } from "@/lib/admin-guard";
 import { checkRateLimit, createRateLimitHeaders, getClientIp } from "@/lib/security/rate-limit";
 import { isResendConfigured, sendEmailViaResend } from "@/lib/email/resend";
-import { displayNameFor, fetchRemindersEnabled, todayInZurich } from "@/lib/fleet-queries";
+import { displayNameFor, fetchRemindersEnabled, recordAssetEvent, todayInZurich } from "@/lib/fleet-queries";
 import {
   computeReliability,
   dueDateOf,
   daysOverdue,
+  expiryFor,
   formatDayLong,
   formatSpan,
   reminderFor,
+  type ClosedReason,
   type ReminderKind,
   type ReservationSource,
   type ReservationSpan,
@@ -53,6 +55,7 @@ type LiveReservation = {
   destination: string | null;
   returned_on: string | null;
   holder_label: string | null;
+  source: ReservationSource;
 };
 
 /** The narrower row shape used to recompute each recipient's reliability. */
@@ -65,6 +68,15 @@ type ScoringReservation = {
   status: ReservationStatus;
   returned_on: string | null;
   source: ReservationSource;
+  closed_reason: ClosedReason | null;
+};
+
+/** A booking the daily sweep closed (or would close, on a dry run). */
+type Swept = {
+  reservation_id: string;
+  asset_id: string;
+  reason: "no_show" | "expired";
+  applied: boolean;
 };
 
 type Outcome = {
@@ -135,9 +147,26 @@ function buildEmail(params: {
   destination: string | null;
   score: number;
   dashboardUrl: string;
+  /** False for a booking carried over from the sheet: those never touch the score. */
+  scoreApplies?: boolean;
+  /** False while the booking is only reserved — there is nothing to check in yet. */
+  canCheckIn?: boolean;
 }) {
-  const { name, assetName, assetLabel, kind, dueDate, daysLate, spanLabel, destination, score, dashboardUrl } =
-    params;
+  const {
+    name,
+    assetName,
+    assetLabel,
+    kind,
+    dueDate,
+    daysLate,
+    spanLabel,
+    destination,
+    score,
+    dashboardUrl,
+    scoreApplies = true,
+    canCheckIn = true,
+  } = params;
+  const cta = canCheckIn ? "Check it in" : "Open Fleet";
 
   const due = formatDateLabel(dueDate);
   const subject =
@@ -154,8 +183,9 @@ function buildEmail(params: {
         ? `${assetLabel} is due back today (${due}).`
         : `${assetLabel} was due back on ${due} — that is ${daysLate} day${daysLate === 1 ? "" : "s"} ago.`;
 
-  const consequence =
-    kind === "overdue"
+  const consequence = !scoreApplies
+    ? "This booking was carried over from the fleet sheet, so it does not count against your reliability score — but the material is still due back, and whoever booked it next is waiting on it."
+    : kind === "overdue"
       ? `While it is out past its due date it counts against your reliability score, which is currently ${score}. The score sets how far ahead you can book and who wins a contested day, so this is worth clearing today.`
       : `Checking it in on time keeps your reliability score (currently ${score}) up, which is what decides how far ahead you can book.`;
 
@@ -169,7 +199,7 @@ function buildEmail(params: {
     "",
     consequence,
     "",
-    `Check it in here: ${dashboardUrl}`,
+    `${cta} here: ${dashboardUrl}`,
     "",
     "— Flya Space, Fleet",
   ]
@@ -186,7 +216,7 @@ function buildEmail(params: {
       <p style="margin:0 0 14px;font-size:14px;line-height:1.6;">${escapeHtml(opener)}</p>
       ${whereLine ? `<p style="margin:0 0 14px;font-size:13px;line-height:1.6;color:#94a3b8;">${escapeHtml(whereLine)}</p>` : ""}
       <p style="margin:0 0 22px;font-size:13px;line-height:1.6;color:#94a3b8;">${escapeHtml(consequence)}</p>
-      <a href="${escapeHtml(dashboardUrl)}" style="display:inline-block;background:#22d3ee;color:#0b1120;text-decoration:none;font-size:14px;font-weight:600;padding:11px 20px;border-radius:9px;">Check it in</a>
+      <a href="${escapeHtml(dashboardUrl)}" style="display:inline-block;background:#22d3ee;color:#0b1120;text-decoration:none;font-size:14px;font-weight:600;padding:11px 20px;border-radius:9px;">${escapeHtml(cta)}</a>
       <p style="margin:22px 0 0;font-size:12px;color:#64748b;">— Flya Space, Fleet</p>
     </div>
   </body>
@@ -224,6 +254,66 @@ export async function GET(request: Request) {
   const today = todayInZurich();
   const admin = createAdminClient();
 
+  // Daily sweep, before anything is mailed. A booking nobody collected whose
+  // span has passed is a no-show, and a waitlist entry whose span has passed
+  // can never be promoted. Left open, the first is scored as "still out" and
+  // mailed "check it in" for material that never left the shelf; the second
+  // clutters the queue forever. This is data hygiene rather than a
+  // notification, so it runs even while reminders are paused — but it honours
+  // `?dry=1`, and a preview render touches nothing.
+  const swept: Swept[] = [];
+  if (!isPreview) {
+    const { data: staleRows, error: staleError } = await admin
+      .from("fleet_reservations")
+      .select("id, asset_id, user_id, start_date, end_date, status")
+      .in("status", ["reserved", "waitlisted"])
+      .lt("end_date", today);
+    if (staleError) console.error("fleet reminder: sweep read failed", staleError.message);
+
+    for (const row of (staleRows ?? []) as Array<
+      Pick<LiveReservation, "id" | "asset_id" | "user_id" | "start_date" | "end_date" | "status">
+    >) {
+      const reason = expiryFor(
+        {
+          id: row.id,
+          asset_id: row.asset_id,
+          user_id: row.user_id,
+          start_date: row.start_date,
+          end_date: row.end_date,
+          status: row.status,
+        },
+        today,
+      );
+      if (!reason) continue;
+      if (isDryRun) {
+        swept.push({ reservation_id: row.id, asset_id: row.asset_id, reason, applied: false });
+        continue;
+      }
+      // Guard on the status we read, so a pickup or cancel that landed in
+      // between is left alone.
+      const { error: closeError } = await admin
+        .from("fleet_reservations")
+        .update({ status: "cancelled", closed_reason: reason })
+        .eq("id", row.id)
+        .eq("status", row.status);
+      if (closeError) {
+        console.error("fleet reminder: sweep close failed", row.id, closeError.message);
+        continue;
+      }
+      await recordAssetEvent(admin, {
+        asset_id: row.asset_id,
+        reservation_id: row.id,
+        kind: reason,
+        actor_user_id: null,
+        note:
+          reason === "no_show"
+            ? `Booked ${formatSpan(row.start_date, row.end_date)}, never picked up`
+            : "Waitlist entry lapsed",
+      });
+      swept.push({ reservation_id: row.id, asset_id: row.asset_id, reason, applied: true });
+    }
+  }
+
   // Global hold. Reminders ship switched OFF: the bookings carried over from the
   // spreadsheet have guessed due dates, and mailing people about those on day
   // one teaches everyone to ignore the reminder before it ever carries a real
@@ -236,6 +326,7 @@ export async function GET(request: Request) {
       ok: true,
       skipped: "reminders_disabled",
       today,
+      swept,
       hint: "Turn reminders on in the Fleet panel (admin), or POST /api/fleet {action:'set_reminders',enabled:true}.",
     });
   }
@@ -243,7 +334,7 @@ export async function GET(request: Request) {
   // Only bookings that can still be late. `returned` and `cancelled` are done.
   const { data: liveRows, error: liveError } = await admin
     .from("fleet_reservations")
-    .select("id, asset_id, user_id, holder_label, start_date, end_date, status, destination, returned_on")
+    .select("id, asset_id, user_id, holder_label, source, start_date, end_date, status, destination, returned_on")
     .in("status", ["reserved", "picked_up"]);
   if (liveError) {
     console.error("fleet reminder: reservations read failed", liveError.message);
@@ -263,6 +354,7 @@ export async function GET(request: Request) {
         status: row.status,
         returned_on: row.returned_on,
         holder_label: row.holder_label,
+        source: row.source,
       };
       return { row, span, kind: reminderFor(span, today) };
     })
@@ -271,7 +363,7 @@ export async function GET(request: Request) {
     );
 
   if (due.length === 0 && !isPreview) {
-    return NextResponse.json({ ok: true, today, considered: live.length, due: 0, outcomes: [] });
+    return NextResponse.json({ ok: true, today, considered: live.length, due: 0, swept, outcomes: [] });
   }
 
   // Resolve asset names and recipient emails for just the reservations in play.
@@ -302,7 +394,7 @@ export async function GET(request: Request) {
   const allSpansByUser = new Map<string, ReservationSpan[]>();
   const { data: allRows } = await admin
     .from("fleet_reservations")
-    .select("id, asset_id, user_id, start_date, end_date, status, returned_on, source");
+    .select("id, asset_id, user_id, start_date, end_date, status, returned_on, source, closed_reason");
   for (const row of (allRows ?? []) as ScoringReservation[]) {
     if (!row.user_id) continue;
     const list = allSpansByUser.get(row.user_id) ?? [];
@@ -315,6 +407,7 @@ export async function GET(request: Request) {
       status: row.status,
       returned_on: row.returned_on,
       source: row.source,
+      closed_reason: row.closed_reason,
     });
     allSpansByUser.set(row.user_id, list);
   }
@@ -346,6 +439,10 @@ export async function GET(request: Request) {
       destination: entry.row.destination ?? asset?.location ?? null,
       score,
       dashboardUrl,
+      // Imported bookings never touch the score, so the mail must not say they do.
+      scoreApplies: entry.row.source !== "sheet_import",
+      // A booking that was never picked up has nothing to check in.
+      canCheckIn: entry.row.status === "picked_up",
     });
   }
 
@@ -491,6 +588,7 @@ export async function GET(request: Request) {
     considered: live.length,
     due: due.length,
     sent: outcomes.filter((o) => o.status === "sent").length,
+    swept,
     outcomes,
   });
 }

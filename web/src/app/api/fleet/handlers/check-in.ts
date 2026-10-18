@@ -28,6 +28,21 @@ export async function handleCheckIn(
     return NextResponse.json({ error: "That booking is already closed." }, { status: 409 });
   }
 
+  // The return day defaults to today (Zurich). A backdated day is allowed so a
+  // unit dropped off on Friday and checked in on Monday is not scored as three
+  // days late — but never earlier than the booking began, and never a day that
+  // has not happened yet.
+  const returnedOn = payload.returned_on ?? today;
+  if (returnedOn > today) {
+    return NextResponse.json({ error: "The return date cannot be in the future." }, { status: 400 });
+  }
+  if (returnedOn < reservation.start_date) {
+    return NextResponse.json(
+      { error: "The return date cannot be before the booking started." },
+      { status: 400 },
+    );
+  }
+
   const asset = reservation.asset;
   const landingSpot = payload.location ?? asset?.home_location ?? asset?.current_location ?? null;
   // Free the unit only if this booking is what holds it. If someone else is
@@ -41,9 +56,10 @@ export async function handleCheckIn(
       .from("fleet_reservations")
       .update({
         status: "returned",
+        closed_reason: "returned",
         returned_at: new Date().toISOString(),
-        // The Zurich date, so an evening check-in is not counted as the next day.
-        returned_on: today,
+        // A Zurich date, so an evening check-in is not counted as the next day.
+        returned_on: returnedOn,
       })
       .eq("id", payload.reservation_id),
     holdsTheUnit
@@ -73,9 +89,11 @@ export async function handleCheckIn(
       actor_user_id: viewer.id,
       from_location: asset?.current_location ?? null,
       to_location: landingSpot,
-      note: payload.note ?? null,
+      note:
+        payload.note ??
+        (returnedOn !== today ? `Came back on ${returnedOn}, checked in ${today}` : null),
     }),
-    promoteWaitlist(admin, reservation.asset_id, reservation.start_date),
+    promoteWaitlist(admin, reservation.asset_id),
     fetchReliability(admin, reservation.user_id, today),
   ]);
   return NextResponse.json({ ok: true, promoted, score });

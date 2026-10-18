@@ -12,6 +12,7 @@ import {
   normalizeHolderLabel,
   orderQueue,
   type ReliabilityScore,
+  type ClosedReason,
   type ReservationSource,
   type ReservationSpan,
   type ReservationStatus,
@@ -107,6 +108,7 @@ export type FleetReservationRow = {
   picked_up_at: string | null;
   returned_at: string | null;
   returned_on: string | null;
+  closed_reason: ClosedReason | null;
   created_at: string;
 };
 
@@ -211,6 +213,7 @@ function toSpan(row: FleetReservationRow): ReservationSpan {
     returned_on: row.returned_on,
     holder_label: row.holder_label,
     source: row.source,
+    closed_reason: row.closed_reason ?? null,
   };
 }
 
@@ -303,7 +306,7 @@ export async function fetchFleetBoard(
     admin
       .from("fleet_reservations")
       .select(
-        "id, asset_id, user_id, holder_label, source, start_date, end_date, status, purpose, destination, picked_up_at, returned_at, returned_on, created_at",
+        "id, asset_id, user_id, holder_label, source, start_date, end_date, status, purpose, destination, picked_up_at, returned_at, returned_on, closed_reason, created_at",
       )
       .order("start_date", { ascending: true }),
     fetchRemindersEnabled(admin),
@@ -568,7 +571,7 @@ export async function fetchUserNames(admin: AnySupabase, ids: string[]): Promise
 export async function fetchUserSpans(admin: AnySupabase, userId: string): Promise<ReservationSpan[]> {
   const { data, error } = await admin
     .from("fleet_reservations")
-    .select("id, asset_id, user_id, holder_label, source, start_date, end_date, status, returned_on")
+    .select("id, asset_id, user_id, holder_label, source, start_date, end_date, status, returned_on, closed_reason")
     .eq("user_id", userId);
   if (error) throw new Error(`fleet_reservations read failed: ${error.message}`);
   return ((data ?? []) as FleetReservationRow[]).map(toSpan);
@@ -578,7 +581,7 @@ export async function fetchUserSpans(admin: AnySupabase, userId: string): Promis
 export async function fetchAssetSpans(admin: AnySupabase, assetId: string): Promise<ReservationSpan[]> {
   const { data, error } = await admin
     .from("fleet_reservations")
-    .select("id, asset_id, user_id, holder_label, source, start_date, end_date, status, returned_on")
+    .select("id, asset_id, user_id, holder_label, source, start_date, end_date, status, returned_on, closed_reason")
     .eq("asset_id", assetId);
   if (error) throw new Error(`fleet_reservations read failed: ${error.message}`);
   return ((data ?? []) as FleetReservationRow[]).map(toSpan);

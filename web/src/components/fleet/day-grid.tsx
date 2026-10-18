@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useMemo } from "react";
 import {
+  blockedUntil,
   calendarLayerFor,
   DAY_MS,
   daysBetween,
@@ -130,8 +131,12 @@ export function DayGrid({
       // while past bookings are hidden, so they cost no work either.
       if (!layer) continue;
       const target = layer === "live" ? live : history;
-      // Stops on the day it actually came back, when that was early.
-      const length = daysBetween(reservation.start_date, occupiedUntil(reservation));
+      // A live booking blocks through today while the unit is out past its due
+      // date — those days are not free, and drawing them free is how someone
+      // books a unit that has not come back. A finished booking stops on the
+      // day it actually came back, when that was early.
+      const until = layer === "live" ? blockedUntil(reservation, today) : occupiedUntil(reservation);
+      const length = daysBetween(reservation.start_date, until);
       const startMs = parseDateKey(reservation.start_date).getTime();
       for (let i = 0; i <= length; i += 1) {
         const d = new Date(startMs + i * DAY_MS);
@@ -139,7 +144,7 @@ export function DayGrid({
       }
     }
     return { live, history };
-  }, [reservations, showPast]);
+  }, [reservations, showPast, today]);
 
   return (
     <div className="overflow-x-auto rounded-xl border border-glass/10 bg-glass/[0.03]">

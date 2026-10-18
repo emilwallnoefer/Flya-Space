@@ -9,7 +9,7 @@ import {
   recordAssetEvent,
   todayInZurich,
 } from "@/lib/fleet-queries";
-import { closureStatusFor, isBlocking } from "@/lib/fleet-rules";
+import { blockedUntil, closureStatusFor, isBlocking } from "@/lib/fleet-rules";
 
 /**
  * Types and database helpers shared by the `/api/fleet` action handlers.
@@ -83,7 +83,7 @@ export async function loadReservation(admin: Admin, id: string) {
   const { data, error } = await admin
     .from("fleet_reservations")
     .select(
-      "id, asset_id, user_id, start_date, end_date, status, destination, fleet_assets(current_location, home_location, current_holder_user_id)",
+      "id, asset_id, user_id, start_date, end_date, status, destination, fleet_assets(name, status, current_location, home_location, current_holder_user_id, current_holder_label)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -95,7 +95,14 @@ export async function loadReservation(admin: Admin, id: string) {
   // is dropped so callers have exactly one way to reach the asset.
   const { fleet_assets: embedded, ...reservation } = data as typeof data & { fleet_assets?: unknown };
   const asset = (Array.isArray(embedded) ? embedded[0] : embedded) as
-    | { current_location: string | null; home_location: string | null; current_holder_user_id: string | null }
+    | {
+        name: string;
+        status: string;
+        current_location: string | null;
+        home_location: string | null;
+        current_holder_user_id: string | null;
+        current_holder_label: string | null;
+      }
     | null
     | undefined;
 
@@ -103,21 +110,21 @@ export async function loadReservation(admin: Admin, id: string) {
 }
 
 /**
- * Promotes the highest-scoring waitlist entry for a freed span to a real
- * booking. Returns the promoted reservation id, or null when nobody was
- * waiting or the span is still blocked.
+ * Promotes the highest-scoring waitlist entry whose span is now free on this
+ * asset to a real booking. Returns the promoted reservation id, or null when
+ * nobody was waiting or every waiting span is still blocked.
+ *
+ * Every waitlist entry on the asset is considered, not only those starting on
+ * the day that was freed: someone waiting for Tue–Thu is just as unblocked by a
+ * Mon–Wed cancellation as someone waiting for Mon–Wed, and matching on the
+ * exact start date left them waiting for a unit that was already free.
  */
-export async function promoteWaitlist(
-  admin: Admin,
-  assetId: string,
-  startDate: string,
-): Promise<string | null> {
+export async function promoteWaitlist(admin: Admin, assetId: string): Promise<string | null> {
   const { data: waiting, error } = await admin
     .from("fleet_reservations")
     .select("id, user_id, start_date, end_date, created_at")
     .eq("asset_id", assetId)
-    .eq("status", "waitlisted")
-    .eq("start_date", startDate);
+    .eq("status", "waitlisted");
   if (error || !waiting || waiting.length === 0) return null;
 
   const today = todayInZurich();
@@ -138,11 +145,13 @@ export async function promoteWaitlist(
   );
 
   for (const candidate of scored) {
+    // A span already in the past can never be collected; the sweep expires it.
+    if (candidate.row.end_date < today) continue;
     const clash = existing.some(
       (span) =>
         isBlocking(span.status) &&
         span.start_date <= candidate.row.end_date &&
-        candidate.row.start_date <= span.end_date,
+        candidate.row.start_date <= blockedUntil(span, today),
     );
     if (clash) continue;
 
@@ -191,14 +200,14 @@ export async function closeLiveReservations(admin: Admin, assetId: string) {
   if (returned.length > 0) {
     const { error: returnError } = await admin
       .from("fleet_reservations")
-      .update({ status: "returned", returned_at: now, returned_on: today })
+      .update({ status: "returned", closed_reason: "returned", returned_at: now, returned_on: today })
       .in("id", returned);
     if (returnError) throw new Error(returnError.message);
   }
   if (cancelled.length > 0) {
     const { error: cancelError } = await admin
       .from("fleet_reservations")
-      .update({ status: "cancelled" })
+      .update({ status: "cancelled", closed_reason: "cancelled" })
       .in("id", cancelled);
     if (cancelError) throw new Error(cancelError.message);
   }

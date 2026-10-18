@@ -240,6 +240,114 @@ describe("a return has to follow a pickup (audit run-4 F4)", () => {
   });
 });
 
+describe("a unit that has not come back cannot be picked up (fleet edge cases P1)", () => {
+  const RES_ID = RESERVATION_ID;
+
+  it("refuses while the previous holder still has it", async () => {
+    // OTHER is late; MEMBER's booking starts today. The shelf is empty.
+    const res = await post(
+      {
+        viewer: MEMBER,
+        tables: {
+          fleet_assets: assets({ status: "out", current_holder_user_id: OTHER.id, current_location: "Basel" }),
+          fleet_reservations: [reservation()],
+        },
+      },
+      { action: "check_out", reservation_id: RES_ID },
+    );
+    expect(res.status).toBe(409);
+    expect(String(res.body.error)).toMatch(/still out with/i);
+    // Nothing moved: the booking is still waiting and OTHER is still the holder.
+    expect(res.tables.fleet_reservations[0].status).toBe("reserved");
+    expect(res.tables.fleet_assets[0].current_holder_user_id).toBe(OTHER.id);
+  });
+
+  it("names a holder who has no account", async () => {
+    const res = await post(
+      {
+        viewer: MEMBER,
+        tables: {
+          fleet_assets: assets({ status: "out", current_holder_label: "Charles" }),
+          fleet_reservations: [reservation()],
+        },
+      },
+      { action: "check_out", reservation_id: RES_ID },
+    );
+    expect(res.status).toBe(409);
+    expect(String(res.body.error)).toContain("Charles");
+  });
+
+  it("lets the person recorded as holding it pick up their own next booking", async () => {
+    const res = await post(
+      {
+        viewer: MEMBER,
+        tables: {
+          fleet_assets: assets({ status: "out", current_holder_user_id: MEMBER.id }),
+          fleet_reservations: [reservation()],
+        },
+      },
+      { action: "check_out", reservation_id: RES_ID },
+    );
+    expect(res.status).toBe(200);
+    expect(res.tables.fleet_reservations[0].status).toBe("picked_up");
+  });
+});
+
+describe("a late return can say when it really came back (fleet edge cases P1)", () => {
+  const RES_ID = RESERVATION_ID;
+  // Due 2026-09-10; today is 2026-09-14.
+  const overdue = () => ({
+    fleet_assets: assets({ status: "out", current_holder_user_id: MEMBER.id }),
+    fleet_reservations: [reservation({ status: "picked_up", start_date: "2026-09-08", end_date: "2026-09-10" })],
+  });
+
+  it("records the backdated day and says so in the audit trail", async () => {
+    const res = await post(
+      { viewer: MEMBER, tables: overdue() },
+      { action: "check_in", reservation_id: RES_ID, returned_on: "2026-09-11" },
+    );
+    expect(res.status).toBe(200);
+    const booking = res.tables.fleet_reservations[0];
+    expect(booking.status).toBe("returned");
+    expect(booking.returned_on).toBe("2026-09-11");
+    expect(booking.closed_reason).toBe("returned");
+    const event = res.tables.fleet_asset_events.find((e) => e.kind === "checked_in");
+    expect(String(event?.note)).toMatch(/came back on 2026-09-11/i);
+  });
+
+  it("defaults to today, and records the reason the booking closed", async () => {
+    const res = await post({ viewer: MEMBER, tables: overdue() }, { action: "check_in", reservation_id: RES_ID });
+    expect(res.status).toBe(200);
+    expect(res.tables.fleet_reservations[0].returned_on).toBe(TODAY);
+    expect(res.tables.fleet_reservations[0].closed_reason).toBe("returned");
+  });
+
+  it("refuses a day in the future or before the booking began", async () => {
+    const future = await post(
+      { viewer: MEMBER, tables: overdue() },
+      { action: "check_in", reservation_id: RES_ID, returned_on: "2026-09-15" },
+    );
+    expect(future.status).toBe(400);
+    expect(future.tables.fleet_reservations[0].status).toBe("picked_up");
+
+    const early = await post(
+      { viewer: MEMBER, tables: overdue() },
+      { action: "check_in", reservation_id: RES_ID, returned_on: "2026-09-07" },
+    );
+    expect(early.status).toBe(400);
+    expect(early.tables.fleet_reservations[0].status).toBe("picked_up");
+  });
+
+  it("marks a cancellation with its reason", async () => {
+    const res = await post(
+      { viewer: MEMBER, tables: { fleet_assets: assets(), fleet_reservations: [reservation()] } },
+      { action: "cancel", reservation_id: RES_ID },
+    );
+    expect(res.status).toBe(200);
+    expect(res.tables.fleet_reservations[0].closed_reason).toBe("cancelled");
+  });
+});
+
 describe("a self-chosen profile name proves nothing (audit run-4 F7)", () => {
   it("does not count a claim on a colleague's name as a self-match", async () => {
     // MEMBER renamed themselves in user_metadata (anyone can, via updateUser)
