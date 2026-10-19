@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type TouchEvent } from "react";
 import { useTimeTracker, type TimeTrackerState } from "@/components/time-tracker/use-time-tracker";
 import { addDays, fmtHM, fmtSignedHM, fromDateKey, getMonday, TARGET_MINS, toDateKey, type DayData, type WeekResponse } from "@/components/time-tracker/types";
 import { isPremiumOvertimeDay, isWeekendDate } from "@/lib/time-tracker-rules";
 import { cn } from "@/lib/cn";
+import { swipeDirection } from "@/lib/swipe-direction";
 import { ChevronIcon, MobileGroup } from "../primitives";
 import { MobileDaySheet } from "./mobile-day-sheet";
 import { MobileWeekPicker } from "./mobile-week-picker";
 
 /**
  * The phone's Time Tracker: a week as a plain list of seven rows, two stat
- * chips, and a bottom sheet to log a day (where the quick fills live too). Same hook as the desktop (`useTimeTracker`),
+ * chips, and a bottom sheet to log a day (where the quick fills live too).
+ * Swipe sideways to change week. Same hook as the desktop (`useTimeTracker`),
  * so saves, rollbacks, travel lookups and the overtime bank behave the same.
  */
 export function MobileTimeScreen({
@@ -46,9 +48,26 @@ export function MobileTimeScreen({
   const isCurrentWeek = weekStart === toDateKey(getMonday());
   const weekLabel = `${monday.toLocaleDateString(undefined, { day: "numeric", month: "short" })} – ${sunday.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`;
   const days = activeWeekData?.days ?? [];
+  const stepWeek = (by: number) => setWeekStart(toDateKey(addDays(monday, by * 7)));
+
+  // Swipe sideways anywhere on the screen to step a week; left = next week.
+  // Ignored while a sheet is open, since its touches bubble up here too.
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: TouchEvent) => {
+    const t = e.touches[0];
+    touchStart.current = e.touches.length === 1 && t ? { x: t.clientX, y: t.clientY } : null;
+  };
+  const onTouchEnd = (e: TouchEvent) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    const t = e.changedTouches[0];
+    if (!start || !t || editorOpen || pickerOpen) return;
+    const dir = swipeDirection(t.clientX - start.x, t.clientY - start.y);
+    if (dir) stepWeek(dir === "left" ? 1 : -1);
+  };
 
   return (
-    <div className="space-y-4 px-4 pt-1">
+    <div className="space-y-4 px-4 pt-1" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onTouchCancel={() => (touchStart.current = null)}>
       {viewingLabel ? <p className="text-xs text-warn/90">Viewing: {viewingLabel}</p> : null}
 
       <div className="grid grid-cols-2 gap-3">
@@ -61,22 +80,26 @@ export function MobileTimeScreen({
       </div>
 
       <div className="flex items-center gap-1">
-        <button type="button" onClick={() => setWeekStart(toDateKey(addDays(monday, -7)))} aria-label="Previous week" className="grid h-11 w-11 place-items-center rounded-xl text-ink-3 active:bg-glass/10">
+        <button type="button" onClick={() => stepWeek(-1)} aria-label="Previous week" className="grid h-11 w-11 place-items-center rounded-xl text-ink-3 active:bg-glass/10">
           <ChevronIcon className="h-5 w-5 rotate-180" />
         </button>
-        <button type="button" onClick={() => setPickerOpen(true)} className="flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center rounded-xl active:bg-glass/8" aria-haspopup="dialog">
+        <button type="button" onClick={() => setPickerOpen(true)} className="flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-xl active:bg-glass/8" aria-haspopup="dialog" aria-label={`${weekLabel}, pick a week`}>
           <span className="text-[15px] font-semibold text-ink">{weekLabel}</span>
-          <span className="text-[11px] text-ink-4">{isCurrentWeek ? "This week · tap to pick" : "Tap to pick a week"}</span>
         </button>
-        <button type="button" onClick={() => setWeekStart(toDateKey(addDays(monday, 7)))} aria-label="Next week" className="grid h-11 w-11 place-items-center rounded-xl text-ink-3 active:bg-glass/10">
+        <button type="button" onClick={() => stepWeek(1)} aria-label="Next week" className="grid h-11 w-11 place-items-center rounded-xl text-ink-3 active:bg-glass/10">
           <ChevronIcon className="h-5 w-5" />
         </button>
-      </div>
-      {!isCurrentWeek ? (
-        <button type="button" onClick={() => setWeekStart(toDateKey(getMonday()))} className="-mt-2 w-full text-center text-xs font-medium text-accent-soft">
-          Back to this week
+        {/* Always there, so the days below never shift; dimmed on the current week. */}
+        <button
+          type="button"
+          onClick={() => setWeekStart(toDateKey(getMonday()))}
+          disabled={isCurrentWeek}
+          aria-label="Go to this week"
+          className="ml-1 shrink-0 rounded-full border border-glass/15 px-2.5 py-1 text-xs font-medium text-accent-soft active:bg-glass/10 disabled:text-ink-5 disabled:opacity-60"
+        >
+          Today
         </button>
-      ) : null}
+      </div>
 
       {/* No placeholder rows while the week loads: the group stays empty and the
           real rows fade in one after another, on the same reveal cadence as the
