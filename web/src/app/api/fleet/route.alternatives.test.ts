@@ -3,11 +3,12 @@ import type { Tables } from "@/test/fake-supabase";
 import { ADMIN, ASSET_ID, MEMBER, OTHER, pooledAsset, post, reservation, RESERVATION_ID } from "@/test/fleet-harness";
 
 /**
- * Interchangeable units (fleet edge cases, phase 4): the reserve refusal
- * offers free siblings, and `move_booking` takes one.
+ * Interchangeable units (fleet edge cases, phase 4, revised 2026-10-19 to go
+ * by model): the reserve refusal offers free units of the same model, and
+ * `move_booking` takes one.
  *
  * Clock frozen at 2026-09-14. SVA-257 (ASSET_ID) and SVA-330 (SIBLING) are
- * both "elios-3"; REV-7 is a different kind.
+ * both Elios 3; REV-7 is a LiDAR.
  */
 
 const SIBLING = "aaaaaaaa-0000-4000-8000-000000000002";
@@ -17,25 +18,25 @@ const THEIRS = "bbbbbbbb-0000-4000-8000-000000000002";
 const REQUEST = "cccccccc-0000-4000-8000-000000000001";
 
 const fleet = (extra: { sibling?: Record<string, unknown> } = {}) => [
-  pooledAsset({ kind_key: "elios-3" }),
-  pooledAsset({ id: SIBLING, name: "SVA-330", kind_key: "elios-3", current_location: "Basel", ...extra.sibling }),
-  pooledAsset({ id: OTHER_KIND, name: "REV-7", kind_key: "lidar-rev-7", category: "lidar" }),
+  pooledAsset(),
+  pooledAsset({ id: SIBLING, name: "SVA-330", current_location: "Basel", ...extra.sibling }),
+  pooledAsset({ id: OTHER_KIND, name: "REV-7", category: "lidar", model: "LiDAR Rev 7" }),
 ];
 
 const asMember = (tables: Tables) => ({ viewer: MEMBER, users: [MEMBER, OTHER], tables });
 const asOther = (tables: Tables) => ({ viewer: OTHER, users: [MEMBER, OTHER], tables });
 
-describe("a clash offers free units of the same kind", () => {
+describe("a clash offers free units of the same model", () => {
   const clash = { action: "reserve", asset_id: ASSET_ID, start_date: "2026-09-15", end_date: "2026-09-17" };
 
   it("names the sibling that is free, and only that one", async () => {
     const res = await post(asOther({ fleet_assets: fleet(), fleet_reservations: [reservation()] }), clash);
     expect(res.status).toBe(409);
-    expect(res.body.alternatives).toEqual([{ asset_id: SIBLING, name: "SVA-330", location: "Basel" }]);
+    expect(res.body.alternatives).toEqual([{ asset_id: SIBLING, name: "SVA-330", location: "Basel", assigned: false, holder: null }]);
     expect(String(res.body.error)).toMatch(/SVA-330 is free for those days/);
   });
 
-  it("offers nothing when the sibling is taken, in repair, or the unit has no kind", async () => {
+  it("offers nothing when the sibling is taken, in repair, of another model, or the unit has no model", async () => {
     const siblingTaken = await post(
       asOther({
         fleet_assets: fleet(),
@@ -49,8 +50,16 @@ describe("a clash offers free units of the same kind", () => {
     const inRepair = await post(asOther({ fleet_assets: fleet({ sibling: { status: "in_repair" } }), fleet_reservations: [reservation()] }), clash);
     expect(inRepair.body.alternatives).toEqual([]);
 
-    const noKind = await post(asOther({ fleet_assets: [pooledAsset(), pooledAsset({ id: SIBLING, name: "SVA-330" })], fleet_reservations: [reservation()] }), clash);
-    expect(noKind.body.alternatives).toEqual([]);
+    const otherModel = await post(asOther({ fleet_assets: [pooledAsset(), pooledAsset({ id: SIBLING, name: "SVA-200", model: "Elios 2" })], fleet_reservations: [reservation()] }), clash);
+    expect(otherModel.body.alternatives).toEqual([]);
+
+    const noModel = await post(asOther({ fleet_assets: [pooledAsset({ model: null }), pooledAsset({ id: SIBLING, name: "SVA-330", model: null })], fleet_reservations: [reservation()] }), clash);
+    expect(noModel.body.alternatives).toEqual([]);
+  });
+
+  it("folds spelling: 'elios-3' and 'Elios 3' are one model", async () => {
+    const res = await post(asOther({ fleet_assets: fleet({ sibling: { model: "elios-3" } }), fleet_reservations: [reservation()] }), clash);
+    expect(res.body.alternatives).toHaveLength(1);
   });
 
   it("lets the person book the sibling for the same days", async () => {
@@ -158,20 +167,13 @@ describe("moving a booking to a sibling", () => {
   });
 });
 
-describe("kinds are kept to one spelling", () => {
-  it("slugs whatever an admin types", async () => {
+describe("there is nothing to set for interchangeability", () => {
+  it("ignores a kind_key an old client might still send", async () => {
     const res = await post(
       { viewer: ADMIN, adminEmails: [ADMIN.email!], tables: { fleet_assets: [], fleet_reservations: [] } },
       { action: "create_asset", name: "SVA-900", category: "drone", kind_key: "Elios 3" },
     );
     expect(res.status).toBe(200);
-    expect(res.tables.fleet_assets[0].kind_key).toBe("elios-3");
-
-    const cleared = await post(
-      { viewer: ADMIN, adminEmails: [ADMIN.email!], tables: { fleet_assets: [pooledAsset({ kind_key: "elios-3" })], fleet_reservations: [] } },
-      { action: "update_asset", asset_id: ASSET_ID, kind_key: "" },
-    );
-    expect(cleared.status).toBe(200);
-    expect(cleared.tables.fleet_assets[0].kind_key).toBeNull();
+    expect(res.tables.fleet_assets[0]).not.toHaveProperty("kind_key");
   });
 });

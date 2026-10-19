@@ -191,11 +191,21 @@ export function CalendarTab({
             <Button size="sm" variant="glass" onClick={() => void confirmBooking(true)} disabled={busy}>
               Join waitlist instead
             </Button>
-            {/* Offered by the server with a clash: the same days on a free
-                unit of the same kind. One tap books it there instead. */}
+            {/* Offered by the server with a clash: the same days on another
+                unit of the same model. A free one is booked with one tap; an
+                assigned one is asked for, and its holder approves. */}
             {alternatives.map((alt) => (
-              <Button key={alt.asset_id} size="sm" variant="accent" disabled={busy} onClick={() => void confirmBooking(false, alt.asset_id)}>
-                Book {alt.name} instead{alt.location ? ` · ${alt.location}` : ""}
+              <Button
+                key={alt.asset_id}
+                size="sm"
+                variant={alt.assigned ? "glass" : "accent"}
+                disabled={busy}
+                onClick={() => void confirmBooking(false, alt.asset_id)}
+                title={alt.assigned ? `${alt.name} is assigned to ${alt.holder ?? "someone"}; they approve the request` : undefined}
+              >
+                {alt.assigned
+                  ? `Ask ${alt.holder ?? "the assignee"} for ${alt.name}`
+                  : `Book ${alt.name} instead${alt.location ? ` · ${alt.location}` : ""}`}
               </Button>
             ))}
           </div>

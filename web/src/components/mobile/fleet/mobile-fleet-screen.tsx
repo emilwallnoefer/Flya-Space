@@ -93,6 +93,7 @@ export function MobileFleetScreen({ initialBoard }: { initialBoard: FleetBoardRe
               busy={busy}
               onRespond={(requestId, reply) => void post({ action: "respond_request", request_id: requestId, reply })}
               onMove={(reservationId, assetId) => void post({ action: "move_booking", reservation_id: reservationId, asset_id: assetId })}
+              onRequest={(assetId, startDate, endDate) => void post({ action: "reserve", asset_id: assetId, start_date: startDate, end_date: endDate })}
             />
             <MyMaterialList state={state} onBrowse={() => setView("book")} />
           </>
@@ -137,7 +138,9 @@ function MyMaterialList({ state, onBrowse }: { state: FleetState; onBrowse: () =
         {myReservations.map((r) => {
           const asset = assets.find((a) => a.id === r.asset_id);
           const overdue = r.days_overdue > 0;
-          const label = r.status === "waitlisted" ? "Waitlisted" : r.status === "picked_up" ? (overdue ? "Overdue" : "With you") : r.status === "reserved" ? "Reserved" : r.status;
+          // A waitlisted row on an assigned unit is a borrow awaiting the assignee's approval, not a queue.
+          const awaiting = r.status === "waitlisted" && asset?.pooled === false;
+          const label = awaiting ? "Awaiting approval" : r.status === "waitlisted" ? "Waitlisted" : r.status === "picked_up" ? (overdue ? "Overdue" : "With you") : r.status === "reserved" ? "Reserved" : r.status;
           return (
             <div key={r.id} className={cn("px-4 py-3", overdue && "bg-rose-500/[0.06]")}>
               <div className="flex items-start gap-3">
@@ -169,7 +172,7 @@ function MyMaterialList({ state, onBrowse }: { state: FleetState; onBrowse: () =
                 ) : null}
                 {r.status === "waitlisted" ? (
                   <MobileButton className="min-h-10 text-sm" variant="secondary" disabled={busy} onClick={() => void post({ action: "cancel", reservation_id: r.id })}>
-                    Leave waitlist
+                    {awaiting ? "Withdraw request" : "Leave waitlist"}
                   </MobileButton>
                 ) : null}
                 {r.status === "picked_up" ? (

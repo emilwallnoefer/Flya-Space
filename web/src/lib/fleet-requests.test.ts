@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyDateChange,
   dateChangeErrorMessage,
+  repliesFor,
   requestExpired,
   requestStatusLabel,
   shortenedStartFor,
@@ -95,5 +96,12 @@ describe("answering an extension request", () => {
     expect(requestStatusLabel("declined", null)).toMatch(/declined/i);
     expect(requestStatusLabel("expired", null)).toBe("Lapsed");
     expect(requestStatusLabel("cancelled", null)).toBe("Withdrawn");
+  });
+
+  it("labels a borrow in its own words, and knows which replies fit which kind", () => {
+    expect(requestStatusLabel("accepted", "approve", "borrow")).toMatch(/approved/i);
+    expect(requestStatusLabel("declined", null, "borrow")).toMatch(/declined/i);
+    expect(repliesFor("borrow")).toEqual(["approve", "decline"]);
+    expect(repliesFor("extension")).toEqual(["shorten", "cancel", "decline"]);
   });
 });

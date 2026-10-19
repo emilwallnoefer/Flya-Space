@@ -9,6 +9,7 @@ import {
   holderLabelMatchesPerson,
   isBlocking,
   isBookable,
+  modelKey,
   mondayOf,
   normalizeHolderLabel,
   orderQueue,
@@ -20,7 +21,7 @@ import {
   type ReservationSpan,
   type ReservationStatus,
 } from "@/lib/fleet-rules";
-import type { FleetRequestView, RequestResolution, RequestStatus } from "@/lib/fleet-requests";
+import type { FleetRequestView, RequestKind, RequestResolution, RequestStatus } from "@/lib/fleet-requests";
 import { isAdminEmail } from "@/lib/admin";
 
 /**
@@ -96,8 +97,6 @@ export type FleetAssetRow = {
   active: boolean;
   /** True when the unit is part of the shared bookable pool (and so, the calendar). */
   pooled: boolean;
-  /** Admin-set slug grouping interchangeable units ("elios-3"); null = no siblings. */
-  kind_key: string | null;
 };
 
 export type FleetReservationRow = {
@@ -122,8 +121,15 @@ export type FleetReservationRow = {
 /** One row of `fleet_booking_requests`, as the board reads it. */
 type FleetRequestRow = {
   id: string;
+  /** Rows older than the phase-5b migration have no kind column: they are extensions. */
+  kind?: RequestKind | null;
   reservation_id: string;
-  target_reservation_id: string;
+  /** Null for a borrow (no second booking). */
+  target_reservation_id: string | null;
+  /** Borrow only: the unit asked for and the first day. */
+  asset_id?: string | null;
+  requested_start_date?: string | null;
+  holder_label?: string | null;
   requested_end_date: string;
   requester_id: string | null;
   recipient_id: string | null;
@@ -325,7 +331,7 @@ export async function fetchFleetBoard(
     admin
       .from("fleet_assets")
       .select(
-        "id, serial_number, name, category, model, owner_group, status, home_location, current_location, current_holder_user_id, current_holder_label, location_confirmed_at, notes, active, pooled, kind_key",
+        "id, serial_number, name, category, model, owner_group, status, home_location, current_location, current_holder_user_id, current_holder_label, location_confirmed_at, notes, active, pooled",
       )
       .eq("active", true)
       .order("name", { ascending: true }),
@@ -342,7 +348,7 @@ export async function fetchFleetBoard(
       ? admin
           .from("fleet_assets")
           .select(
-            "id, serial_number, name, category, model, owner_group, status, home_location, current_location, current_holder_user_id, current_holder_label, location_confirmed_at, notes, active, pooled, kind_key",
+            "id, serial_number, name, category, model, owner_group, status, home_location, current_location, current_holder_user_id, current_holder_label, location_confirmed_at, notes, active, pooled",
           )
           .eq("active", false)
           .order("name", { ascending: true })
@@ -350,7 +356,7 @@ export async function fetchFleetBoard(
     admin
       .from("fleet_booking_requests")
       .select(
-        "id, reservation_id, target_reservation_id, requested_end_date, requester_id, recipient_id, status, resolution, created_at, resolved_at",
+        "id, kind, reservation_id, target_reservation_id, asset_id, requested_start_date, holder_label, requested_end_date, requester_id, recipient_id, status, resolution, created_at, resolved_at",
       ),
   ]);
 
@@ -539,49 +545,74 @@ export async function fetchFleetBoard(
       (row) =>
         args.isAdmin || row.requester_id === args.viewerId || row.recipient_id === args.viewerId,
     )
-    .flatMap((row) => {
+    .flatMap((row): FleetRequestView[] => {
+      const kind: RequestKind = row.kind === "borrow" ? "borrow" : "extension";
       const booking = reservationById.get(row.reservation_id);
-      const target = reservationById.get(row.target_reservation_id);
-      if (!booking || !target) return [];
+      if (!booking) return [];
       const incoming =
         row.recipient_id === args.viewerId || (Boolean(args.isAdmin) && row.recipient_id === null);
+      const common = {
+        id: row.id,
+        kind,
+        status: row.status,
+        resolution: row.resolution,
+        requested_end_date: row.requested_end_date,
+        created_at: row.created_at,
+        resolved_at: row.resolved_at,
+        requester_id: row.requester_id,
+        requester_name: row.requester_id
+          ? (names.get(row.requester_id) ?? "Unknown")
+          : (booking.holder_label ?? "Unknown"),
+        recipient_id: row.recipient_id,
+        reservation_id: booking.id,
+        asset_id: booking.asset_id,
+        asset_name: assetById.get(booking.asset_id)?.name ?? "Material",
+        current_end_date: booking.end_date,
+        incoming,
+        outgoing: row.requester_id === args.viewerId,
+      };
+
+      if (kind === "borrow") {
+        // The question is the pending booking itself: its days, on the unit
+        // assigned to the recipient. Nothing to move to — they say yes or no.
+        return [
+          {
+            ...common,
+            recipient_name: row.recipient_id
+              ? (names.get(row.recipient_id) ?? "Unknown")
+              : (row.holder_label ?? assetById.get(booking.asset_id)?.current_holder_label ?? "the assignee"),
+            target_reservation_id: null,
+            target_start_date: row.requested_start_date ?? booking.start_date,
+            target_end_date: row.requested_end_date,
+            alternatives: [],
+          },
+        ];
+      }
+
+      const target = row.target_reservation_id ? reservationById.get(row.target_reservation_id) : undefined;
+      if (!target) return [];
       return [
         {
-          id: row.id,
-          status: row.status,
-          resolution: row.resolution,
-          requested_end_date: row.requested_end_date,
-          created_at: row.created_at,
-          resolved_at: row.resolved_at,
-          requester_id: row.requester_id,
-          requester_name: row.requester_id
-            ? (names.get(row.requester_id) ?? "Unknown")
-            : (booking.holder_label ?? "Unknown"),
-          recipient_id: row.recipient_id,
+          ...common,
           recipient_name: row.recipient_id
             ? (names.get(row.recipient_id) ?? "Unknown")
             : (target.holder_label ?? "an unclaimed booking"),
-          reservation_id: booking.id,
-          asset_id: booking.asset_id,
-          asset_name: assetById.get(booking.asset_id)?.name ?? "Material",
-          current_end_date: booking.end_date,
           target_reservation_id: target.id,
           target_start_date: target.start_date,
           target_end_date: target.end_date,
-          incoming,
-          outgoing: row.requester_id === args.viewerId,
-          // What the recipient could move to instead of giving up days: free
-          // units of the same kind for THEIR whole booking. Only computed where
-          // someone can act on it.
+          // What the recipient could take instead of giving up days: units of
+          // the same model free for THEIR whole booking — pooled ones to move
+          // to, assigned ones to ask for. Only computed where someone can act.
           alternatives:
             incoming && row.status === "pending"
               ? freeSiblings({
-                  asset: { id: target.asset_id, kind_key: assetById.get(target.asset_id)?.kind_key ?? null },
+                  asset: { id: target.asset_id, model: assetById.get(target.asset_id)?.model ?? null },
                   startDate: target.start_date,
                   endDate: target.end_date,
                   today,
                   assets,
                   spans: reservations.map(toSpan),
+                  names,
                 })
               : [],
         },
@@ -711,9 +742,10 @@ export async function fetchUserContacts(admin: AnySupabase, ids: string[]): Prom
 }
 
 /**
- * Other units of the same kind as `assetId` that are free for the whole span.
- * Empty when the unit has no kind. Reads the kind's units and their live
- * bookings; the rule itself is `freeSiblings` in fleet-rules.
+ * Other units of the same model as `assetId` that are free for the whole span:
+ * pooled ones first (book outright), then assigned ones (ask the holder).
+ * Reads the type's units, keeps the same model, and their live bookings; the rule itself is
+ * `freeSiblings` in fleet-rules.
  */
 export async function fetchFreeSiblings(
   admin: AnySupabase,
@@ -721,34 +753,42 @@ export async function fetchFreeSiblings(
 ): Promise<FreeSibling[]> {
   const { data: asset } = await admin
     .from("fleet_assets")
-    .select("id, kind_key")
+    .select("id, category, model")
     .eq("id", args.assetId)
     .maybeSingle();
-  const kindKey = (asset as { kind_key?: string | null } | null)?.kind_key ?? null;
-  if (!kindKey) return [];
+  const unit = asset as { category?: string | null; model?: string | null } | null;
+  if (!unit?.category || !modelKey(unit.model)) return [];
 
+  // The type narrows the read; the model, spelled one way, is the rule.
   const { data: units } = await admin
     .from("fleet_assets")
-    .select("id, name, kind_key, pooled, status, active, current_location")
-    .eq("kind_key", kindKey)
+    .select("id, name, model, pooled, status, active, current_location, current_holder_user_id, current_holder_label")
+    .eq("category", unit.category)
     .eq("active", true);
   const assets = (units ?? []) as SiblingAsset[];
   const ids = assets.map((a) => a.id).filter((id) => id !== args.assetId);
   if (ids.length === 0) return [];
 
-  const { data: rows } = await admin
-    .from("fleet_reservations")
-    .select("id, asset_id, user_id, holder_label, source, start_date, end_date, status, returned_on, closed_reason")
-    .in("asset_id", ids)
-    .in("status", ["reserved", "picked_up"]);
+  const [{ data: rows }, names] = await Promise.all([
+    admin
+      .from("fleet_reservations")
+      .select("id, asset_id, user_id, holder_label, source, start_date, end_date, status, returned_on, closed_reason")
+      .in("asset_id", ids)
+      .in("status", ["reserved", "picked_up"]),
+    fetchUserNames(
+      admin,
+      assets.map((a) => a.current_holder_user_id).filter((id): id is string => Boolean(id)),
+    ),
+  ]);
   const spans = ((rows ?? []) as FleetReservationRow[]).map(toSpan);
   return freeSiblings({
-    asset: { id: args.assetId, kind_key: kindKey },
+    asset: { id: args.assetId, model: unit.model ?? null },
     startDate: args.startDate,
     endDate: args.endDate,
     today: args.today,
     assets,
     spans,
+    names,
   });
 }
 

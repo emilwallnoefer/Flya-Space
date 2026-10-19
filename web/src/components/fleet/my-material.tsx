@@ -73,6 +73,8 @@ export function MyMaterial({
           const returning = returningId === reservation.id;
           const changing = changingId === reservation.id;
           const live = reservation.status === "reserved" || reservation.status === "picked_up";
+          // A waitlisted row on an assigned unit is a borrow awaiting the assignee's approval, not a queue.
+          const awaiting = reservation.status === "waitlisted" && asset?.pooled === false;
 
           return (
             <Row key={reservation.id} tone={overdue ? "alert" : "default"}>
@@ -83,7 +85,7 @@ export function MyMaterial({
                       <AssetIcon category={asset.category} className="h-4 w-4 shrink-0 text-ink-4" />
                     ) : null}
                     <span className="text-xs font-medium text-ink">{asset?.name ?? "Material"}</span>
-                    <Badge tone={stateTone(reservation, overdue)}>{stateLabel(reservation, overdue)}</Badge>
+                    <Badge tone={stateTone(reservation, overdue)}>{awaiting ? "Awaiting approval" : stateLabel(reservation, overdue)}</Badge>
                     {reservation.imported ? (
                       <Badge
                         tone="neutral"
@@ -105,6 +107,7 @@ export function MyMaterial({
                   <p className="mt-0.5 text-[11px] text-ink-5">
                     {formatSpan(reservation.start_date, occupiedUntil(reservation))}
                     {reservation.destination ? ` · going to ${reservation.destination}` : ""}
+                    {awaiting && asset?.holder_name ? ` · asked ${asset.holder_name}` : ""}
                   </p>
                 </div>
 
@@ -136,7 +139,7 @@ export function MyMaterial({
                       disabled={busy}
                       onClick={() => onCancel(reservation.id)}
                     >
-                      Leave waitlist
+                      {awaiting ? "Withdraw request" : "Leave waitlist"}
                     </Button>
                   ) : null}
                   {reservation.status === "picked_up" ? (

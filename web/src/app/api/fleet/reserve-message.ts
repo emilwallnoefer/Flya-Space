@@ -14,8 +14,8 @@ export function reserveErrorMessage(
   check: ReserveRefusal,
   reliability: { score: number; horizonDays: number },
   assetName: string,
-  /** Free units of the same kind, when the refusal is a clash. */
-  alternatives: ReadonlyArray<{ name: string }> = [],
+  /** Units of the same model that are free, when the refusal is a clash: pooled ones to book, assigned ones to ask for. */
+  alternatives: ReadonlyArray<{ name: string; assigned?: boolean; holder?: string | null }> = [],
 ): string {
   switch (check.reason) {
     case "inverted":
@@ -28,10 +28,22 @@ export function reserveErrorMessage(
       return `Your reliability score (${reliability.score}) lets you book up to ${check.horizonDays} days ahead. Return material on time to book further out.`;
     case "overlap": {
       const base = `${assetName} is already booked on those days.`;
-      if (alternatives.length === 0) return `${base} You can join the waitlist instead.`;
-      const names = alternatives.map((a) => a.name);
-      const list = names.length <= 2 ? names.join(" and ") : `${names.slice(0, 2).join(", ")} and ${names.length - 2} more`;
-      return `${base} ${list} ${names.length === 1 ? "is" : "are"} free for those days — or join the waitlist.`;
+      const free = alternatives.filter((a) => !a.assigned).map((a) => a.name);
+      const assigned = alternatives.filter((a) => a.assigned);
+      const parts: string[] = [];
+      if (free.length > 0) {
+        const list = free.length <= 2 ? free.join(" and ") : `${free.slice(0, 2).join(", ")} and ${free.length - 2} more`;
+        parts.push(`${list} ${free.length === 1 ? "is" : "are"} free for those days`);
+      }
+      if (assigned.length > 0) {
+        const list =
+          assigned.length <= 2
+            ? assigned.map((a) => `${a.name}${a.holder ? ` (${a.holder})` : ""}`).join(" and ")
+            : `${assigned.slice(0, 2).map((a) => a.name).join(", ")} and ${assigned.length - 2} more`;
+        parts.push(`${list} ${assigned.length === 1 ? "is" : "are"} assigned and can be asked for`);
+      }
+      if (parts.length === 0) return `${base} You can join the waitlist instead.`;
+      return `${base} ${parts.join("; ")} — or join the waitlist.`;
     }
   }
 }

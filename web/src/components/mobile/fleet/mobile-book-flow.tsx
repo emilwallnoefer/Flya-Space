@@ -155,10 +155,13 @@ function DatePickerSheet({ state, asset, onClose, onBooked }: { state: FleetStat
               Join the waitlist
             </MobileButton>
           ) : null}
-          {/* Offered by the server with a clash: same days, a free unit of the same kind. */}
+          {/* Offered by the server with a clash: same days, another unit of the
+              same model — booked outright when free, asked for when assigned. */}
           {alternatives.map((alt) => (
-            <MobileButton key={alt.asset_id} disabled={busy} onClick={() => void book(false, alt.asset_id)}>
-              Book {alt.name} instead{alt.location ? ` · ${alt.location}` : ""}
+            <MobileButton key={alt.asset_id} variant={alt.assigned ? "secondary" : "primary"} disabled={busy} onClick={() => void book(false, alt.asset_id)}>
+              {alt.assigned
+                ? `Ask ${alt.holder ?? "the assignee"} for ${alt.name}`
+                : `Book ${alt.name} instead${alt.location ? ` · ${alt.location}` : ""}`}
             </MobileButton>
           ))}
         </div>

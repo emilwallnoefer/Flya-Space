@@ -84,7 +84,7 @@ export async function loadReservation(admin: Admin, id: string) {
   const { data, error } = await admin
     .from("fleet_reservations")
     .select(
-      "id, asset_id, user_id, start_date, end_date, status, destination, fleet_assets(name, status, current_location, home_location, current_holder_user_id, current_holder_label)",
+      "id, asset_id, user_id, start_date, end_date, status, destination, fleet_assets(name, status, pooled, current_location, home_location, current_holder_user_id, current_holder_label)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -99,6 +99,8 @@ export async function loadReservation(admin: Admin, id: string) {
     | {
         name: string;
         status: string;
+        /** False for a unit assigned to someone — a booking on it is a borrow. */
+        pooled: boolean;
         current_location: string | null;
         home_location: string | null;
         current_holder_user_id: string | null;
@@ -134,6 +136,11 @@ export async function promoteWaitlist(
     .eq("asset_id", assetId)
     .eq("status", "waitlisted");
   if (error || !waiting || waiting.length === 0) return null;
+
+  // On an assigned unit a `waitlisted` row is a borrow awaiting the assignee's
+  // approval, not a queue — only `respond_request` may turn it into a booking.
+  const { data: unit } = await admin.from("fleet_assets").select("pooled").eq("id", assetId).maybeSingle();
+  if (unit && (unit as { pooled?: boolean }).pooled === false) return null;
 
   const today = todayInZurich();
   const existing = await fetchAssetSpans(admin, assetId);

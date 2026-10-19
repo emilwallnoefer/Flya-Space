@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { closeAssignmentRows } from "@/lib/fleet-assignment";
 import { fetchUserNames, recordAssetEvent } from "@/lib/fleet-queries";
 import { loadReservation, settleRequestsFor, type FleetActionContext } from "./shared";
 import type { FleetPayload } from "./schemas";
@@ -7,7 +8,7 @@ export async function handleCheckOut(
   ctx: FleetActionContext,
   payload: FleetPayload<"check_out">,
 ): Promise<NextResponse> {
-  const { admin, viewer } = ctx;
+  const { admin, viewer, today } = ctx;
   const reservation = await loadReservation(admin, payload.reservation_id);
   if (!reservation) return NextResponse.json({ error: "Reservation not found." }, { status: 404 });
   if (reservation.user_id !== viewer.id && !viewer.isAdmin) {
@@ -18,6 +19,10 @@ export async function handleCheckOut(
   }
 
   const asset = reservation.asset;
+  // A `reserved` booking on an assigned unit is an approved borrow: the unit
+  // is, by definition, out with its assignee, and the borrower takes it from
+  // their hands. That is the hand-over, not a missing unit.
+  const borrow = asset?.pooled === false;
 
   // The unit has to be on the shelf. If it is recorded as out with somebody
   // else — the previous holder is late and has not checked it in — "picking it
@@ -25,7 +30,7 @@ export async function handleCheckOut(
   // The real fix is the other person's check-in (or an admin's); refusing here
   // is what keeps the record honest about where the material is.
   const heldBy = asset?.current_holder_user_id ?? null;
-  if (asset?.status === "out" && heldBy !== reservation.user_id) {
+  if (!borrow && asset?.status === "out" && heldBy !== reservation.user_id) {
     const holderName = heldBy
       ? ((await fetchUserNames(admin, [heldBy])).get(heldBy) ?? "someone else")
       : (asset.current_holder_label ?? "someone else");
@@ -39,6 +44,10 @@ export async function handleCheckOut(
   }
 
   const destination = payload.location ?? reservation.destination ?? null;
+
+  // The assignee's own open booking closes: the unit is with the borrower now,
+  // and `check_in` re-opens it when it comes back to them.
+  if (borrow) await closeAssignmentRows(admin, { assetId: reservation.asset_id, today });
 
   const [{ error: resError }, { error: assetError }] = await Promise.all([
     admin
@@ -67,6 +76,7 @@ export async function handleCheckOut(
       actor_user_id: viewer.id,
       from_location: asset?.current_location ?? null,
       to_location: destination,
+      note: borrow ? `Borrowed from ${asset?.current_holder_label ?? "its assignee"}` : null,
     }),
     // The unit is in this person's hands now; nobody can extend into it any more.
     settleRequestsFor(admin, reservation.id, { asTarget: "expired" }),

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { restoreAssignment } from "@/lib/fleet-assignment";
 import { fetchAssetSpans, fetchReliability, fetchUserNames, recordAssetEvent } from "@/lib/fleet-queries";
 import { sendFleetNotice } from "@/lib/fleet-notify";
 import { isBlocking } from "@/lib/fleet-rules";
-import { loadReservation, promoteWaitlist, settleRequestsFor, type FleetActionContext } from "./shared";
+import { loadReservation, promoteWaitlist, settleRequestsFor, type Admin, type FleetActionContext } from "./shared";
 import type { FleetPayload } from "./schemas";
 
 export async function handleCheckIn(
@@ -46,7 +47,14 @@ export async function handleCheckIn(
   }
 
   const asset = reservation.asset;
-  const landingSpot = payload.location ?? asset?.home_location ?? asset?.current_location ?? null;
+  // A borrowed unit goes back to the person it is assigned to, not to a shelf:
+  // the asset is recorded out with them again, where it was, and their own open
+  // booking is re-opened below.
+  const borrow = asset?.pooled === false;
+  const assignee = borrow ? await assigneeOf(admin, reservation.id, reservation.asset_id) : null;
+  const landingSpot = borrow
+    ? (payload.location ?? asset?.current_location ?? null)
+    : (payload.location ?? asset?.home_location ?? asset?.current_location ?? null);
   // Free the unit only if this booking is what holds it. If someone else is
   // recorded as having it, closing this booking must not reset their unit to
   // available-at-home while it is still in their hands.
@@ -67,18 +75,31 @@ export async function handleCheckIn(
     holdsTheUnit
       ? admin
           .from("fleet_assets")
-          .update({
-            status: "available",
-            current_holder_user_id: null,
-            current_holder_label: null,
-            current_location: landingSpot,
-            location_confirmed_at: new Date().toISOString(),
-          })
+          .update(
+            borrow
+              ? {
+                  status: "out",
+                  current_holder_user_id: assignee?.user_id ?? null,
+                  current_holder_label: assignee?.holder_label ?? asset?.current_holder_label ?? "Assigned",
+                  current_location: landingSpot,
+                  location_confirmed_at: new Date().toISOString(),
+                }
+              : {
+                  status: "available",
+                  current_holder_user_id: null,
+                  current_holder_label: null,
+                  current_location: landingSpot,
+                  location_confirmed_at: new Date().toISOString(),
+                },
+          )
           .eq("id", reservation.asset_id)
       : Promise.resolve({ error: null }),
   ]);
   if (resError) throw new Error(resError.message);
   if (assetError) throw new Error(assetError.message);
+  if (borrow && holdsTheUnit) {
+    await restoreAssignment(admin, { assetId: reservation.asset_id, today, actorUserId: viewer.id });
+  }
 
   // The audit event, the waitlist promotion and the score all follow from the
   // update above but not from each other, so they go together rather than in
@@ -93,7 +114,11 @@ export async function handleCheckIn(
       to_location: landingSpot,
       note:
         payload.note ??
-        (returnedOn !== today ? `Came back on ${returnedOn}, checked in ${today}` : null),
+        (borrow
+          ? `Back with ${assignee?.holder_label ?? asset?.current_holder_label ?? "its assignee"}${returnedOn !== today ? ` on ${returnedOn}` : ""}`
+          : returnedOn !== today
+            ? `Came back on ${returnedOn}, checked in ${today}`
+            : null),
     }),
     promoteWaitlist(admin, reservation.asset_id, { origin, today, actorUserId: viewer.id }),
     fetchReliability(admin, reservation.user_id, today),
@@ -131,4 +156,38 @@ export async function handleCheckIn(
     }
   }
   return NextResponse.json({ ok: true, promoted: promoted?.id ?? null, score });
+}
+
+/**
+ * Who a borrowed unit goes back to: the borrow request names them (an account
+ * when the assignee has one, else the name on the unit). Falls back to the
+ * assignment booking that `check_out` closed when the borrow began.
+ */
+async function assigneeOf(
+  admin: Admin,
+  reservationId: string,
+  assetId: string,
+): Promise<{ user_id: string | null; holder_label: string | null } | null> {
+  const { data: request } = await admin
+    .from("fleet_booking_requests")
+    .select("recipient_id, holder_label")
+    .eq("reservation_id", reservationId)
+    .eq("kind", "borrow")
+    .eq("status", "accepted")
+    .limit(1)
+    .maybeSingle();
+  const req = request as { recipient_id: string | null; holder_label: string | null } | null;
+  if (req && (req.recipient_id || req.holder_label)) {
+    return { user_id: req.recipient_id, holder_label: req.holder_label };
+  }
+  const { data: rows } = await admin
+    .from("fleet_reservations")
+    .select("user_id, holder_label, returned_at")
+    .eq("asset_id", assetId)
+    .eq("source", "sheet_import")
+    .eq("status", "returned")
+    .order("returned_at", { ascending: false })
+    .limit(1);
+  const last = ((rows ?? []) as Array<{ user_id: string | null; holder_label: string | null }>)[0];
+  return last ? { user_id: last.user_id, holder_label: last.holder_label } : null;
 }

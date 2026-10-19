@@ -32,8 +32,18 @@ const SHOW_PAST_KEY = "fleet:show-past";
 
 export type FleetTab = "calendar" | "mine" | "material" | "manage";
 export type FleetNotice = { tone: NoticeTone; text: string } | null;
-/** A free unit of the same kind, as the server offers it with a refusal. */
-export type FleetAlternative = { asset_id: string; name: string; location: string | null };
+/**
+ * A unit of the same model the server offers with a refusal: free to book when
+ * `assigned` is false; otherwise assigned to `holder`, and booking it files a
+ * request they approve.
+ */
+export type FleetAlternative = {
+  asset_id: string;
+  name: string;
+  location: string | null;
+  assigned: boolean;
+  holder: string | null;
+};
 
 /** Holder filter: everyone. */
 export const HOLDER_ANY = "__any__";
