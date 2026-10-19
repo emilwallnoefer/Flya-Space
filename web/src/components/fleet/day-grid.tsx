@@ -25,9 +25,10 @@ import type { FleetAsset, FleetReservation } from "./types";
  * the material, so "where is it on the 14th" is answerable at a glance, which
  * the merged-cell spreadsheet grid never managed. A booked day is selectable
  * too: a span that runs over someone's booking is what the waitlist is for, so
- * refusing the click only forced people to pick the days around it. The
- * composer decides from the span whether it books or waitlists; opening the
- * booking itself is offered there.
+ * refusing the click only forced people to pick the days around it. A click
+ * that starts on a booking still opens it, as it always did, and selects the
+ * day underneath; the composer decides from the span whether it books or
+ * waitlists.
  *
  * Days rather than weeks because most missions are two or three days long.
  * Booking by the week meant a Tuesday–Wednesday job blocked the unit from
@@ -305,11 +306,18 @@ const AssetRow = memo(function AssetRow({
     (day: string, state: CellState) => {
       // A booking on a day that cannot be selected (a past one, or one beyond
       // the horizon) is still worth opening — it answers "who had this, and
-      // when did it come back". A booking on a selectable day is selected like
-      // a free one, and the composer offers to open it.
+      // when did it come back".
       if (!state.bookable) {
         if (state.reservation) onOpenReservation(state.reservation);
         return;
+      }
+      // A click that STARTS on a live booking opens it (where it went, what
+      // for) and selects the day as well, so closing the detail leaves a span
+      // the composer can waitlist. Extending an existing selection across a
+      // booking stays quiet — the second click is about the days, not the
+      // booking, and a dialog on every extension click would be in the way.
+      if (state.reservation && !state.isHistory && !rowSelection) {
+        onOpenReservation(state.reservation);
       }
 
       // Second click in the same row extends the run; anything else starts fresh.
@@ -381,7 +389,7 @@ const AssetRow = memo(function AssetRow({
                   ? `${asset.name}, ${formatDay(day.key)}: ${
                       state.isHistory ? "was with" : "booked by"
                     } ${reservation.holder_name}${
-                      state.bookable && !state.isHistory ? ", click to join the waitlist" : ""
+                      state.bookable && !state.isHistory ? ", click to open it or join the waitlist" : ""
                     }`
                   : `${asset.name}, ${formatDay(day.key)}: ${
                       state.bookable ? "free, click to book" : "not bookable"
