@@ -509,3 +509,60 @@ describe("the booking rules", () => {
     expect(String(res.body.error)).toMatch(/in repair/i);
   });
 });
+
+describe("picking up before the booking starts moves its start to today", () => {
+  const RES_ID = RESERVATION_ID;
+  const OTHER_RES_ID = "bbbbbbbb-0000-4000-8000-000000000002";
+  // Booked Wed–Fri; today is Mon 2026-09-14.
+  const early = (extra: Record<string, unknown>[] = []) => ({
+    viewer: MEMBER,
+    tables: {
+      fleet_assets: assets(),
+      fleet_reservations: [reservation({ start_date: "2026-09-16", end_date: "2026-09-18" }), ...extra],
+    },
+  });
+
+  it("starts the booking on the pickup day, so the days out are on record", async () => {
+    const res = await post(early(), { action: "check_out", reservation_id: RES_ID });
+    expect(res.status).toBe(200);
+    const booking = res.tables.fleet_reservations[0];
+    expect(booking.status).toBe("picked_up");
+    expect(booking.start_date).toBe(TODAY);
+    expect(booking.end_date).toBe("2026-09-18");
+  });
+
+  it("then lets it come back before the original start — it used to be stuck", async () => {
+    const out = await post(early(), { action: "check_out", reservation_id: RES_ID });
+    const res = await post({ viewer: MEMBER, tables: out.tables }, { action: "check_in", reservation_id: RES_ID });
+    expect(res.status).toBe(200);
+    expect(res.tables.fleet_reservations[0].status).toBe("returned");
+    expect(res.tables.fleet_reservations[0].returned_on).toBe(TODAY);
+  });
+
+  it("refuses when someone else has the unit booked in between", async () => {
+    // OTHER holds Mon–Tue; MEMBER may not take it early over their days.
+    const res = await post(
+      early([reservation({ id: OTHER_RES_ID, user_id: OTHER.id, start_date: TODAY, end_date: "2026-09-15" })]),
+      { action: "check_out", reservation_id: RES_ID },
+    );
+    expect(res.status).toBe(409);
+    expect(String(res.body.error)).toMatch(/booked/i);
+    expect(res.tables.fleet_reservations[0].status).toBe("reserved");
+    expect(res.tables.fleet_reservations[0].start_date).toBe("2026-09-16");
+  });
+
+  it("leaves a booking that has already started alone", async () => {
+    const res = await post(
+      {
+        viewer: MEMBER,
+        tables: {
+          fleet_assets: assets(),
+          fleet_reservations: [reservation({ start_date: "2026-09-12", end_date: "2026-09-16" })],
+        },
+      },
+      { action: "check_out", reservation_id: RES_ID },
+    );
+    expect(res.status).toBe(200);
+    expect(res.tables.fleet_reservations[0].start_date).toBe("2026-09-12");
+  });
+});

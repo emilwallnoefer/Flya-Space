@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { closeAssignmentRows } from "@/lib/fleet-assignment";
-import { fetchUserNames, recordAssetEvent } from "@/lib/fleet-queries";
+import { fetchAssetSpans, fetchUserNames, recordAssetEvent } from "@/lib/fleet-queries";
+import { checkReservation, formatDayLong, isAssignmentSpan } from "@/lib/fleet-rules";
 import { loadReservation, settleRequestsFor, type FleetActionContext } from "./shared";
 import type { FleetPayload } from "./schemas";
 
@@ -43,6 +44,39 @@ export async function handleCheckOut(
     );
   }
 
+  // Picked up before the booking began: the booking starts today instead. The
+  // days the unit is really out are then on record, and a return before the
+  // original first day is a normal check-in — `check_in` refuses a return
+  // dated before `start_date`, which left an early pickup stuck until then.
+  // The added days must be free; an assignment's own booking does not count,
+  // because a borrow's pickup closes it below.
+  const earlyStart = reservation.start_date > today ? today : null;
+  if (earlyStart) {
+    const existing = (await fetchAssetSpans(admin, reservation.asset_id)).filter(
+      (span) => !(borrow && isAssignmentSpan(span)),
+    );
+    const check = checkReservation({
+      startDate: earlyStart,
+      endDate: reservation.end_date,
+      today,
+      horizonDays: 365, // starts today, so the horizon cannot bite
+      existing,
+      ignoreId: reservation.id,
+    });
+    if (!check.ok) {
+      const reason =
+        check.reason === "overlap"
+          ? "someone else has it booked before then"
+          : "that would make the booking too long";
+      return NextResponse.json(
+        {
+          error: `${asset?.name ?? "This unit"} can't be picked up before ${formatDayLong(reservation.start_date)} — ${reason}.`,
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   const destination = payload.location ?? reservation.destination ?? null;
 
   // The assignee's own open booking closes: the unit is with the borrower now,
@@ -52,7 +86,11 @@ export async function handleCheckOut(
   const [{ error: resError }, { error: assetError }] = await Promise.all([
     admin
       .from("fleet_reservations")
-      .update({ status: "picked_up", picked_up_at: new Date().toISOString() })
+      .update({
+        status: "picked_up",
+        picked_up_at: new Date().toISOString(),
+        ...(earlyStart ? { start_date: earlyStart } : {}),
+      })
       .eq("id", payload.reservation_id),
     admin
       .from("fleet_assets")
@@ -76,7 +114,13 @@ export async function handleCheckOut(
       actor_user_id: viewer.id,
       from_location: asset?.current_location ?? null,
       to_location: destination,
-      note: borrow ? `Borrowed from ${asset?.current_holder_label ?? "its assignee"}` : null,
+      note:
+        [
+          borrow ? `Borrowed from ${asset?.current_holder_label ?? "its assignee"}` : null,
+          earlyStart ? `Picked up early — booked from ${formatDayLong(reservation.start_date)}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ") || null,
     }),
     // The unit is in this person's hands now; nobody can extend into it any more.
     settleRequestsFor(admin, reservation.id, { asTarget: "expired" }),
