@@ -15,7 +15,7 @@
     "test:rls:setup": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/rls-smoke-setup.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.132.1",
+    "@anthropic-ai/sdk": "^0.135.0",
     "@googleapis/gmail": "^22.0.1",
     "@googleapis/sheets": "^18.1.1",
     "@supabase/ssr": "^0.12.7",
