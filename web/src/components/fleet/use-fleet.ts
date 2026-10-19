@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { NoticeTone } from "@/components/ui";
+import { subscribeToFleetChanges } from "@/lib/fleet-live";
 import { addDays, isBookable, mondayOf, toDateKey } from "@/lib/fleet-rules";
 import type {
   FleetAsset,
@@ -26,6 +27,12 @@ export const WINDOW_DAYS = 28;
  * current week stays whole until the next one begins.
  */
 export const WINDOW_STEP_DAYS = 7;
+
+/**
+ * How long to wait after a "something changed" ping before refetching, so one
+ * write that touches three tables (three pings) costs one request.
+ */
+export const LIVE_REFRESH_DEBOUNCE_MS = 300;
 
 /** Where the "show finished bookings" preference is remembered, per browser. */
 const SHOW_PAST_KEY = "fleet:show-past";
@@ -84,6 +91,14 @@ export function useFleet(initialBoard: FleetBoardResponse | null) {
   // Guards against a slow response for an earlier window overwriting a newer one
   // (the same staleness rule the Time Tracker follows for its week fetches).
   const requestSeq = useRef(0);
+  /** Writes still waiting on the server; a ping is held until they are done. */
+  const writesInFlight = useRef(0);
+  /** A ping arrived mid-write; refresh once the write is done. */
+  const refreshAfterWrite = useRef(false);
+  const windowStartRef = useRef(windowStart);
+  useEffect(() => {
+    windowStartRef.current = windowStart;
+  }, [windowStart]);
 
   const load = useCallback(async (start: string) => {
     const seq = ++requestSeq.current;
@@ -106,6 +121,54 @@ export function useFleet(initialBoard: FleetBoardResponse | null) {
       if (seq === requestSeq.current) setLoading(false);
     }
   }, []);
+
+  /**
+   * Refetch the board someone else just changed, without the loading state:
+   * the screen stays as it is and the new board simply replaces it. Failures
+   * are silent too — the board on screen is still the last good one.
+   */
+  const refreshQuietly = useCallback(async () => {
+    if (writesInFlight.current > 0) {
+      refreshAfterWrite.current = true;
+      return;
+    }
+    const seq = requestSeq.current;
+    const start = windowStartRef.current;
+    let data: FleetBoardResponse;
+    try {
+      const response = await fetch(
+        `/api/fleet?start=${encodeURIComponent(start)}&days=${WINDOW_DAYS}`,
+      );
+      if (!response.ok) return;
+      data = (await response.json()) as FleetBoardResponse;
+    } catch {
+      return;
+    }
+    // A newer load (another window) or a write's board landed meanwhile: both
+    // bump the sequence, and this response predates them.
+    if (seq !== requestSeq.current) return;
+    // Retire any load still in flight: it was sent before this one.
+    requestSeq.current += 1;
+    setBoard(data);
+    setLoading(false);
+  }, []);
+
+  const isDemo = board?.demo === true;
+  useEffect(() => {
+    if (isDemo) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = subscribeToFleetChanges(() => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        void refreshQuietly();
+      }, LIVE_REFRESH_DEBOUNCE_MS);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [isDemo, refreshQuietly]);
 
   useEffect(() => {
     // Read after mount rather than in the initial state: this panel can be
@@ -148,6 +211,7 @@ export function useFleet(initialBoard: FleetBoardResponse | null) {
       setBusy(true);
       setNotice(null);
       setAlternatives([]);
+      writesInFlight.current += 1;
       try {
         // The window travels with the write so the server can hand back the
         // board for the days actually on screen.
@@ -191,9 +255,14 @@ export function useFleet(initialBoard: FleetBoardResponse | null) {
         return false;
       } finally {
         setBusy(false);
+        writesInFlight.current -= 1;
+        if (writesInFlight.current === 0 && refreshAfterWrite.current) {
+          refreshAfterWrite.current = false;
+          void refreshQuietly();
+        }
       }
     },
-    [board?.demo, windowStart, load],
+    [board?.demo, windowStart, load, refreshQuietly],
   );
 
   // Memoised so the `?? []` fallback does not hand every downstream useMemo a
