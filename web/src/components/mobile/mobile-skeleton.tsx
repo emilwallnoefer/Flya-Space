@@ -139,11 +139,11 @@ function PhoneTimeBody() {
       </div>
       <div className="flex items-center gap-1">
         <Box className="h-11 w-11 rounded-xl" />
-        <div className="flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-1.5">
+        <div className="flex min-h-11 min-w-0 flex-1 items-center justify-center">
           <Box className="h-4 w-36 rounded bg-glass/10" />
-          <Box className="h-3 w-28 rounded bg-glass/10" />
         </div>
         <Box className="h-11 w-11 rounded-xl" />
+        <Box className="ml-1 h-6 w-14 shrink-0 rounded-full border border-glass/15" />
       </div>
       <div className="space-y-2">
         {[0, 1, 2, 3, 4, 5, 6].map((i) => (

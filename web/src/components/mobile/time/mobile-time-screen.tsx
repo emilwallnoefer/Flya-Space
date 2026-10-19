@@ -33,7 +33,7 @@ export function MobileTimeScreen({
   viewingLabel?: string;
 }) {
   const state = useTimeTracker({ readOnly, apiBase, initialWeek, manageEditorChrome: false });
-  const { weekStart, setWeekStart, loading, data, activeWeekData, calendarTodayKey, handleEditDay, editorOpen, returnToWeekdays, revealedDayCount } = state;
+  const { weekStart, setWeekStart, data, activeWeekData, calendarTodayKey, handleEditDay, editorOpen, returnToWeekdays, revealedDayCount } = state;
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // "Log today" from Home: open today's sheet once the week has loaded.
@@ -146,7 +146,7 @@ export function MobileTimeScreen({
               e.stopPropagation();
             }}
           >
-            <MobileGroup title={loading && !activeWeekData ? "Loading…" : "Days"}>
+            <MobileGroup>
               {days.map((day, i) => (
                 <DayRow key={day.date} day={day} state={state} isToday={day.date === calendarTodayKey} revealed={slide.dir !== 0 || i < revealedDayCount} />
               ))}
@@ -200,22 +200,12 @@ function DayRow({ day, state, isToday, revealed }: { day: DayData; state: TimeTr
   // A plain row: the day, what was logged, the total. Filling a day
   // (compensate / standard day) lives in the day sheet, not here.
   return (
-    <button type="button" onClick={() => handleEditDay(day.date)} className={cn(
-        "relative flex w-full items-center gap-3 px-4 py-2.5 text-left transition-opacity duration-300 ease-out",
-        isToday && "bg-accent/[0.14] before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-accent",
-        revealed ? "opacity-100" : "pointer-events-none opacity-0",
-      )}
-      aria-current={isToday ? "date" : undefined}
-    >
+    <button type="button" onClick={() => handleEditDay(day.date)} className={cn("flex w-full items-center gap-3 px-4 py-2.5 text-left transition-opacity duration-300 ease-out", isToday && "bg-accent/[0.06]", revealed ? "opacity-100" : "pointer-events-none opacity-0")}>
       <span className="w-11 shrink-0">
         <span className={cn("block text-[11px] font-semibold uppercase tracking-wide", isToday ? "text-accent-soft" : weekend ? "text-ink-5" : "text-ink-4")}>
-          {isToday ? "Today" : date.toLocaleDateString(undefined, { weekday: "short" })}
+          {date.toLocaleDateString(undefined, { weekday: "short" })}
         </span>
-        {isToday ? (
-          <span className="mt-0.5 grid h-7 w-7 place-items-center rounded-full bg-accent text-base font-bold tabular-nums text-slate-950">{date.getDate()}</span>
-        ) : (
-          <span className="block text-xl font-semibold leading-tight tabular-nums text-ink">{date.getDate()}</span>
-        )}
+        <span className={cn("block text-xl font-semibold leading-tight tabular-nums", isToday ? "text-accent-soft" : "text-ink")}>{date.getDate()}</span>
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">
