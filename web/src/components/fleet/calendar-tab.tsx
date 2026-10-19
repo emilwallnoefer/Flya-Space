@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button, Input } from "@/components/ui";
-import { formatDayLong, formatSpan, occupiedUntil, spanLength } from "@/lib/fleet-rules";
+import { checkReservation, formatDayLong, formatSpan, occupiedUntil, spanLength } from "@/lib/fleet-rules";
 import { playUiSound } from "@/lib/ui-sounds";
 import { CalendarLegend } from "./calendar-legend";
 import { DayGrid, type DaySelection } from "./day-grid";
@@ -51,6 +51,23 @@ export function CalendarTab({
 
   const selectedAsset = selection ? (assets.find((a) => a.id === selection.assetId) ?? null) : null;
   const daysSelected = selection ? spanLength(selection.startDate, selection.endDate) : 0;
+  // Which live bookings the span runs over. The grid lets a booked day be
+  // selected, so this decides what the composer offers: a free span is booked,
+  // a contested one only joins the waitlist. Same rule the server applies.
+  const conflicting: FleetReservation[] = (() => {
+    if (!selection) return [];
+    const check = checkReservation({
+      startDate: selection.startDate,
+      endDate: selection.endDate,
+      today,
+      horizonDays: board?.is_admin ? 365 : (board?.me.horizonDays ?? 56),
+      existing: reservations.filter((r) => r.asset_id === selection.assetId),
+    });
+    if (check.ok || check.reason !== "overlap") return [];
+    const ids = new Set(check.conflicting.map((r) => r.id));
+    return reservations.filter((r) => ids.has(r.id));
+  })();
+  const contested = conflicting.length > 0;
 
   async function confirmBooking(waitlist: boolean, assetId: string = selection?.assetId ?? "") {
     if (!selection || !assetId) return;
@@ -161,6 +178,25 @@ export function CalendarTab({
               <p className="mt-1 text-[11px] text-ink-5">
                 Click another day in the same row to extend, or the same day again to clear.
               </p>
+              {contested ? (
+                <p className="mt-1.5 text-xs text-warn">
+                  Already booked on those days by{" "}
+                  {conflicting.map((r, i) => (
+                    <span key={r.id}>
+                      {i > 0 ? ", " : ""}
+                      <button
+                        type="button"
+                        onClick={() => onOpenReservation(r)}
+                        className="font-medium underline decoration-warn/50 underline-offset-2 hover:decoration-warn"
+                        title={`Open this booking · ${formatSpan(r.start_date, occupiedUntil(r))}`}
+                      >
+                        {r.is_mine ? "you" : r.holder_name}
+                      </button>
+                    </span>
+                  ))}
+                  . You can join the waitlist for it.
+                </p>
+              ) : null}
             </div>
             <Button size="xs" variant="ghost" onClick={() => setSelection(null)}>
               Clear
@@ -185,12 +221,18 @@ export function CalendarTab({
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button size="sm" variant="accent" onClick={() => void confirmBooking(false)} disabled={busy}>
-              {busy ? "Booking…" : `Book ${daysSelected} day${daysSelected === 1 ? "" : "s"}`}
-            </Button>
-            <Button size="sm" variant="glass" onClick={() => void confirmBooking(true)} disabled={busy}>
-              Join waitlist instead
-            </Button>
+            {/* One primary action, decided by the span: a free span is booked,
+                a span over someone's booking can only join the waitlist. Showing
+                both made people guess which one applied. */}
+            {contested ? (
+              <Button size="sm" variant="accent" onClick={() => void confirmBooking(true)} disabled={busy}>
+                {busy ? "Joining…" : "Join waitlist · material is already booked"}
+              </Button>
+            ) : (
+              <Button size="sm" variant="accent" onClick={() => void confirmBooking(false)} disabled={busy}>
+                {busy ? "Booking…" : `Book ${daysSelected} day${daysSelected === 1 ? "" : "s"}`}
+              </Button>
+            )}
             {/* Offered by the server with a clash: the same days on another
                 unit of the same model. A free one is booked with one tap; an
                 assigned one is asked for, and its holder approves. */}

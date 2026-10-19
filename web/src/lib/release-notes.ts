@@ -20,6 +20,16 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-19-fleet-waitlist-days",
+    date: "Oct 19, 2026",
+    title: "Fleet: pick any day, booked or not",
+    highlights: [
+      "Booked days can be selected in the calendar — a span over someone's booking joins the waitlist for it",
+      "One button, decided by the days: Book when they are free, Join waitlist when they are not",
+      "The person who has it is named under the selection; click the name to open their booking",
+    ],
+  },
+  {
     version: "2026-10-19-fleet-home",
     date: "Oct 19, 2026",
     title: "Fleet: one home for the pool",
