@@ -147,14 +147,16 @@ function DatePickerSheet({ state, asset, onClose, onBooked }: { state: FleetStat
         <div className="space-y-2">
           {problem ? <p className="text-xs text-danger">{problem}</p> : null}
           {contested ? <p className="text-xs text-warn">Already booked on some of those days. You can join the waitlist instead.</p> : null}
-          <MobileButton disabled={!start || busy || Boolean(problem) || contested} onClick={() => void book(false)}>
-            {busy ? "Booking…" : start ? `Book ${formatSpan(start, rangeEnd ?? start)} · ${days} day${days === 1 ? "" : "s"}` : "Pick a start day"}
-          </MobileButton>
+          {/* One action, decided by the span: book a free one, waitlist a contested one. */}
           {contested ? (
-            <MobileButton variant="secondary" disabled={busy} onClick={() => void book(true)}>
-              Join the waitlist
+            <MobileButton disabled={busy} onClick={() => void book(true)}>
+              {busy ? "Joining…" : "Join waitlist · material is already booked"}
             </MobileButton>
-          ) : null}
+          ) : (
+            <MobileButton disabled={!start || busy || Boolean(problem)} onClick={() => void book(false)}>
+              {busy ? "Booking…" : start ? `Book ${formatSpan(start, rangeEnd ?? start)} · ${days} day${days === 1 ? "" : "s"}` : "Pick a start day"}
+            </MobileButton>
+          )}
           {/* Offered by the server with a clash: same days, another unit of the
               same model — booked outright when free, asked for when assigned. */}
           {alternatives.map((alt) => (

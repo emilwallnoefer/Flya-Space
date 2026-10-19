@@ -20,10 +20,15 @@ import type { FleetAsset, FleetReservation } from "./types";
 /**
  * The booking calendar: one row per asset, one cell per DAY.
  *
- * Clicking a free cell starts a selection; clicking a second cell in the same
- * row extends it — that is the whole booking gesture. Occupied cells show who
- * has the material, so "where is it on the 14th" is answerable at a glance,
- * which the merged-cell spreadsheet grid never managed.
+ * Clicking a cell starts a selection; clicking a second cell in the same row
+ * extends it — that is the whole booking gesture. Occupied cells show who has
+ * the material, so "where is it on the 14th" is answerable at a glance, which
+ * the merged-cell spreadsheet grid never managed. A booked day is selectable
+ * too: a span that runs over someone's booking is what the waitlist is for, so
+ * refusing the click only forced people to pick the days around it. A click
+ * that starts on a booking still opens it, as it always did, and selects the
+ * day underneath; the composer decides from the span whether it books or
+ * waitlists.
  *
  * Days rather than weeks because most missions are two or three days long.
  * Booking by the week meant a Tuesday–Wednesday job blocked the unit from
@@ -82,6 +87,11 @@ type CellState = {
   isHistory: boolean;
   /** First cell of a visible run, so one label is drawn per booking. */
   isRunStart: boolean;
+  /**
+   * Whether a click selects the day. A live booking does not make a day
+   * unselectable — the days can still be asked for, as a waitlist entry; only
+   * the past, the horizon and the asset's own state do.
+   */
   bookable: boolean;
   beyondHorizon: boolean;
   inPast: boolean;
@@ -281,9 +291,10 @@ const AssetRow = memo(function AssetRow({
         // booking started before the visible range.
         isHistory,
         isRunStart: reservation ? reservation.start_date === day.key || index === 0 : false,
-        // A finished booking does not hold the asset, so a future day carrying one
-        // is still bookable. In practice history sits in the past anyway.
-        bookable: !liveReservation && !day.inPast && !day.beyondHorizon && assetBookable,
+        // A live booking is selectable (the span goes to the waitlist); a
+        // finished one does not hold the asset either. Only the day itself
+        // and the asset's state decide.
+        bookable: !day.inPast && !day.beyondHorizon && assetBookable,
         beyondHorizon: day.beyondHorizon,
         inPast: day.inPast,
       };
@@ -293,13 +304,21 @@ const AssetRow = memo(function AssetRow({
 
   const handleCellClick = useCallback(
     (day: string, state: CellState) => {
-      // A past booking is still worth opening — it answers "who had this, and
-      // when did it come back" — but it must not block booking a free future day.
-      if (state.reservation && (!state.isHistory || !state.bookable)) {
-        onOpenReservation(state.reservation);
+      // A booking on a day that cannot be selected (a past one, or one beyond
+      // the horizon) is still worth opening — it answers "who had this, and
+      // when did it come back".
+      if (!state.bookable) {
+        if (state.reservation) onOpenReservation(state.reservation);
         return;
       }
-      if (!state.bookable) return;
+      // A click that STARTS on a live booking opens it (where it went, what
+      // for) and selects the day as well, so closing the detail leaves a span
+      // the composer can waitlist. Extending an existing selection across a
+      // booking stays quiet — the second click is about the days, not the
+      // booking, and a dialog on every extension click would be in the way.
+      if (state.reservation && !state.isHistory && !rowSelection) {
+        onOpenReservation(state.reservation);
+      }
 
       // Second click in the same row extends the run; anything else starts fresh.
       if (rowSelection) {
@@ -369,7 +388,9 @@ const AssetRow = memo(function AssetRow({
                 reservation
                   ? `${asset.name}, ${formatDay(day.key)}: ${
                       state.isHistory ? "was with" : "booked by"
-                    } ${reservation.holder_name}`
+                    } ${reservation.holder_name}${
+                      state.bookable && !state.isHistory ? ", click to open it or join the waitlist" : ""
+                    }`
                   : `${asset.name}, ${formatDay(day.key)}: ${
                       state.bookable ? "free, click to book" : "not bookable"
                     }`
