@@ -214,9 +214,6 @@ export function AssetDialog({
             </label>
           </div>
 
-          {/* The type is also what makes units interchangeable: when one is
-              taken, every free unit of the same type is offered instead
-              (owner decision 2026-10-19), so there is nothing else to set. */}
           <ChoiceChips
             label="Type"
             value={draft.category}
@@ -224,6 +221,11 @@ export function AssetDialog({
             onChange={(value) => set("category", value)}
           />
 
+          {/* The model is also what makes units interchangeable: when one is
+              taken, every free unit of the same model is offered instead
+              (owner decision 2026-10-19), so there is nothing else to set.
+              Spelling differences are folded by the server; a unit with no
+              model is never offered. */}
           <ChoiceOrCustom
             label="Model"
             value={draft.model}

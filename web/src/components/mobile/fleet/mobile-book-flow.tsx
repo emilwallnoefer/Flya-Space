@@ -156,7 +156,7 @@ function DatePickerSheet({ state, asset, onClose, onBooked }: { state: FleetStat
             </MobileButton>
           ) : null}
           {/* Offered by the server with a clash: same days, another unit of the
-              same type — booked outright when free, asked for when assigned. */}
+              same model — booked outright when free, asked for when assigned. */}
           {alternatives.map((alt) => (
             <MobileButton key={alt.asset_id} variant={alt.assigned ? "secondary" : "primary"} disabled={busy} onClick={() => void book(false, alt.asset_id)}>
               {alt.assigned

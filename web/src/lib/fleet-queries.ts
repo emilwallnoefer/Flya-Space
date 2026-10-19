@@ -9,6 +9,7 @@ import {
   holderLabelMatchesPerson,
   isBlocking,
   isBookable,
+  modelKey,
   mondayOf,
   normalizeHolderLabel,
   orderQueue,
@@ -600,12 +601,12 @@ export async function fetchFleetBoard(
           target_start_date: target.start_date,
           target_end_date: target.end_date,
           // What the recipient could take instead of giving up days: units of
-          // the same type free for THEIR whole booking — pooled ones to move
+          // the same model free for THEIR whole booking — pooled ones to move
           // to, assigned ones to ask for. Only computed where someone can act.
           alternatives:
             incoming && row.status === "pending"
               ? freeSiblings({
-                  asset: { id: target.asset_id, category: assetById.get(target.asset_id)?.category ?? "" },
+                  asset: { id: target.asset_id, model: assetById.get(target.asset_id)?.model ?? null },
                   startDate: target.start_date,
                   endDate: target.end_date,
                   today,
@@ -741,9 +742,9 @@ export async function fetchUserContacts(admin: AnySupabase, ids: string[]): Prom
 }
 
 /**
- * Other units of the same type as `assetId` that are free for the whole span:
+ * Other units of the same model as `assetId` that are free for the whole span:
  * pooled ones first (book outright), then assigned ones (ask the holder).
- * Reads the type's units and their live bookings; the rule itself is
+ * Reads the type's units, keeps the same model, and their live bookings; the rule itself is
  * `freeSiblings` in fleet-rules.
  */
 export async function fetchFreeSiblings(
@@ -752,16 +753,17 @@ export async function fetchFreeSiblings(
 ): Promise<FreeSibling[]> {
   const { data: asset } = await admin
     .from("fleet_assets")
-    .select("id, category")
+    .select("id, category, model")
     .eq("id", args.assetId)
     .maybeSingle();
-  const category = (asset as { category?: string | null } | null)?.category ?? null;
-  if (!category) return [];
+  const unit = asset as { category?: string | null; model?: string | null } | null;
+  if (!unit?.category || !modelKey(unit.model)) return [];
 
+  // The type narrows the read; the model, spelled one way, is the rule.
   const { data: units } = await admin
     .from("fleet_assets")
-    .select("id, name, category, pooled, status, active, current_location, current_holder_user_id, current_holder_label")
-    .eq("category", category)
+    .select("id, name, model, pooled, status, active, current_location, current_holder_user_id, current_holder_label")
+    .eq("category", unit.category)
     .eq("active", true);
   const assets = (units ?? []) as SiblingAsset[];
   const ids = assets.map((a) => a.id).filter((id) => id !== args.assetId);
@@ -780,7 +782,7 @@ export async function fetchFreeSiblings(
   ]);
   const spans = ((rows ?? []) as FleetReservationRow[]).map(toSpan);
   return freeSiblings({
-    asset: { id: args.assetId, category },
+    asset: { id: args.assetId, model: unit.model ?? null },
     startDate: args.startDate,
     endDate: args.endDate,
     today: args.today,

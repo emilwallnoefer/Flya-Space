@@ -14,7 +14,7 @@ export function reserveErrorMessage(
   check: ReserveRefusal,
   reliability: { score: number; horizonDays: number },
   assetName: string,
-  /** Units of the same type that are free, when the refusal is a clash: pooled ones to book, assigned ones to ask for. */
+  /** Units of the same model that are free, when the refusal is a clash: pooled ones to book, assigned ones to ask for. */
   alternatives: ReadonlyArray<{ name: string; assigned?: boolean; holder?: string | null }> = [],
 ): string {
   switch (check.reason) {

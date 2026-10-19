@@ -55,7 +55,7 @@ export type FleetRequestView = {
   incoming: boolean;
   /** The viewer asked this one. */
   outgoing: boolean;
-  /** Units of the same type the recipient could take instead (pending incoming extensions only). */
+  /** Units of the same model the recipient could take instead (pending incoming extensions only). */
   alternatives: RequestAlternative[];
 };
 

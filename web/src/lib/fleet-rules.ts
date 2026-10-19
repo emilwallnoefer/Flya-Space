@@ -428,11 +428,26 @@ export function expiryFor(span: ReservationSpan, today: string): "no_show" | "ex
  */
 export const ASSIGNMENT_SPAN_DAYS = 30;
 
+/**
+ * The model, spelled one way: lower-cased, runs of anything that is not a
+ * letter or digit collapsed to one dash, so "Elios 3", "elios-3" and
+ * " ELIOS 3 " are the same model. Null when there is no model recorded.
+ */
+export function modelKey(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const slug = raw
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug.length > 0 ? slug : null;
+}
+
 export type SiblingAsset = {
   id: string;
   name: string;
-  /** The type ("Type" in Manage): every unit of one type stands in for every other. */
-  category: string;
+  /** The model ("Model" in Manage): every unit of one model stands in for every other. */
+  model: string | null;
   pooled: boolean;
   status: string;
   active?: boolean;
@@ -472,20 +487,21 @@ export function isRequestable(asset: { pooled: boolean; status: string; active?:
 }
 
 /**
- * Other units of the same type that are free for the whole span (owner
- * decision 2026-10-19: type, not a hand-set kind — every unit of one type
- * stands in for every other).
+ * Other units of the same model that are free for the whole span (owner
+ * decision 2026-10-19: the model as recorded, compared through `modelKey` —
+ * not a hand-set kind, and not the coarser type, under which every drone
+ * would be a twin of every other). A unit with no model has no siblings.
  *
  * Pooled units come first: bookable (not retired or in repair), active, and
  * with no live booking on any of the days — an overdue unit still out counts
  * as taken through today (`blockedUntil`). Then the assigned units of that
- * type (`assigned: true`): those can be asked for, and the person they are
+ * model (`assigned: true`): those can be asked for, and the person they are
  * assigned to approves. For them the assignment's own open booking is not a
  * clash (it is what being assigned looks like); only a borrow already booked
  * for those days is.
  */
 export function freeSiblings(args: {
-  asset: Pick<SiblingAsset, "id" | "category">;
+  asset: Pick<SiblingAsset, "id" | "model">;
   startDate: string;
   endDate: string;
   today: string;
@@ -512,7 +528,9 @@ export function freeSiblings(args: {
         spansOverlap({ ...s, end_date: blockedUntil(s, today) }, candidate),
     );
   const byName = (a: SiblingAsset, b: SiblingAsset) => a.name.localeCompare(b.name, undefined, { numeric: true });
-  const sameType = assets.filter((a) => a.id !== asset.id && a.category === asset.category && a.active !== false);
+  const key = modelKey(asset.model);
+  if (!key) return [];
+  const sameType = assets.filter((a) => a.id !== asset.id && modelKey(a.model) === key && a.active !== false);
 
   const pooled = sameType
     .filter((a) => isBookable(a) && !taken(a))

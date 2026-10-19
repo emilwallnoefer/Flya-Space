@@ -53,7 +53,7 @@ const pendingBorrow = (extra: { recipient?: string | null } = {}) => ({
   },
 });
 
-describe("a clash also offers the assigned units of the type", () => {
+describe("a clash also offers the assigned units of the model", () => {
   const clash = { action: "reserve", asset_id: ASSET_ID, start_date: "2026-09-15", end_date: "2026-09-16" };
 
   it("lists the assigned twin after the free ones, as something to ask for", async () => {

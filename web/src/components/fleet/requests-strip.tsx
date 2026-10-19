@@ -24,9 +24,9 @@ export function RequestsStrip({
   requests: FleetRequestView[];
   busy: boolean;
   onRespond: (requestId: string, reply: RequestReply) => void;
-  /** Move the recipient's own booking to a free unit of the same type; the request is granted by that. */
+  /** Move the recipient's own booking to a free unit of the same model; the request is granted by that. */
   onMove: (reservationId: string, assetId: string) => void;
-  /** Ask for an assigned unit of the same type for the recipient's own days (files a borrow request). */
+  /** Ask for an assigned unit of the same model for the recipient's own days (files a borrow request). */
   onRequest?: (assetId: string, startDate: string, endDate: string) => void;
 }) {
   if (requests.length === 0) return null;

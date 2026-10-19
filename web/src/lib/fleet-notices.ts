@@ -263,7 +263,7 @@ function compose(input: FleetNoticeInput): { title: string; lines: string[]; cta
         title: `${input.answererName} cannot lend ${input.assetName}`,
         lines: [
           `Your request for ${formatSpan(input.startDate, input.endDate)} was declined.`,
-          `Ask ${input.answererName} directly if it is urgent, or book another unit of the same type.`,
+          `Ask ${input.answererName} directly if it is urgent, or book another unit of the same model.`,
         ],
         cta: "Open Fleet",
       };

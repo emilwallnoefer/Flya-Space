@@ -15,6 +15,7 @@ import {
   freeSiblings,
   isAssignmentSpan,
   isRequestable,
+  modelKey,
   NO_SHOW_PENALTY,
   NO_SHOW_PENALTY_CAP,
   OVERDUE_REMINDER_DAYS,
@@ -675,10 +676,10 @@ describe("an overdue unit keeps blocking until it is back", () => {
 
 describe("interchangeable units", () => {
   const today = "2026-09-14";
-  const unit = (id: string, category: string, extra: Partial<SiblingAsset> = {}): SiblingAsset => ({
+  const unit = (id: string, model: string | null, extra: Partial<SiblingAsset> = {}): SiblingAsset => ({
     id,
     name: id.toUpperCase(),
-    category,
+    model,
     pooled: true,
     status: "available",
     current_location: "Lausanne",
@@ -686,33 +687,45 @@ describe("interchangeable units", () => {
   });
   const free = (asset_id: string, name: string, location = "Lausanne") => ({ asset_id, name, location, assigned: false, holder: null });
 
-  it("offers every free, bookable unit of the same type — never the unit itself, never another type", () => {
+  it("folds a model's spelling into one key", () => {
+    expect(modelKey("Elios 3")).toBe("elios-3");
+    expect(modelKey("  elios-3 ")).toBe("elios-3");
+    expect(modelKey("LiDAR Rev 7")).toBe("lidar-rev-7");
+    expect(modelKey("")).toBeNull();
+    expect(modelKey("---")).toBeNull();
+    expect(modelKey(null)).toBeNull();
+  });
+
+  it("offers every free, bookable unit of the same model — never the unit itself, never another model", () => {
     const assets = [
-      unit("sva-257", "drone"),
-      unit("sva-330", "drone"),
-      unit("sva-400", "drone", { status: "in_repair" }),
-      unit("sva-600", "drone", { active: false }),
-      unit("rev-7", "lidar"),
+      unit("sva-257", "Elios 3"),
+      unit("sva-330", "elios-3"),
+      unit("sva-400", "Elios 3", { status: "in_repair" }),
+      unit("sva-600", "Elios 3", { active: false }),
+      unit("sva-200", "Elios 2"),
+      unit("sva-700", null),
     ];
     const spans = [span({ id: "x", asset_id: "sva-330", start_date: "2026-09-10", end_date: "2026-09-13", status: "returned", returned_on: "2026-09-13" })];
     expect(freeSiblings({ asset: assets[0], startDate: "2026-09-14", endDate: "2026-09-16", today, assets, spans })).toEqual([free("sva-330", "SVA-330")]);
     expect(freeSiblings({ asset: assets[4], startDate: today, endDate: today, today, assets, spans: [] })).toEqual([]);
+    // No model recorded: nothing is guessed.
+    expect(freeSiblings({ asset: assets[5], startDate: today, endDate: today, today, assets: [...assets, unit("sva-701", null)], spans: [] })).toEqual([]);
   });
 
   it("treats an overdue sibling as taken through today", () => {
-    const assets = [unit("a", "drone"), unit("b", "drone")];
+    const assets = [unit("a", "Elios 3"), unit("b", "Elios 3")];
     const overdue = span({ id: "o", asset_id: "b", start_date: "2026-09-08", end_date: "2026-09-10", status: "picked_up" });
     expect(freeSiblings({ asset: assets[0], startDate: today, endDate: today, today, assets, spans: [overdue] })).toEqual([]);
     expect(freeSiblings({ asset: assets[0], startDate: "2026-09-15", endDate: "2026-09-15", today, assets, spans: [overdue] })).toHaveLength(1);
   });
 
-  it("lists assigned units of the type after the free ones, naming who to ask", () => {
+  it("lists assigned units of the model after the free ones, naming who to ask", () => {
     const assets = [
-      unit("sva-257", "drone"),
-      unit("sva-412", "drone", { pooled: false, status: "out", current_location: "Basel", current_holder_label: "Charles" }),
-      unit("sva-413", "drone", { pooled: false, status: "out", current_holder_user_id: "u-anna", current_holder_label: "ASSIGNED (ANNA)" }),
-      unit("sva-414", "drone", { pooled: false, status: "in_repair", current_holder_label: "Bob" }),
-      unit("sva-330", "drone"),
+      unit("sva-257", "Elios 3"),
+      unit("sva-412", "Elios 3", { pooled: false, status: "out", current_location: "Basel", current_holder_label: "Charles" }),
+      unit("sva-413", "Elios 3", { pooled: false, status: "out", current_holder_user_id: "u-anna", current_holder_label: "ASSIGNED (ANNA)" }),
+      unit("sva-414", "Elios 3", { pooled: false, status: "in_repair", current_holder_label: "Bob" }),
+      unit("sva-330", "Elios 3"),
     ];
     // The assignment's own open booking is not a clash; a borrow already approved is.
     const assignment = span({ id: "as", asset_id: "sva-412", user_id: null, holder_label: "Charles", source: "sheet_import", start_date: "2026-09-01", end_date: "2026-10-01", status: "picked_up" });

@@ -108,7 +108,7 @@ describe("fleet notices", () => {
       base,
     );
     expect(no.push.title).toBe("Charles cannot lend SVA-412");
-    expect(no.email.text).toMatch(/another unit of the same type/);
+    expect(no.email.text).toMatch(/another unit of the same model/);
   });
 
   it("escapes HTML in names", () => {

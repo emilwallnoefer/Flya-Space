@@ -192,7 +192,7 @@ export function CalendarTab({
               Join waitlist instead
             </Button>
             {/* Offered by the server with a clash: the same days on another
-                unit of the same type. A free one is booked with one tap; an
+                unit of the same model. A free one is booked with one tap; an
                 assigned one is asked for, and its holder approves. */}
             {alternatives.map((alt) => (
               <Button

@@ -4,11 +4,11 @@ import { ADMIN, ASSET_ID, MEMBER, OTHER, pooledAsset, post, reservation, RESERVA
 
 /**
  * Interchangeable units (fleet edge cases, phase 4, revised 2026-10-19 to go
- * by type): the reserve refusal offers free units of the same type, and
+ * by model): the reserve refusal offers free units of the same model, and
  * `move_booking` takes one.
  *
  * Clock frozen at 2026-09-14. SVA-257 (ASSET_ID) and SVA-330 (SIBLING) are
- * both drones; REV-7 is a LiDAR.
+ * both Elios 3; REV-7 is a LiDAR.
  */
 
 const SIBLING = "aaaaaaaa-0000-4000-8000-000000000002";
@@ -26,7 +26,7 @@ const fleet = (extra: { sibling?: Record<string, unknown> } = {}) => [
 const asMember = (tables: Tables) => ({ viewer: MEMBER, users: [MEMBER, OTHER], tables });
 const asOther = (tables: Tables) => ({ viewer: OTHER, users: [MEMBER, OTHER], tables });
 
-describe("a clash offers free units of the same type", () => {
+describe("a clash offers free units of the same model", () => {
   const clash = { action: "reserve", asset_id: ASSET_ID, start_date: "2026-09-15", end_date: "2026-09-17" };
 
   it("names the sibling that is free, and only that one", async () => {
@@ -36,7 +36,7 @@ describe("a clash offers free units of the same type", () => {
     expect(String(res.body.error)).toMatch(/SVA-330 is free for those days/);
   });
 
-  it("offers nothing when the sibling is taken, in repair, or of another type", async () => {
+  it("offers nothing when the sibling is taken, in repair, of another model, or the unit has no model", async () => {
     const siblingTaken = await post(
       asOther({
         fleet_assets: fleet(),
@@ -50,8 +50,16 @@ describe("a clash offers free units of the same type", () => {
     const inRepair = await post(asOther({ fleet_assets: fleet({ sibling: { status: "in_repair" } }), fleet_reservations: [reservation()] }), clash);
     expect(inRepair.body.alternatives).toEqual([]);
 
-    const otherType = await post(asOther({ fleet_assets: [pooledAsset(), pooledAsset({ id: SIBLING, name: "REV-7", category: "lidar" })], fleet_reservations: [reservation()] }), clash);
-    expect(otherType.body.alternatives).toEqual([]);
+    const otherModel = await post(asOther({ fleet_assets: [pooledAsset(), pooledAsset({ id: SIBLING, name: "SVA-200", model: "Elios 2" })], fleet_reservations: [reservation()] }), clash);
+    expect(otherModel.body.alternatives).toEqual([]);
+
+    const noModel = await post(asOther({ fleet_assets: [pooledAsset({ model: null }), pooledAsset({ id: SIBLING, name: "SVA-330", model: null })], fleet_reservations: [reservation()] }), clash);
+    expect(noModel.body.alternatives).toEqual([]);
+  });
+
+  it("folds spelling: 'elios-3' and 'Elios 3' are one model", async () => {
+    const res = await post(asOther({ fleet_assets: fleet({ sibling: { model: "elios-3" } }), fleet_reservations: [reservation()] }), clash);
+    expect(res.body.alternatives).toHaveLength(1);
   });
 
   it("lets the person book the sibling for the same days", async () => {

@@ -33,7 +33,7 @@ const SHOW_PAST_KEY = "fleet:show-past";
 export type FleetTab = "calendar" | "mine" | "material" | "manage";
 export type FleetNotice = { tone: NoticeTone; text: string } | null;
 /**
- * A unit of the same type the server offers with a refusal: free to book when
+ * A unit of the same model the server offers with a refusal: free to book when
  * `assigned` is false; otherwise assigned to `holder`, and booking it files a
  * request they approve.
  */
