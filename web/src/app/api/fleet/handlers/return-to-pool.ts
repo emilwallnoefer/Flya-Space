@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { recordAssetEvent } from "@/lib/fleet-queries";
+import { FLEET_HOME_LOCATION } from "@/lib/fleet-rules";
 import { closeLiveReservations, type FleetActionContext } from "./shared";
 import type { FleetPayload } from "./schemas";
 
@@ -26,13 +27,13 @@ export async function handleReturnToPool(
 
   const { data: asset, error: readError } = await admin
     .from("fleet_assets")
-    .select("id, name, current_location, home_location")
+    .select("id, name, current_location")
     .eq("id", payload.asset_id)
     .maybeSingle();
   if (readError) throw new Error(readError.message);
   if (!asset) return NextResponse.json({ error: "Asset not found." }, { status: 404 });
 
-  const landingSpot = payload.location ?? asset.home_location ?? asset.current_location ?? null;
+  const landingSpot = payload.location ?? FLEET_HOME_LOCATION;
 
   await closeLiveReservations(admin, payload.asset_id);
 

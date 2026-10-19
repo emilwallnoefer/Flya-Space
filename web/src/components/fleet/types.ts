@@ -40,7 +40,6 @@ export type FleetAsset = {
   model: string | null;
   owner_group: string | null;
   status: FleetAssetStatus;
-  home_location: string | null;
   current_location: string | null;
   current_holder_user_id: string | null;
   current_holder_label: string | null;

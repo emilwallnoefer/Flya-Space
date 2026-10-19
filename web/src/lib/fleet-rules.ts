@@ -20,6 +20,15 @@
  *     returns anything is last in line, automatically.
  */
 
+/**
+ * Where every pooled unit lives between jobs. There used to be a per-unit
+ * `home_location`; it was "Pilots HQ Lausanne" on every row that had one, so
+ * the field was dropped (owner decision, 2026-10-19) and the one answer is
+ * named here. Check-in and "back to the pool" land a unit here unless the
+ * person says otherwise.
+ */
+export const FLEET_HOME_LOCATION = "Pilots HQ Lausanne";
+
 export const DAY_MS = 24 * 60 * 60 * 1000;
 export const WEEK_MS = 7 * DAY_MS;
 

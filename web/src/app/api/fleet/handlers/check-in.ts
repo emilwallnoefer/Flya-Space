@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { restoreAssignment } from "@/lib/fleet-assignment";
 import { fetchAssetSpans, fetchReliability, fetchUserNames, recordAssetEvent } from "@/lib/fleet-queries";
 import { sendFleetNotice } from "@/lib/fleet-notify";
-import { isBlocking } from "@/lib/fleet-rules";
+import { FLEET_HOME_LOCATION, isBlocking } from "@/lib/fleet-rules";
 import { loadReservation, promoteWaitlist, settleRequestsFor, type Admin, type FleetActionContext } from "./shared";
 import type { FleetPayload } from "./schemas";
 
@@ -52,9 +52,11 @@ export async function handleCheckIn(
   // booking is re-opened below.
   const borrow = asset?.pooled === false;
   const assignee = borrow ? await assigneeOf(admin, reservation.id, reservation.asset_id) : null;
+  // A pooled unit goes back to the HQ unless the person says otherwise — there
+  // is no per-unit home any more, every pooled unit lives at the same place.
   const landingSpot = borrow
     ? (payload.location ?? asset?.current_location ?? null)
-    : (payload.location ?? asset?.home_location ?? asset?.current_location ?? null);
+    : (payload.location ?? FLEET_HOME_LOCATION);
   // Free the unit only if this booking is what holds it. If someone else is
   // recorded as having it, closing this booking must not reset their unit to
   // available-at-home while it is still in their hands.

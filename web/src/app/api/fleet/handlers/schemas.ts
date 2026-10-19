@@ -107,7 +107,6 @@ const assetFields = {
   status: z.enum(ASSET_STATUSES).optional(),
   /** true = shared bookable pool (calendar); false = assigned to someone. */
   pooled: z.boolean().optional(),
-  home_location: z.string().trim().max(160).nullable().optional(),
   current_location: z.string().trim().max(160).nullable().optional(),
   current_holder_label: z.string().trim().max(160).nullable().optional(),
   notes: z.string().trim().max(500).nullable().optional(),
@@ -132,7 +131,6 @@ const updateAssetSchema = z.object({
   owner_group: assetFields.owner_group,
   status: assetFields.status,
   pooled: assetFields.pooled,
-  home_location: assetFields.home_location,
   current_location: assetFields.current_location,
   current_holder_label: assetFields.current_holder_label,
   notes: assetFields.notes,

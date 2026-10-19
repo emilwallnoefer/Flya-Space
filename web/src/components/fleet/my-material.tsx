@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Badge, Button, Input } from "@/components/ui";
-import { addDays, dueLabel, formatSpan, MAX_RESERVATION_DAYS, occupiedUntil } from "@/lib/fleet-rules";
+import { addDays, dueLabel, FLEET_HOME_LOCATION, formatSpan, MAX_RESERVATION_DAYS, occupiedUntil } from "@/lib/fleet-rules";
 import { AssetIcon } from "./asset-icon";
 import { ReliabilityCard } from "./reliability-badge";
 import { EmptyState, Row } from "./ui";
@@ -150,7 +150,7 @@ export function MyMaterial({
                       aria-expanded={returning}
                       onClick={() => {
                         setReturningId(returning ? null : reservation.id);
-                        setReturnTo(asset?.home_location ?? "");
+                        setReturnTo(FLEET_HOME_LOCATION);
                         setReturnedOn(today);
                       }}
                     >

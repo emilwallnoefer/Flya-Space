@@ -88,7 +88,6 @@ export type FleetAssetRow = {
   model: string | null;
   owner_group: string | null;
   status: FleetAssetStatus;
-  home_location: string | null;
   current_location: string | null;
   current_holder_user_id: string | null;
   current_holder_label: string | null;
@@ -331,7 +330,7 @@ export async function fetchFleetBoard(
     admin
       .from("fleet_assets")
       .select(
-        "id, serial_number, name, category, model, owner_group, status, home_location, current_location, current_holder_user_id, current_holder_label, location_confirmed_at, notes, active, pooled",
+        "id, serial_number, name, category, model, owner_group, status, current_location, current_holder_user_id, current_holder_label, location_confirmed_at, notes, active, pooled",
       )
       .eq("active", true)
       .order("name", { ascending: true }),
@@ -348,7 +347,7 @@ export async function fetchFleetBoard(
       ? admin
           .from("fleet_assets")
           .select(
-            "id, serial_number, name, category, model, owner_group, status, home_location, current_location, current_holder_user_id, current_holder_label, location_confirmed_at, notes, active, pooled",
+            "id, serial_number, name, category, model, owner_group, status, current_location, current_holder_user_id, current_holder_label, location_confirmed_at, notes, active, pooled",
           )
           .eq("active", false)
           .order("name", { ascending: true })

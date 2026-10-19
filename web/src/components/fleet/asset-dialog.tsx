@@ -3,6 +3,7 @@
 import { m } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Input, Notice, Textarea } from "@/components/ui";
+import { FLEET_HOME_LOCATION } from "@/lib/fleet-rules";
 import { useFocusTrap } from "@/lib/use-focus-trap";
 import { AssetIcon } from "./asset-icon";
 import { ChoiceChips, ChoiceOrCustom, type Choice } from "./choice";
@@ -36,7 +37,6 @@ export type AssetDraft = {
   owner_group: string;
   pooled: boolean;
   current_holder_label: string;
-  home_location: string;
   current_location: string;
   notes: string;
   status?: FleetAssetStatus;
@@ -50,7 +50,6 @@ const BLANK: AssetDraft = {
   owner_group: "",
   pooled: true,
   current_holder_label: "",
-  home_location: "",
   current_location: "",
   notes: "",
 };
@@ -109,7 +108,6 @@ export function AssetDialog({
           owner_group: asset.owner_group ?? "",
           pooled: asset.pooled,
           current_holder_label: asset.current_holder_label ?? "",
-          home_location: asset.home_location ?? "",
           current_location: asset.current_location ?? "",
           notes: asset.notes ?? "",
           status: asset.status,
@@ -246,11 +244,10 @@ export function AssetDialog({
               setDraft((d) => ({
                 ...d,
                 pooled,
-                // Leaving the pool clears the locations rather than saving them
-                // from fields that are no longer on screen — a value nobody can
+                // Leaving the pool clears the location rather than saving it
+                // from a field that is no longer on screen — a value nobody can
                 // see and nobody will maintain is the definition of stale data.
                 current_location: pooled ? d.current_location : "",
-                home_location: pooled ? d.home_location : "",
               }));
             }}
             columns
@@ -267,34 +264,23 @@ export function AssetDialog({
           ) : null}
 
           {/* ------------------------------------------------------- where */}
-          {/* Locations are a fact about the shared pool only. Pooled kit sits
+          {/* The location is a fact about the shared pool only. Pooled kit sits
               somewhere between jobs and the next person has to find it; a unit
               assigned to one person travels with them permanently, so a
               location on it would be stale the day after it was entered and
               would have to be maintained forever to stay a lie. Not asking is
-              the fix. */}
+              the fix. There is no "home" field: every pooled unit lives at
+              FLEET_HOME_LOCATION between jobs, and check-in lands it there. */}
           {draft.pooled ? (
-            <>
-              <ChoiceOrCustom
-                label="Current location"
-                value={draft.current_location}
-                options={locations}
-                onChange={(value) => set("current_location", value)}
-                placeholder="Lausanne"
-                allowEmpty
-                emptyLabel="Unknown"
-              />
-
-              <ChoiceOrCustom
-                label="Home location"
-                value={draft.home_location}
-                options={locations}
-                onChange={(value) => set("home_location", value)}
-                placeholder="Where it lives between jobs"
-                allowEmpty
-                emptyLabel="None"
-              />
-            </>
+            <ChoiceOrCustom
+              label="Current location"
+              value={draft.current_location}
+              options={locations}
+              onChange={(value) => set("current_location", value)}
+              placeholder={FLEET_HOME_LOCATION}
+              allowEmpty
+              emptyLabel="Unknown"
+            />
           ) : null}
 
           <ChoiceOrCustom
