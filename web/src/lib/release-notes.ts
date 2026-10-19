@@ -20,6 +20,15 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-19-fleet-home",
+    date: "Oct 19, 2026",
+    title: "Fleet: one home for the pool",
+    highlights: [
+      "Every pooled unit lives at Pilots HQ Lausanne between jobs — the per-unit “home location” is gone from Manage",
+      "Bringing a unit back lands it there unless you say where else you left it",
+    ],
+  },
+  {
     version: "2026-10-19-fleet-borrow",
     date: "Oct 19, 2026",
     title: "Fleet: every unit of a model is a twin, and assigned material can be asked for",

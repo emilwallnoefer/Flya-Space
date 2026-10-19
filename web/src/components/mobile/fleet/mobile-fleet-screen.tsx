@@ -10,7 +10,7 @@ import { RequestsStrip } from "@/components/fleet/requests-strip";
 import { CATEGORY_LABEL, categoryRank, type FleetAsset, type FleetBoardResponse, type FleetReservation } from "@/components/fleet/types";
 import { useFleet, type FleetState } from "@/components/fleet/use-fleet";
 import { Notice } from "@/components/ui";
-import { addDays, blockedUntil, dueLabel, formatDay, formatSpan, isBlocking, MAX_RESERVATION_DAYS, occupiedUntil } from "@/lib/fleet-rules";
+import { addDays, blockedUntil, dueLabel, FLEET_HOME_LOCATION, formatDay, formatSpan, isBlocking, MAX_RESERVATION_DAYS, occupiedUntil } from "@/lib/fleet-rules";
 import { cn } from "@/lib/cn";
 import { MobileButton, MobileEmpty, MobileGroup, MobileSegmented, MobileSheet } from "../primitives";
 import { MobileBookFlow } from "./mobile-book-flow";
@@ -176,7 +176,7 @@ function MyMaterialList({ state, onBrowse }: { state: FleetState; onBrowse: () =
                   </MobileButton>
                 ) : null}
                 {r.status === "picked_up" ? (
-                  <MobileButton className="min-h-10 text-sm" variant={overdue ? "primary" : "secondary"} disabled={busy} onClick={() => { setReturning(r); setReturnTo(asset?.home_location ?? ""); setReturnedOn(today); }}>
+                  <MobileButton className="min-h-10 text-sm" variant={overdue ? "primary" : "secondary"} disabled={busy} onClick={() => { setReturning(r); setReturnTo(FLEET_HOME_LOCATION); setReturnedOn(today); }}>
                     Bring back
                   </MobileButton>
                 ) : null}

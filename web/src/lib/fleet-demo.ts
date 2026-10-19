@@ -76,7 +76,6 @@ export function buildDemoBoard(args: {
     model: asset.model || null,
     owner_group: "Sales",
     status: asset.status,
-    home_location: asset.location,
     current_location: asset.location,
     current_holder_user_id: null,
     current_holder_label: asset.status === "out" ? "On mission" : null,

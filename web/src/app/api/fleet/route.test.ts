@@ -71,7 +71,11 @@ describe("moving material between the pool and an assignment is admin-only", () 
   });
 
   it("allows an admin, and actually moves the unit", async () => {
-    const asAdmin = { viewer: ADMIN, tables: tables(), adminEmails: [ADMIN.email!] };
+    const asAdmin = {
+      viewer: ADMIN,
+      tables: { ...tables(), fleet_assets: assets({ pooled: false, current_location: "Zurich" }) },
+      adminEmails: [ADMIN.email!],
+    };
     const res = await post(asAdmin, { action: "return_to_pool", asset_id: ASSET_ID });
     expect(res.status).toBe(200);
 
@@ -79,6 +83,8 @@ describe("moving material between the pool and an assignment is admin-only", () 
     expect(asset.pooled).toBe(true);
     expect(asset.status).toBe("available");
     expect(asset.current_holder_label).toBeNull();
+    // Back in the pool means back at the HQ: there is no per-unit home.
+    expect(asset.current_location).toBe("Pilots HQ Lausanne");
   });
 
   it("does not let a non-admin close someone else's booking through it", async () => {
@@ -167,7 +173,7 @@ describe("picking material up and bringing it back", () => {
       {
         viewer: MEMBER,
         tables: {
-          fleet_assets: assets({ status: "out", current_holder_user_id: MEMBER.id }),
+          fleet_assets: assets({ status: "out", current_holder_user_id: MEMBER.id, current_location: "Basel" }),
           fleet_reservations: [reservation({ status: "picked_up" })],
         },
       },
@@ -182,8 +188,9 @@ describe("picking material up and bringing it back", () => {
     const asset = res.tables.fleet_assets[0];
     expect(asset.status).toBe("available");
     expect(asset.current_holder_user_id).toBeNull();
-    // Falls back to the home location when the caller names none.
-    expect(asset.current_location).toBe("EMEA");
+    // Lands at the HQ when the caller names no location — even though the
+    // unit was recorded somewhere else while out.
+    expect(asset.current_location).toBe("Pilots HQ Lausanne");
   });
 
   it("refuses to check out a booking that is not confirmed", async () => {

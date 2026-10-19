@@ -84,7 +84,7 @@ export async function loadReservation(admin: Admin, id: string) {
   const { data, error } = await admin
     .from("fleet_reservations")
     .select(
-      "id, asset_id, user_id, start_date, end_date, status, destination, fleet_assets(name, status, pooled, current_location, home_location, current_holder_user_id, current_holder_label)",
+      "id, asset_id, user_id, start_date, end_date, status, destination, fleet_assets(name, status, pooled, current_location, current_holder_user_id, current_holder_label)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -102,7 +102,6 @@ export async function loadReservation(admin: Admin, id: string) {
         /** False for a unit assigned to someone — a booking on it is a borrow. */
         pooled: boolean;
         current_location: string | null;
-        home_location: string | null;
         current_holder_user_id: string | null;
         current_holder_label: string | null;
       }

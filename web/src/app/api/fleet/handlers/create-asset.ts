@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { recordAssetEvent } from "@/lib/fleet-queries";
+import { FLEET_HOME_LOCATION } from "@/lib/fleet-rules";
 import type { FleetActionContext } from "./shared";
 import type { FleetPayload } from "./schemas";
 
@@ -32,8 +33,10 @@ export async function handleCreateAsset(
       // holder is on the shelf. Deriving this keeps the two from disagreeing.
       status: payload.status ?? (pooled ? "available" : "out"),
       pooled,
-      home_location: payload.home_location?.trim() || null,
-      current_location: payload.current_location?.trim() || payload.home_location?.trim() || null,
+      // A pooled unit with no location named starts at the HQ, where pooled
+      // kit lives; an assigned one carries no location (it travels with its
+      // person).
+      current_location: payload.current_location?.trim() || (pooled ? FLEET_HOME_LOCATION : null),
       current_holder_label: pooled ? null : holder,
       notes: payload.notes?.trim() || null,
       location_confirmed_at: new Date().toISOString(),
@@ -56,7 +59,7 @@ export async function handleCreateAsset(
     asset_id: data.id,
     kind: "created",
     actor_user_id: viewer.id,
-    to_location: payload.current_location?.trim() || payload.home_location?.trim() || null,
+    to_location: payload.current_location?.trim() || (pooled ? FLEET_HOME_LOCATION : null),
     note: `Added to the fleet${holder ? ` — assigned to ${holder}` : ""}`,
   });
 

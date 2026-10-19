@@ -259,7 +259,6 @@ function assetFields(draft: AssetDraft) {
     model: draft.model.trim(),
     owner_group: draft.owner_group.trim(),
     pooled: draft.pooled,
-    home_location: draft.home_location.trim(),
     current_location: draft.current_location.trim(),
     current_holder_label: draft.current_holder_label.trim(),
     notes: draft.notes.trim(),

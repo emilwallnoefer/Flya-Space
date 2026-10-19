@@ -92,7 +92,6 @@ export function ManageMaterial({
     const set = new Set<string>();
     for (const a of assets) {
       if (a.current_location) set.add(a.current_location);
-      if (a.home_location) set.add(a.home_location);
     }
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [assets]);
