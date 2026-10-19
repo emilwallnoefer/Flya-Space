@@ -70,6 +70,24 @@ describe("launch camera markup", () => {
     expect(css).toMatch(/html\[data-launch-warm\] \.launch-splash-word \{\s*animation-delay: calc\(-1 \* var\(--launch-elapsed, 900ms\)\);\s*\}/);
   });
 
+  it("plays the opening only where lib/launch-route.ts says so", () => {
+    // The proxy forwards the URL; the layout decides from it and never mounts
+    // the splash unconditionally; what is skipped still marks the opening
+    // over (first-load popups wait on that).
+    const proxy = read("src/proxy.ts");
+    expect(proxy).toContain("requestHeaders.set(REQUEST_URL_HEADER, request.nextUrl.pathname + request.nextUrl.search)");
+    const layout = read("src/app/layout.tsx");
+    expect(layout).toContain("showsLaunchSplash(parseRequestUrl(requestHeaders.get(REQUEST_URL_HEADER)))");
+    expect(layout).toContain("{splash ? <LaunchSplash /> : <LaunchSkipped />}");
+    expect(layout).not.toMatch(/^\s*<LaunchSplash \/>\s*$/m);
+    expect(read("src/components/launch-splash.tsx")).toMatch(/export function LaunchSkipped\(\) \{[\s\S]*markLaunchDone\(\);/);
+    // The dashboard skeleton draws the module the reload asks for, on both shells.
+    const loading = read("src/app/dashboard/loading.tsx");
+    expect(loading).toContain("requestedDashboardModule(url.search)");
+    expect(loading).toContain("<MobileSkeleton module={openModule} />");
+    expect(loading).toContain("<ModuleSkeleton module={openModule} />");
+  });
+
   it("marks fixed chrome as late, never as a plain reveal", () => {
     for (const rel of ["src/components/mobile/mobile-tab-bar.tsx", "src/components/offline-game-card.tsx"]) {
       expect(read(rel)).toContain("data-launch-late");

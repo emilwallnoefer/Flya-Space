@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { NONCE_HEADER, buildCsp, cspHeaderName, generateCspNonce } from "@/lib/security/csp";
+import { REQUEST_URL_HEADER } from "@/lib/launch-route";
 
 /**
  * Paths whose session must be refreshed and gated. Deliberately NOT every path
@@ -28,6 +29,11 @@ export async function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(NONCE_HEADER, nonce);
   requestHeaders.set("Content-Security-Policy", csp);
+  // The path and query, for the root layout (does the launch splash play?)
+  // and the dashboard's loading UI (which module's skeleton to draw) — neither
+  // can see the URL otherwise (lib/launch-route.ts). `set`, so a client cannot
+  // supply its own.
+  requestHeaders.set(REQUEST_URL_HEADER, request.nextUrl.pathname + request.nextUrl.search);
 
   const response = needsSession(request.nextUrl.pathname)
     ? await updateSession(request, requestHeaders)

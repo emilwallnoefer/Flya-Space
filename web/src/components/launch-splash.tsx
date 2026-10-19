@@ -113,6 +113,30 @@ function whenViewTransitionDone(): Promise<unknown> {
 
 type Phase = "in" | "fade" | "done";
 
+/**
+ * Rendered by the root layout in place of the splash on the pages without an
+ * opening shot (lib/launch-route.ts: a reload inside a module, Settings,
+ * Onboarding). Two things still have to happen there: the opening counts as
+ * over at once, or the first-load popups that wait on `whenLaunchDone()`
+ * would wait forever; and the launch page's hand-over marks are cleared, as
+ * the splash would have, so a later reload cannot resume an entrance that
+ * never showed. Renders nothing.
+ */
+export function LaunchSkipped() {
+  useEffect(() => {
+    const html = document.documentElement;
+    html.style.removeProperty("--launch-elapsed");
+    delete html.dataset.launchWarm;
+    try {
+      sessionStorage.removeItem("ma_launch");
+    } catch {
+      // Storage unavailable: nothing to clear.
+    }
+    markLaunchDone();
+  }, []);
+  return null;
+}
+
 export function LaunchSplash() {
   const [phase, setPhase] = useState<Phase>("in");
   const wordRef = useRef<HTMLDivElement>(null);

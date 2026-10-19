@@ -2,7 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
-import { LaunchSplash } from "@/components/launch-splash";
+import { LaunchSkipped, LaunchSplash } from "@/components/launch-splash";
+import { parseRequestUrl, REQUEST_URL_HEADER, showsLaunchSplash } from "@/lib/launch-route";
 import { MotionProvider } from "@/components/motion-provider";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 import { createClient } from "@/lib/supabase/server";
@@ -119,6 +120,11 @@ export default async function RootLayout({
   // form the browser would refuse.
   const requestHeaders = await headers();
   const nonce = requestHeaders.get(NONCE_HEADER);
+  // The opening shot plays on the workspace home and on login only; a reload
+  // inside a module, or on Settings or Onboarding, gets that view's skeleton
+  // with nothing in front of it (lib/launch-route.ts). Decided here, on the
+  // server, so the overlay is never in the HTML of a page that skips it.
+  const splash = showsLaunchSplash(parseRequestUrl(requestHeaders.get(REQUEST_URL_HEADER)));
 
   // When the account has a saved theme, apply it as data-* on <html> at SSR time
   // (authoritative, no flash) and flag the source so the bootstrap reconciles
@@ -172,10 +178,11 @@ export default async function RootLayout({
         <a href="#main-content" className="skip-link">
           Skip to content
         </a>
-        <LaunchSplash />
+        {splash ? <LaunchSplash /> : <LaunchSkipped />}
         {/* .launch-stage: the page as the launch camera sees it. The splash
             transforms it so the header title fills the screen, then pulls
-            back (components/launch-splash.tsx). A plain block otherwise. */}
+            back (components/launch-splash.tsx). A plain block otherwise,
+            including on every page without a splash. */}
         <MotionProvider>
           <div className="launch-stage">{children}</div>
         </MotionProvider>

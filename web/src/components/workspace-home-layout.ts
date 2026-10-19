@@ -107,5 +107,28 @@ export const HOME_CARDS = [
   },
 ] as const;
 
+/**
+ * The open module's name in the header row above it ("← Workspace overview …
+ * Time Tracker"), shared with the module skeletons in `loading.tsx`. Admin's
+ * label depends on the role (`adminModuleLabel` in the shell); this is the
+ * admin's own, which the skeleton uses before the role is known.
+ */
+export const MODULE_VIEW_LABELS = {
+  mail: "Mail Composer",
+  time: "Time Tracker",
+  fleet: "Fleet (beta)",
+  planning: HOME_CARDS[3].title,
+  fleetsheet: HOME_CARDS[4].title,
+  roaddays: HOME_CARDS[5].title,
+  admin: "Admin",
+  settings: "Settings",
+} as const;
+
+/** The row above an open module: the way back to the home on the left, the module's name on the right. */
+export const MODULE_VIEW_HEADER_CLASS = "flex flex-wrap items-center justify-between gap-3 border-b border-glass/[0.07] pb-4";
+export const MODULE_VIEW_BACK_CLASS =
+  "group inline-flex items-center gap-2 rounded-xl border border-glass/10 bg-overlay/40 px-3.5 py-2 text-xs font-medium text-ink-3 shadow-sm shadow-shade/20 backdrop-blur-sm transition hover:border-accent/25 hover:bg-glass/[0.06] hover:text-ink";
+export const MODULE_VIEW_LABEL_CLASS = "text-[11px] text-ink-5";
+
 export const CHAT_PILL_CLASS =
   "fixed bottom-safe right-4 z-[125] inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/95 px-4 py-3 text-sm font-semibold text-slate-900 shadow-[0_18px_36px_-12px_rgba(34,211,238,0.55)] backdrop-blur transition hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

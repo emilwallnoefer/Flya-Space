@@ -28,6 +28,10 @@ import {
   MODULE_CARD_DESCRIPTION_CLASS,
   MODULE_CARD_ICON_CLASS,
   MODULE_CARD_TITLE_CLASS,
+  MODULE_VIEW_BACK_CLASS,
+  MODULE_VIEW_HEADER_CLASS,
+  MODULE_VIEW_LABEL_CLASS,
+  MODULE_VIEW_LABELS,
 } from "@/components/workspace-home-layout";
 import { MailComposerPanel } from "@/components/mail-composer/mail-composer-panel";
 import { useMailComposer } from "@/components/mail-composer/use-mail-composer";
@@ -534,36 +538,22 @@ export function DashboardShell({
         />
 
         {showComposer ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-glass/[0.07] pb-4">
+          <div className={MODULE_VIEW_HEADER_CLASS}>
             <button
               type="button"
               onClick={() => {
                 playUiSound("switchWhoosh");
                 setShowComposer(false);
               }}
-              className="group inline-flex items-center gap-2 rounded-xl border border-glass/10 bg-overlay/40 px-3.5 py-2 text-xs font-medium text-ink-3 shadow-sm shadow-shade/20 backdrop-blur-sm transition hover:border-accent/25 hover:bg-glass/[0.06] hover:text-ink"
+              className={MODULE_VIEW_BACK_CLASS}
             >
               <span className="transition group-hover:-translate-x-0.5" aria-hidden>
                 ←
               </span>
               Workspace overview
             </button>
-            <p className="text-[11px] text-ink-5">
-              {activeModule === "mail"
-                ? "Mail Composer"
-                : activeModule === "time"
-                  ? "Time Tracker"
-                  : activeModule === "fleet"
-                    ? "Fleet (beta)"
-                    : activeModule === "planning"
-                      ? HOME_CARDS[3].title
-                    : activeModule === "fleetsheet"
-                      ? HOME_CARDS[4].title
-                    : activeModule === "roaddays"
-                      ? HOME_CARDS[5].title
-                    : activeModule === "admin"
-                      ? adminModuleLabel
-                      : "Settings"}
+            <p className={MODULE_VIEW_LABEL_CLASS}>
+              {activeModule === "admin" ? adminModuleLabel : MODULE_VIEW_LABELS[activeModule]}
             </p>
           </div>
         ) : null}
