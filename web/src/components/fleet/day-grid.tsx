@@ -432,7 +432,7 @@ const AssetRow = memo(function AssetRow({
                 i
               </button>
             ) : null}
-            {/* Admin removal sits in the bottom-right corner, under the "i". */}
+            {/* Admin removal sits in the top-left corner, across from the "i". */}
             {canRemove && reservation && reservation.status === "reserved" ? (
               <button
                 type="button"
@@ -441,7 +441,7 @@ const AssetRow = memo(function AssetRow({
                 aria-label={`Remove booking: ${asset.name}, ${reservation.holder_name}, ${formatDay(
                   reservation.start_date,
                 )}`}
-                className="absolute bottom-0 right-0 z-[3] flex h-3.5 w-3.5 items-center justify-center rounded-br-[3px] rounded-tl-[3px] bg-slate-900/80 text-[11px] leading-none text-rose-200 opacity-0 transition hover:bg-rose-500 hover:text-white focus-visible:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent group-hover/cell:opacity-100"
+                className="absolute left-0 top-0 z-[3] flex h-3.5 w-3.5 items-center justify-center rounded-br-[3px] rounded-tl-[3px] bg-slate-900/80 text-[11px] leading-none text-rose-200 opacity-0 transition hover:bg-rose-500 hover:text-white focus-visible:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent group-hover/cell:opacity-100"
               >
                 −
               </button>
