@@ -551,6 +551,35 @@ describe("picking up before the booking starts moves its start to today", () => 
     expect(res.tables.fleet_reservations[0].start_date).toBe("2026-09-16");
   });
 
+  it("frees a booking picked up early before this rule existed", async () => {
+    // Out since Sun 13th on a Wed–Fri booking whose start was never moved.
+    const stuck = () => ({
+      viewer: MEMBER,
+      tables: {
+        fleet_assets: assets({ status: "out", current_holder_user_id: MEMBER.id }),
+        fleet_reservations: [
+          reservation({
+            status: "picked_up",
+            start_date: "2026-09-16",
+            end_date: "2026-09-18",
+            picked_up_at: "2026-09-13T07:00:00.000Z",
+          }),
+        ],
+      },
+    });
+    const res = await post(stuck(), { action: "check_in", reservation_id: RES_ID });
+    expect(res.status).toBe(200);
+    const booking = res.tables.fleet_reservations[0];
+    expect(booking.status).toBe("returned");
+    expect(booking.returned_on).toBe(TODAY);
+    // The record now says when it really went out.
+    expect(booking.start_date).toBe("2026-09-13");
+
+    // Still never earlier than the pickup itself.
+    const tooEarly = await post(stuck(), { action: "check_in", reservation_id: RES_ID, returned_on: "2026-09-12" });
+    expect(tooEarly.status).toBe(400);
+  });
+
   it("leaves a booking that has already started alone", async () => {
     const res = await post(
       {

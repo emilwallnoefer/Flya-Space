@@ -84,7 +84,7 @@ export async function loadReservation(admin: Admin, id: string) {
   const { data, error } = await admin
     .from("fleet_reservations")
     .select(
-      "id, asset_id, user_id, start_date, end_date, status, destination, fleet_assets(name, status, pooled, current_location, current_holder_user_id, current_holder_label)",
+      "id, asset_id, user_id, start_date, end_date, status, destination, picked_up_at, fleet_assets(name, status, pooled, current_location, current_holder_user_id, current_holder_label)",
     )
     .eq("id", id)
     .maybeSingle();
