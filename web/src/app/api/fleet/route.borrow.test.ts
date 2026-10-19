@@ -250,7 +250,8 @@ describe("a borrowed unit changes hands and comes back", () => {
     expect(res.status).toBe(200);
     expect(res.tables.fleet_reservations.find((r) => r.id === PENDING)).toMatchObject({ status: "returned", closed_reason: "returned" });
     const unit = res.tables.fleet_assets.find((a) => a.id === ASSIGNED_ID)!;
-    expect(unit).toMatchObject({ status: "out", current_holder_user_id: null, current_holder_label: "Charles", current_location: "Basel", pooled: false });
+    // Back with its assignee, and with no location: assigned material travels unlogged.
+    expect(unit).toMatchObject({ status: "out", current_holder_user_id: null, current_holder_label: "Charles", current_location: null, pooled: false });
     const reopened = res.tables.fleet_reservations.filter((r) => r.asset_id === ASSIGNED_ID && r.status === "picked_up");
     expect(reopened).toHaveLength(1);
     expect(reopened[0]).toMatchObject({ user_id: null, holder_label: "Charles", source: "sheet_import", start_date: "2026-09-14", end_date: "2026-10-14" });
