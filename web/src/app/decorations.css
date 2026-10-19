@@ -1244,18 +1244,18 @@ html[data-mode="neu"] :is(input, textarea, select):focus-visible {
  * *base* bg-glass / bg-accent utility only, not `hover:bg-…` on ghost buttons,
  * which stay flat so the surface stays calm. Home cards and menu items have
  * their own treatment below. */
-html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]):not([role="switch"]) {
+html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]):not([role="switch"]):not(.choice-chip) {
   border-color: transparent;
   background-color: rgb(var(--paper-3));
   background-image: none;
   color: var(--ink);
   box-shadow: var(--neu-raised-sm);
 }
-html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]):not([role="switch"]):hover {
+html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]):not([role="switch"]):not(.choice-chip):hover {
   background-color: rgb(var(--paper-3));
   color: var(--ink);
 }
-html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]):not([role="switch"]):active:not(:disabled) {
+html[data-mode="neu"] :is(button, a):is([class^="bg-glass"], [class*=" bg-glass"], [class^="bg-accent"], [class*=" bg-accent"]):not(.home-card):not([role="tab"]):not([aria-pressed]):not([aria-current]):not([role="switch"]):not(.choice-chip):active:not(:disabled) {
   box-shadow: var(--neu-inset);
   transform: none;
   filter: none;
@@ -1342,6 +1342,30 @@ html[data-mode="neu"] :is(button, a):is([role="tab"][aria-selected="true"], [ari
 html[data-mode="neu"] button[aria-current] {
   width: calc(100% - 1rem);
   margin: 0.125rem 0.5rem;
+}
+/* Fleet → Manage choice chips (type, model, owner group, people …) follow the
+ * same convention: the chosen chip is the one raised block, every other chip
+ * lies flush on the surface. They carry aria-checked (radio groups) or
+ * aria-pressed (pick-or-type groups) and keep their own small radius. */
+html[data-mode="neu"] .choice-chip {
+  border-color: transparent;
+  background-color: transparent;
+  background-image: none;
+  color: var(--ink-3);
+  box-shadow: none;
+}
+html[data-mode="neu"] .choice-chip:hover {
+  background-color: rgb(var(--paper-1) / 0.5);
+  color: var(--ink);
+}
+html[data-mode="neu"] .choice-chip:is([aria-checked="true"], [aria-pressed="true"]) {
+  background-color: rgb(var(--paper-3));
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: var(--neu-raised-sm);
+}
+html[data-mode="neu"] .choice-chip:is([aria-checked="true"], [aria-pressed="true"]) .text-ink-5 {
+  color: var(--ink-3);
 }
 /* The selected fleet day cell is an accent fill under dark text; the accent is
  * dark here, so the text goes light. */

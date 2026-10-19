@@ -28,7 +28,7 @@ export type Choice<T extends string> = {
 
 function chipClass(selected: boolean): string {
   return [
-    "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition ease-fluid",
+    "choice-chip inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition ease-fluid",
     "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent/80",
     selected
       ? "border-accent/50 bg-accent-deep/30 text-accent-soft"
@@ -138,6 +138,7 @@ export function ChoiceOrCustom({
               setCustom(false);
               onChange("");
             }}
+            aria-pressed={!custom && value === ""}
             className={chipClass(!custom && value === "")}
           >
             {emptyLabel}
@@ -152,6 +153,7 @@ export function ChoiceOrCustom({
               setCustom(false);
               onChange(option);
             }}
+            aria-pressed={!custom && value === option}
             className={chipClass(!custom && value === option)}
           >
             {option}
@@ -166,8 +168,9 @@ export function ChoiceOrCustom({
             if (!custom) onChange("");
             setCustom(true);
           }}
-          className={chipClass(custom)}
+          aria-pressed={custom}
           aria-expanded={custom}
+          className={chipClass(custom)}
         >
           + Other
         </button>
