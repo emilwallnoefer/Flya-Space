@@ -24,6 +24,13 @@ export async function handleUpdateAsset(
   }
   // Moving a unit into the pool means nobody holds it any more.
   if (patch.pooled === true) patch.current_holder_label = null;
+  // Leaving the pool clears the location: an assigned unit travels with its
+  // person and nobody logs where. The dialog sends "" already; this holds for
+  // any client.
+  if (patch.pooled === false) {
+    patch.current_location = null;
+    patch.location_confirmed_at = null;
+  }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ ok: true, message: "Nothing to change." });
   }

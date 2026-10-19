@@ -48,15 +48,14 @@ export async function handleCheckIn(
 
   const asset = reservation.asset;
   // A borrowed unit goes back to the person it is assigned to, not to a shelf:
-  // the asset is recorded out with them again, where it was, and their own open
-  // booking is re-opened below.
+  // the asset is recorded out with them again, with no location (assigned
+  // material travels and nobody logs where), and their own open booking is
+  // re-opened below.
   const borrow = asset?.pooled === false;
   const assignee = borrow ? await assigneeOf(admin, reservation.id, reservation.asset_id) : null;
   // A pooled unit goes back to the HQ unless the person says otherwise — there
   // is no per-unit home any more, every pooled unit lives at the same place.
-  const landingSpot = borrow
-    ? (payload.location ?? asset?.current_location ?? null)
-    : (payload.location ?? FLEET_HOME_LOCATION);
+  const landingSpot = borrow ? null : (payload.location ?? FLEET_HOME_LOCATION);
   // Free the unit only if this booking is what holds it. If someone else is
   // recorded as having it, closing this booking must not reset their unit to
   // available-at-home while it is still in their hands.
@@ -83,8 +82,8 @@ export async function handleCheckIn(
                   status: "out",
                   current_holder_user_id: assignee?.user_id ?? null,
                   current_holder_label: assignee?.holder_label ?? asset?.current_holder_label ?? "Assigned",
-                  current_location: landingSpot,
-                  location_confirmed_at: new Date().toISOString(),
+                  current_location: null,
+                  location_confirmed_at: null,
                 }
               : {
                   status: "available",

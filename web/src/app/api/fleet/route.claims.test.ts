@@ -149,6 +149,20 @@ describe("closing a booking when material leaves the pool", () => {
     expect(original?.status).toBe("returned");
     expect(original?.returned_on).toBe(TODAY);
   });
+
+  it("clears the location: assigned material travels with its person, unlogged", async () => {
+    const res = await post(
+      {
+        viewer: ADMIN,
+        adminEmails: [ADMIN.email!],
+        tables: { fleet_assets: assets({ current_location: "Pilots HQ Lausanne" }), fleet_reservations: [] },
+      },
+      { action: "assign", asset_id: ASSET_ID, holder_label: "Charles" },
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.tables.fleet_assets[0]).toMatchObject({ pooled: false, current_location: null, location_confirmed_at: null });
+  });
 });
 
 describe("an admin removing a booking from the calendar", () => {

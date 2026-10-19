@@ -70,7 +70,6 @@ const assignSchema = z.object({
   asset_id: z.string().uuid(),
   /** Who it goes to. A free-text name is fine — they may not have an account. */
   holder_label: z.string().trim().min(1).max(160),
-  location: z.string().trim().max(160).optional(),
   note: z.string().trim().max(280).optional(),
 });
 

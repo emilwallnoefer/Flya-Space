@@ -39,7 +39,10 @@ export async function handleAssign(
   if (readError) throw new Error(readError.message);
   if (!asset) return NextResponse.json({ error: "Asset not found." }, { status: 404 });
 
-  const location = payload.location ?? asset.current_location ?? null;
+  // An assigned unit travels with its person and nobody logs where; a
+  // location on it would be wrong by morning, so it carries none (owner
+  // decision, 2026-10-19). The event keeps where it left from.
+  const location = null;
 
   // Every live booking has to go: the unit is leaving the pool, and leaving a
   // reservation pointing at it would strand that person on a date they can no
@@ -69,7 +72,7 @@ export async function handleAssign(
       current_holder_user_id: null,
       current_holder_label: payload.holder_label,
       current_location: location,
-      location_confirmed_at: new Date().toISOString(),
+      location_confirmed_at: null,
     })
     .eq("id", payload.asset_id);
   if (assetError) throw new Error(assetError.message);
