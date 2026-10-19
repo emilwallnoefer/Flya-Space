@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type TouchEvent } from "react";
+import { AnimatePresence, m, type Variants } from "framer-motion";
 import { useTimeTracker, type TimeTrackerState } from "@/components/time-tracker/use-time-tracker";
 import { addDays, fmtHM, fmtSignedHM, fromDateKey, getMonday, TARGET_MINS, toDateKey, type DayData, type WeekResponse } from "@/components/time-tracker/types";
 import { isPremiumOvertimeDay, isWeekendDate } from "@/lib/time-tracker-rules";
@@ -13,7 +14,8 @@ import { MobileWeekPicker } from "./mobile-week-picker";
 /**
  * The phone's Time Tracker: a week as a plain list of seven rows, two stat
  * chips, and a bottom sheet to log a day (where the quick fills live too).
- * Swipe sideways to change week. Same hook as the desktop (`useTimeTracker`),
+ * Swipe sideways to change week: the day list follows the finger and slides
+ * across to the next week. Same hook as the desktop (`useTimeTracker`),
  * so saves, rollbacks, travel lookups and the overtime bank behave the same.
  */
 export function MobileTimeScreen({
@@ -50,12 +52,24 @@ export function MobileTimeScreen({
   const days = activeWeekData?.days ?? [];
   const stepWeek = (by: number) => setWeekStart(toDateKey(addDays(monday, by * 7)));
 
-  // Swipe sideways anywhere on the screen to step a week; left = next week.
-  // Ignored while a sheet is open, since its touches bubble up here too.
+  // Which way the last week change went (+1 later, -1 earlier), so the day
+  // list slides in from the matching side whatever changed the week (swipe,
+  // chevrons, Today, the picker). Updated during render, React's pattern for
+  // state derived from a changing value.
+  const [slide, setSlide] = useState({ week: weekStart, dir: 0 });
+  if (slide.week !== weekStart) setSlide({ week: weekStart, dir: weekStart > slide.week ? 1 : -1 });
+
+  // A drag that ends on a day row must not also open that day.
+  const draggedRef = useRef(false);
+
+  // Swipe sideways elsewhere on the screen (chips, week row) to step a week;
+  // the day list handles its own drag. Ignored while a sheet is open, since
+  // its touches bubble up here too.
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const onTouchStart = (e: TouchEvent) => {
     const t = e.touches[0];
-    touchStart.current = e.touches.length === 1 && t ? { x: t.clientX, y: t.clientY } : null;
+    const inList = e.target instanceof Element && e.target.closest("[data-week-days]");
+    touchStart.current = e.touches.length === 1 && t && !inList ? { x: t.clientX, y: t.clientY } : null;
   };
   const onTouchEnd = (e: TouchEvent) => {
     const start = touchStart.current;
@@ -103,18 +117,59 @@ export function MobileTimeScreen({
 
       {/* No placeholder rows while the week loads: the group stays empty and the
           real rows fade in one after another, on the same reveal cadence as the
-          desktop day cards (the hook's revealedDayCount). */}
-      <MobileGroup title={loading && !activeWeekData ? "Loading…" : "Days"}>
-        {days.map((day, i) => (
-          <DayRow key={day.date} day={day} state={state} isToday={day.date === calendarTodayKey} revealed={i < revealedDayCount} />
-        ))}
-      </MobileGroup>
+          desktop day cards (the hook's revealedDayCount). After a week change
+          the rows arrive with the slide instead, all at once. */}
+      <div className="relative -mx-4 overflow-hidden px-4">
+        <AnimatePresence initial={false} mode="popLayout" custom={slide.dir}>
+          <m.div
+            key={weekStart}
+            data-week-days
+            custom={slide.dir}
+            variants={WEEK_SLIDE}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            drag={editorOpen || pickerOpen ? false : "x"}
+            dragDirectionLock
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.7}
+            onPointerDown={() => (draggedRef.current = false)}
+            onDragStart={() => (draggedRef.current = true)}
+            onDragEnd={(_event, info) => {
+              const far = Math.abs(info.offset.x) > 80 || Math.abs(info.velocity.x) > 500;
+              if (far && Math.abs(info.offset.x) > 16) stepWeek(info.offset.x < 0 ? 1 : -1);
+            }}
+            onClickCapture={(e) => {
+              if (!draggedRef.current) return;
+              draggedRef.current = false;
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
+            <MobileGroup title={loading && !activeWeekData ? "Loading…" : "Days"}>
+              {days.map((day, i) => (
+                <DayRow key={day.date} day={day} state={state} isToday={day.date === calendarTodayKey} revealed={slide.dir !== 0 || i < revealedDayCount} />
+              ))}
+            </MobileGroup>
+          </m.div>
+        </AnimatePresence>
+      </div>
 
       <MobileDaySheet state={state} open={editorOpen} onClose={returnToWeekdays} travelDebug={data?.travel_debug} />
       <MobileWeekPicker state={state} open={pickerOpen} onClose={() => setPickerOpen(false)} />
     </div>
   );
 }
+
+const WEEK_EASE = [0.32, 0.72, 0, 1] as const;
+
+// Out the side the finger pushed toward, in from the other. `dir` is the week
+// change (+1 later), so a later week enters from the right.
+const WEEK_SLIDE: Variants = {
+  enter: (dir: number) => ({ x: dir >= 0 ? "100%" : "-100%", opacity: 0.4 }),
+  center: { x: 0, opacity: 1, transition: { duration: 0.34, ease: WEEK_EASE } },
+  exit: (dir: number) => ({ x: dir >= 0 ? "-100%" : "100%", opacity: 0.4, transition: { duration: 0.34, ease: WEEK_EASE } }),
+};
 
 function StatChip({ label, value, detail, tone = "default" }: { label: string; value: string; detail?: string; tone?: "default" | "accent" | "warn" }) {
   return (
@@ -145,12 +200,22 @@ function DayRow({ day, state, isToday, revealed }: { day: DayData; state: TimeTr
   // A plain row: the day, what was logged, the total. Filling a day
   // (compensate / standard day) lives in the day sheet, not here.
   return (
-    <button type="button" onClick={() => handleEditDay(day.date)} className={cn("flex w-full items-center gap-3 px-4 py-2.5 text-left transition-opacity duration-300 ease-out", isToday && "bg-accent/[0.06]", revealed ? "opacity-100" : "pointer-events-none opacity-0")}>
+    <button type="button" onClick={() => handleEditDay(day.date)} className={cn(
+        "relative flex w-full items-center gap-3 px-4 py-2.5 text-left transition-opacity duration-300 ease-out",
+        isToday && "bg-accent/[0.14] before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-accent",
+        revealed ? "opacity-100" : "pointer-events-none opacity-0",
+      )}
+      aria-current={isToday ? "date" : undefined}
+    >
       <span className="w-11 shrink-0">
         <span className={cn("block text-[11px] font-semibold uppercase tracking-wide", isToday ? "text-accent-soft" : weekend ? "text-ink-5" : "text-ink-4")}>
-          {date.toLocaleDateString(undefined, { weekday: "short" })}
+          {isToday ? "Today" : date.toLocaleDateString(undefined, { weekday: "short" })}
         </span>
-        <span className={cn("block text-xl font-semibold leading-tight tabular-nums", isToday ? "text-accent-soft" : "text-ink")}>{date.getDate()}</span>
+        {isToday ? (
+          <span className="mt-0.5 grid h-7 w-7 place-items-center rounded-full bg-accent text-base font-bold tabular-nums text-slate-950">{date.getDate()}</span>
+        ) : (
+          <span className="block text-xl font-semibold leading-tight tabular-nums text-ink">{date.getDate()}</span>
+        )}
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">
