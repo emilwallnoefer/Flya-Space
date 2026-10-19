@@ -1,6 +1,6 @@
 # Fleet edge cases — masterplan
 
-Status: approved 2026-10-18. P1 (#252), P2 (#253), P3 (#254) merged 2026-10-18; P4 + P5 merged 2026-10-19. **Revised 2026-10-19 (section D, migration `-5.sql`):** interchangeability is by **model** (`model`, spelling folded by `modelKey`), not by an admin-set kind — `kind_key` shipped in P4 and was withdrawn the same day, the column stays unread until a housekeeping migration drops it — and **assigned material can be requested, with the assignee's approval**. Keep this file as the record of *why* each rule exists.
+Status: approved 2026-10-18. P1 (#252), P2 (#253), P3 (#254) merged 2026-10-18; P4 + P5 merged 2026-10-19. **Revised 2026-10-19 (section D, migration `-5.sql`):** interchangeability is by **model** (`model`, spelling folded by `modelKey`), not by an admin-set kind — `kind_key` shipped in P4 and was withdrawn the same day; `2026-10-19-fleet-drop-kind-key.sql` removes the column — and **assigned material can be requested, with the assignee's approval**. Keep this file as the record of *why* each rule exists.
 
 Decided with Emil 2026-10-18: collisions are resolved by the **next booker, never automatically**. Decided 2026-10-19: **every unit of the same model stands in for every other** (first said "type"; changed to model the same hour because every drone is one type), and **assigned units can be asked for but need the assignee's approval** (the earlier "admin-set `kind_key`" is superseded). Implemented phase by phase, one PR each (see Phases).
 
