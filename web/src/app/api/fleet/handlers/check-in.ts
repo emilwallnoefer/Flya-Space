@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { restoreAssignment } from "@/lib/fleet-assignment";
-import { fetchAssetSpans, fetchReliability, fetchUserNames, recordAssetEvent } from "@/lib/fleet-queries";
+import {
+  fetchAssetSpans,
+  fetchReliability,
+  fetchUserNames,
+  recordAssetEvent,
+  todayInZurich,
+} from "@/lib/fleet-queries";
 import { sendFleetNotice } from "@/lib/fleet-notify";
 import { FLEET_HOME_LOCATION, isBlocking } from "@/lib/fleet-rules";
 import { loadReservation, promoteWaitlist, settleRequestsFor, type Admin, type FleetActionContext } from "./shared";
@@ -39,7 +45,13 @@ export async function handleCheckIn(
   if (returnedOn > today) {
     return NextResponse.json({ error: "The return date cannot be in the future." }, { status: 400 });
   }
-  if (returnedOn < reservation.start_date) {
+  // A booking picked up before its first day — before `check_out` learned to
+  // move the start — really began on the pickup day. Without this it could not
+  // come back until the original start.
+  const pickedUpOn = reservation.picked_up_at ? todayInZurich(new Date(reservation.picked_up_at)) : null;
+  const startedOn =
+    pickedUpOn && pickedUpOn < reservation.start_date ? pickedUpOn : reservation.start_date;
+  if (returnedOn < startedOn) {
     return NextResponse.json(
       { error: "The return date cannot be before the booking started." },
       { status: 400 },
@@ -71,6 +83,7 @@ export async function handleCheckIn(
         returned_at: new Date().toISOString(),
         // A Zurich date, so an evening check-in is not counted as the next day.
         returned_on: returnedOn,
+        ...(startedOn !== reservation.start_date ? { start_date: startedOn } : {}),
       })
       .eq("id", payload.reservation_id),
     holdsTheUnit
