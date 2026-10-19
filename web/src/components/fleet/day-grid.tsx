@@ -25,10 +25,10 @@ import type { FleetAsset, FleetReservation } from "./types";
  * the material, so "where is it on the 14th" is answerable at a glance, which
  * the merged-cell spreadsheet grid never managed. A booked day is selectable
  * too: a span that runs over someone's booking is what the waitlist is for, so
- * refusing the click only forced people to pick the days around it. A click
- * that starts on a booking still opens it, as it always did, and selects the
- * day underneath; the composer decides from the span whether it books or
- * waitlists.
+ * refusing the click only forced people to pick the days around it. The
+ * composer decides from the span whether it books or waitlists. Opening a
+ * booking (where it went, what for) is a small "i" that appears in the cell's
+ * top-right corner on hover — a click on the day itself always selects.
  *
  * Days rather than weeks because most missions are two or three days long.
  * Booking by the week meant a Tuesday–Wednesday job blocked the unit from
@@ -311,14 +311,8 @@ const AssetRow = memo(function AssetRow({
         if (state.reservation) onOpenReservation(state.reservation);
         return;
       }
-      // A click that STARTS on a live booking opens it (where it went, what
-      // for) and selects the day as well, so closing the detail leaves a span
-      // the composer can waitlist. Extending an existing selection across a
-      // booking stays quiet — the second click is about the days, not the
-      // booking, and a dialog on every extension click would be in the way.
-      if (state.reservation && !state.isHistory && !rowSelection) {
-        onOpenReservation(state.reservation);
-      }
+      // A booked day on a selectable day is selected like a free one. Opening
+      // the booking is the small "i" in the cell's corner, not the click.
 
       // Second click in the same row extends the run; anything else starts fresh.
       if (rowSelection) {
@@ -389,7 +383,7 @@ const AssetRow = memo(function AssetRow({
                   ? `${asset.name}, ${formatDay(day.key)}: ${
                       state.isHistory ? "was with" : "booked by"
                     } ${reservation.holder_name}${
-                      state.bookable && !state.isHistory ? ", click to open it or join the waitlist" : ""
+                      state.bookable && !state.isHistory ? ", click to join the waitlist" : ""
                     }`
                   : `${asset.name}, ${formatDay(day.key)}: ${
                       state.bookable ? "free, click to book" : "not bookable"
@@ -422,6 +416,23 @@ const AssetRow = memo(function AssetRow({
                 </span>
               ) : null}
             </button>
+            {/* The booking's details, on hover in the top-right corner. The
+                day itself selects on click, so this is the one way in from the
+                grid to "where did it go, what for". */}
+            {reservation ? (
+              <button
+                type="button"
+                onClick={() => onOpenReservation(reservation)}
+                title={`Open booking — ${reservation.holder_name}`}
+                aria-label={`Open booking: ${asset.name}, ${reservation.holder_name}, ${formatDay(
+                  reservation.start_date,
+                )}`}
+                className="absolute right-0 top-0 z-[3] flex h-3.5 w-3.5 items-center justify-center rounded-bl-[3px] rounded-tr-[3px] bg-slate-900/80 font-serif text-[10px] italic leading-none text-sky-200 opacity-0 transition hover:bg-sky-500 hover:text-white focus-visible:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent group-hover/cell:opacity-100"
+              >
+                i
+              </button>
+            ) : null}
+            {/* Admin removal sits in the bottom-right corner, under the "i". */}
             {canRemove && reservation && reservation.status === "reserved" ? (
               <button
                 type="button"
@@ -430,7 +441,7 @@ const AssetRow = memo(function AssetRow({
                 aria-label={`Remove booking: ${asset.name}, ${reservation.holder_name}, ${formatDay(
                   reservation.start_date,
                 )}`}
-                className="absolute right-0 top-0 z-[3] flex h-3.5 w-3.5 items-center justify-center rounded-bl-[3px] rounded-tr-[3px] bg-slate-900/80 text-[11px] leading-none text-rose-200 opacity-0 transition hover:bg-rose-500 hover:text-white focus-visible:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent group-hover/cell:opacity-100"
+                className="absolute bottom-0 right-0 z-[3] flex h-3.5 w-3.5 items-center justify-center rounded-br-[3px] rounded-tl-[3px] bg-slate-900/80 text-[11px] leading-none text-rose-200 opacity-0 transition hover:bg-rose-500 hover:text-white focus-visible:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent group-hover/cell:opacity-100"
               >
                 −
               </button>
