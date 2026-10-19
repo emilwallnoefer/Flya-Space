@@ -1,8 +1,8 @@
 # Fleet edge cases — masterplan
 
-Status: approved 2026-10-18. P1 (#252), P2 (#253), P3 (#254) merged 2026-10-18; P4 + P5 merged 2026-10-19. One deviation from the plan below: `kind_key` is a slug on `fleet_assets` picked from the keys in use (no separate `fleet_kinds` table). Keep this file as the record of *why* each rule exists.
+Status: approved 2026-10-18. P1 (#252), P2 (#253), P3 (#254) merged 2026-10-18; P4 + P5 merged 2026-10-19. **Revised 2026-10-19 (section D, migration `-5.sql`):** interchangeability is by **type** (`category`), not by an admin-set kind — `kind_key` shipped in P4 and was withdrawn the same day, the column stays unread until a housekeeping migration drops it — and **assigned material can be requested, with the assignee's approval**. Keep this file as the record of *why* each rule exists.
 
-Decided with Emil 2026-10-18: collisions are resolved by the **next booker, never automatically**; interchangeable units are grouped by an **admin-set `kind_key`** on each asset. Implemented phase by phase, one PR each (see Phases).
+Decided with Emil 2026-10-18: collisions are resolved by the **next booker, never automatically**. Decided 2026-10-19: **every unit of the same type stands in for every other**, and **assigned units can be asked for but need the assignee's approval** (the earlier "admin-set `kind_key`" is superseded). Implemented phase by phase, one PR each (see Phases).
 
 ## Context
 
@@ -54,14 +54,19 @@ Grouped by who is hurt. Each row names the mechanism from the phases below.
 | C3 | Waitlist entries never expire | Cron cancels waitlisted rows whose `end_date` < today (P1) |
 | C4 | Someone cancels; the sibling the waiter moved to is now worse | Out of scope; waiters see the free unit in the grid |
 
-### D. Suggesting another unit of the same kind
+### D. Suggesting another unit of the same type
+
+Revised 2026-10-19: "same kind" is the unit's **type** (`fleet_assets.category`, the "Type" field in Manage). Nothing is set per unit. The P4 `kind_key` rows below are kept struck through for the record.
 
 | # | Case | Solution |
 |---|---|---|
-| D1 | Reserve refused on overlap | Refusal payload carries `alternatives: [{asset_id, name, location}]`, free for the exact span, same `kind_key`, bookable; UI offers **Book SVA-330 instead** next to the waitlist button (P4) |
-| D2 | A2 / A4 notices | Same list embedded; **Move my booking** calls the new `move_booking` action, atomic under the exclusion constraint (P4) |
+| D1 | Reserve refused on overlap | Refusal payload carries `alternatives: [{asset_id, name, location, assigned, holder}]`, free for the exact span, same type; pooled units first, then assigned ones. UI offers **Book SVA-330 instead** (pooled) or **Ask Charles for SVA-412** (assigned) next to the waitlist button (P4, revised) |
+| D2 | A2 / A4 notices | Same list embedded; **Move my booking** calls `move_booking` (pooled targets only), atomic under the exclusion constraint; **Ask Y for X** files a borrow request (D5) for the recipient's own days (P4, revised) |
 | D3 | Sibling is free but at another location | Shown with the location, never hidden; the person decides (P4) |
-| D4 | Asset has no `kind_key` yet | No alternatives, no error; Manage shows an "Unassigned kind" count so admins fill it (P4) |
+| ~~D4~~ | ~~Asset has no `kind_key` yet~~ | ~~No alternatives; Manage shows an "Unassigned kind" count~~ — superseded: every unit has a type, so every unit has siblings |
+| D5 | Wanted unit is **assigned** to someone | **Request, never book**: `reserve` on an assigned unit writes the booking as `waitlisted` (blocks nobody) plus a `fleet_booking_requests` row of kind `borrow` to the assignee (`current_holder_user_id`), or to the admins when the name on the unit has no account. They **approve** (the row becomes `reserved`; the assignment's own open booking ends the day before — `yieldAssignmentFor`) or **decline** (the row is cancelled). The requester is told either way |
+| D6 | Borrowed unit changes hands | The borrower's `check_out` takes it from the assignee (the "still out with X" refusal does not apply on an assigned unit; the assignee's booking closes as returned). Their `check_in` puts it back with the assignee — asset `out` again, holder restored from the request, location kept — and re-opens the assignee's booking (`restoreAssignment`, 30 days, stopping before the next approved borrow). A cancelled approved borrow restores it too |
+| D7 | Pending borrow lapses | The daily sweep closes the `waitlisted` row once its days have passed (`expired`), and the cron expires the request; `promoteWaitlist` never promotes a `waitlisted` row on an assigned unit |
 
 ### E. Concurrency and trust (must hold throughout)
 
@@ -108,6 +113,7 @@ Grouped by who is hurt. Each row names the mechanism from the phases below.
 - New action `move_booking {reservation_id, asset_id}`: owner or admin; same dates; `checkReservation` on the target; update `asset_id`, event `moved_booking`, `closed_reason` untouched (same booking, new unit); on `23P01` friendly 409 with refreshed alternatives.
 - Notices from P3 embed `alternatives` and the Requests strip shows **Move to SVA-330**.
 - Manage: kind picker on the asset dialog, kinds list, "N units without a kind" hint.
+- **Revision 2026-10-19 (migration `-5.sql`, same day as P4):** the kind picker and hint were removed; `freeSiblings` matches on `category`, returns pooled then assigned units with the holder's name; `fleet_booking_requests` gained `kind = 'borrow'` (`asset_id`, `requested_start_date`, `holder_label`, nullable `target_reservation_id`, a `_shape` check and a one-pending-per-booking index); `respond_request` gained `approve`; `lib/fleet-assignment.ts` holds `yieldAssignmentFor` / `closeAssignmentRows` / `restoreAssignment`; notices `borrow_request` / `borrow_approved` / `borrow_declined`; events `borrow_requested` / `borrow_resolved`. Tests: `route.borrow.test.ts`.
 
 ### P5 — Polish and release note
 

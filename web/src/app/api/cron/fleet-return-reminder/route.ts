@@ -318,28 +318,45 @@ export async function GET(request: Request) {
       swept.push({ reservation_id: row.id, asset_id: row.asset_id, reason, applied: true });
     }
 
-    // Extension requests lapse once the booking they asked to shrink has begun:
-    // the person is at the shelf, there is nothing left to decide. A missing
-    // table (phase-2 migration not applied) is silence, not an error.
+    // Requests lapse on their own. An extension once the booking it asked to
+    // shrink has begun: the person is at the shelf, there is nothing left to
+    // decide. A borrow once its pending booking is gone or its days have passed
+    // (the sweep above closes the lapsed row as `expired`). A missing table
+    // (phase-2 migration not applied) is silence, not an error.
     const { data: pendingRows, error: pendingError } = await admin
       .from("fleet_booking_requests")
-      .select("id, target_reservation_id")
+      .select("id, kind, reservation_id, target_reservation_id")
       .eq("status", "pending");
     if (pendingError && pendingError.code !== "42P01") {
       console.error("fleet reminder: pending requests read failed", pendingError.message);
     }
-    const pending = (pendingRows ?? []) as Array<{ id: string; target_reservation_id: string }>;
+    const pending = (pendingRows ?? []) as Array<{
+      id: string;
+      kind: string | null;
+      reservation_id: string;
+      target_reservation_id: string | null;
+    }>;
     if (pending.length > 0) {
+      const lookup = [
+        ...new Set(pending.map((p) => (p.kind === "borrow" ? p.reservation_id : p.target_reservation_id)).filter((id): id is string => Boolean(id))),
+      ];
       const { data: targets } = await admin
         .from("fleet_reservations")
-        .select("id, start_date, status")
-        .in("id", [...new Set(pending.map((p) => p.target_reservation_id))]);
-      const lapsed = new Set(
-        ((targets ?? []) as Array<{ id: string; start_date: string; status: string }>)
-          .filter((t) => t.start_date <= today || t.status !== "reserved")
-          .map((t) => t.id),
+        .select("id, start_date, end_date, status")
+        .in("id", lookup.length > 0 ? lookup : ["00000000-0000-0000-0000-000000000000"]);
+      const byId = new Map(
+        ((targets ?? []) as Array<{ id: string; start_date: string; end_date: string; status: string }>).map((t) => [t.id, t]),
       );
-      const toExpire = pending.filter((p) => lapsed.has(p.target_reservation_id)).map((p) => p.id);
+      const toExpire = pending
+        .filter((p) => {
+          if (p.kind === "borrow") {
+            const booking = byId.get(p.reservation_id);
+            return !booking || booking.status !== "waitlisted" || booking.end_date < today;
+          }
+          const target = p.target_reservation_id ? byId.get(p.target_reservation_id) : undefined;
+          return !target || target.start_date <= today || target.status !== "reserved";
+        })
+        .map((p) => p.id);
       if (toExpire.length > 0 && !isDryRun) {
         const { error: expireError } = await admin
           .from("fleet_booking_requests")

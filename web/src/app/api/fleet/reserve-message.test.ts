@@ -56,4 +56,18 @@ describe("reserveErrorMessage", () => {
     ]);
     expect(three).toContain("A, B and 1 more are free");
   });
+
+  it("tells assigned twins apart from free ones", () => {
+    const mixed = reserveErrorMessage({ ok: false, reason: "overlap", conflicting: [] }, reliability, "SVA-257", [
+      { name: "SVA-330", assigned: false, holder: null },
+      { name: "SVA-412", assigned: true, holder: "Charles" },
+    ]);
+    expect(mixed).toContain("SVA-330 is free for those days");
+    expect(mixed).toContain("SVA-412 (Charles) is assigned and can be asked for");
+    const onlyAssigned = reserveErrorMessage({ ok: false, reason: "overlap", conflicting: [] }, reliability, "SVA-257", [
+      { name: "SVA-412", assigned: true, holder: null },
+    ]);
+    expect(onlyAssigned).toContain("SVA-412 is assigned and can be asked for");
+    expect(onlyAssigned).toMatch(/waitlist/i);
+  });
 });

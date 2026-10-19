@@ -39,8 +39,6 @@ export type AssetDraft = {
   home_location: string;
   current_location: string;
   notes: string;
-  /** Which units can stand in for this one ("elios-3"); blank = none. */
-  kind_key: string;
   status?: FleetAssetStatus;
 };
 
@@ -55,7 +53,6 @@ const BLANK: AssetDraft = {
   home_location: "",
   current_location: "",
   notes: "",
-  kind_key: "",
 };
 
 const CATEGORY_CHOICES: ReadonlyArray<Choice<FleetAssetCategory>> = CATEGORY_ORDER.map((value) => ({
@@ -87,7 +84,6 @@ export function AssetDialog({
   locations,
   ownerGroups,
   models,
-  kinds,
   busy,
   onSave,
   onClose,
@@ -99,8 +95,6 @@ export function AssetDialog({
   locations: readonly string[];
   ownerGroups: readonly string[];
   models: readonly string[];
-  /** Kind keys already in use, so a new unit joins an existing group rather than spelling a new one. */
-  kinds: readonly string[];
   busy: boolean;
   onSave: (draft: AssetDraft) => Promise<boolean>;
   onClose: () => void;
@@ -118,7 +112,6 @@ export function AssetDialog({
           home_location: asset.home_location ?? "",
           current_location: asset.current_location ?? "",
           notes: asset.notes ?? "",
-          kind_key: asset.kind_key ?? "",
           status: asset.status,
         }
       : BLANK,
@@ -221,6 +214,9 @@ export function AssetDialog({
             </label>
           </div>
 
+          {/* The type is also what makes units interchangeable: when one is
+              taken, every free unit of the same type is offered instead
+              (owner decision 2026-10-19), so there is nothing else to set. */}
           <ChoiceChips
             label="Type"
             value={draft.category}
@@ -236,20 +232,6 @@ export function AssetDialog({
             placeholder="Elios 3"
             allowEmpty
             emptyLabel="Not recorded"
-          />
-
-          {/* Which units can stand in for this one. Picked from the keys
-              already in use so one kind never ends up spelled two ways; the
-              server slugs whatever is typed ("Elios 3" → "elios-3"). A unit
-              with no kind is simply never offered as an alternative. */}
-          <ChoiceOrCustom
-            label="Interchangeable with"
-            value={draft.kind_key}
-            options={kinds}
-            onChange={(value) => set("kind_key", value)}
-            placeholder="elios-3"
-            allowEmpty
-            emptyLabel="No alternatives"
           />
 
           {/* ------------------------------------------------- who can use it */}

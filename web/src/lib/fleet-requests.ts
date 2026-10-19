@@ -8,14 +8,30 @@ import { addDays, daysBetween, MAX_RESERVATION_DAYS, spanLength, type Reservatio
  */
 
 export type RequestStatus = "pending" | "accepted" | "declined" | "expired" | "cancelled";
-/** How an accepted request was honoured. `move` arrives with phase 4. */
-export type RequestResolution = "shorten" | "cancel" | "move";
-/** What the recipient may answer today. */
-export type RequestReply = "shorten" | "cancel" | "decline";
+/**
+ * Two kinds of question. An `extension` asks the next booker to free days
+ * they hold; a `borrow` asks the person a unit is assigned to for the unit.
+ */
+export type RequestKind = "extension" | "borrow";
+/** How an accepted request was honoured. `approve` is the borrow's only yes. */
+export type RequestResolution = "shorten" | "cancel" | "move" | "approve";
+/** What the recipient may answer: the first three to an extension, the last two to a borrow. */
+export type RequestReply = "shorten" | "cancel" | "decline" | "approve";
+
+/** A unit the recipient could take instead, as the board offers it. */
+export type RequestAlternative = {
+  asset_id: string;
+  name: string;
+  location: string | null;
+  /** Assigned to someone: asking for it files a borrow request rather than booking it. */
+  assigned: boolean;
+  holder: string | null;
+};
 
 /** One request as the board hands it to the client, names resolved. */
 export type FleetRequestView = {
   id: string;
+  kind: RequestKind;
   status: RequestStatus;
   resolution: RequestResolution | null;
   requested_end_date: string;
@@ -25,21 +41,22 @@ export type FleetRequestView = {
   requester_name: string;
   recipient_id: string | null;
   recipient_name: string;
-  /** The booking that wants to grow. */
+  /** Extension: the booking that wants to grow. Borrow: the pending booking on the assigned unit. */
   reservation_id: string;
   asset_id: string;
   asset_name: string;
   current_end_date: string;
-  /** The booking it would grow into. */
-  target_reservation_id: string;
+  /** Extension only: the booking it would grow into. Null for a borrow. */
+  target_reservation_id: string | null;
+  /** Extension: the target booking's days. Borrow: the days asked for. */
   target_start_date: string;
   target_end_date: string;
-  /** The viewer has to answer this one (recipient, or admin when the target has no account). */
+  /** The viewer has to answer this one (recipient, or admin when nobody else can). */
   incoming: boolean;
   /** The viewer asked this one. */
   outgoing: boolean;
-  /** Free units of the same kind the recipient could move their booking to (pending incoming only). */
-  alternatives: Array<{ asset_id: string; name: string; location: string | null }>;
+  /** Units of the same type the recipient could take instead (pending incoming extensions only). */
+  alternatives: RequestAlternative[];
 };
 
 export type DateChange =
@@ -134,21 +151,27 @@ export function requestExpired(target: Pick<ReservationSpan, "start_date">, toda
 }
 
 /** Short status text for the Requests strip. */
-export function requestStatusLabel(status: RequestStatus, resolution: RequestResolution | null): string {
+export function requestStatusLabel(status: RequestStatus, resolution: RequestResolution | null, kind: RequestKind = "extension"): string {
   switch (status) {
     case "pending":
       return "Waiting for an answer";
     case "accepted":
+      if (kind === "borrow") return "Approved — it is booked to you";
       return resolution === "cancel"
         ? "Accepted — they cancelled their booking"
         : resolution === "move"
           ? "Accepted — they moved to another unit"
           : "Accepted — they start later";
     case "declined":
-      return "Declined — get in touch to find a solution";
+      return kind === "borrow" ? "Declined — ask them directly, or book another unit" : "Declined — get in touch to find a solution";
     case "expired":
       return "Lapsed";
     case "cancelled":
       return "Withdrawn";
   }
+}
+
+/** Which replies make sense for a request of this kind — the strip renders exactly these. */
+export function repliesFor(kind: RequestKind): RequestReply[] {
+  return kind === "borrow" ? ["approve", "decline"] : ["shorten", "cancel", "decline"];
 }

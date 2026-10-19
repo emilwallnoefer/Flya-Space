@@ -193,9 +193,45 @@ export function pooledAsset(overrides: Record<string, unknown> = {}) {
     current_holder_label: null,
     location_confirmed_at: null,
     notes: null,
-    kind_key: null,
     ...overrides,
   };
+}
+
+/**
+ * A unit assigned to someone (out of the pool), with the open booking that
+ * stands for the assignment — exactly what `assign` writes. The second row
+ * matters: the borrow flow has to see through it.
+ */
+export const ASSIGNED_ID = "aaaaaaaa-0000-4000-8000-000000000009";
+export const ASSIGNMENT_ID = "bbbbbbbb-0000-4000-8000-000000000009";
+
+export function assignedAsset(overrides: Record<string, unknown> = {}) {
+  return pooledAsset({
+    id: ASSIGNED_ID,
+    name: "SVA-412",
+    pooled: false,
+    status: "out",
+    current_location: "Basel",
+    current_holder_user_id: null,
+    current_holder_label: "Charles",
+    ...overrides,
+  });
+}
+
+/** The open `picked_up` row behind an assignment: 30 days from the day it was assigned. */
+export function assignmentRow(overrides: Record<string, unknown> = {}) {
+  return reservation({
+    id: ASSIGNMENT_ID,
+    asset_id: ASSIGNED_ID,
+    user_id: null,
+    holder_label: "Charles",
+    source: "sheet_import",
+    start_date: "2026-09-01",
+    end_date: "2026-10-01",
+    status: "picked_up",
+    picked_up_at: "2026-09-01T08:00:00.000Z",
+    ...overrides,
+  });
 }
 
 /** One reservation. Defaults to a live booking held by MEMBER. */

@@ -20,7 +20,10 @@ export type FleetNoticeKind =
   | "extension_declined"
   | "waitlist_promoted"
   | "unit_back_early"
-  | "overdue_escalation";
+  | "overdue_escalation"
+  | "borrow_request"
+  | "borrow_approved"
+  | "borrow_declined";
 
 export type FleetNoticeInput =
   | {
@@ -88,6 +91,32 @@ export type FleetNoticeInput =
       daysLate: number;
       nextHolderName: string | null;
       nextStart: string | null;
+      linkReservationId: string;
+    }
+  | {
+      kind: "borrow_request";
+      assetName: string;
+      requesterName: string;
+      startDate: string;
+      endDate: string;
+      /** Set when the unit's assignee has no account and the admins are asked instead. */
+      assignedTo: string | null;
+      linkReservationId: string;
+    }
+  | {
+      kind: "borrow_approved";
+      assetName: string;
+      answererName: string;
+      startDate: string;
+      endDate: string;
+      linkReservationId: string;
+    }
+  | {
+      kind: "borrow_declined";
+      assetName: string;
+      answererName: string;
+      startDate: string;
+      endDate: string;
       linkReservationId: string;
     };
 
@@ -209,6 +238,34 @@ function compose(input: FleetNoticeInput): { title: string; lines: string[]; cta
             : "Nobody has it booked next.",
         ],
         cta: "Open the booking",
+      };
+    case "borrow_request":
+      return {
+        title: `${input.requesterName} asks to borrow ${input.assetName}`,
+        lines: [
+          input.assignedTo
+            ? `${input.assetName} is assigned to ${input.assignedTo}, who has no account here, so this comes to you as an admin.`
+            : `${input.assetName} is assigned to you.`,
+          `${input.requesterName} would like it ${formatSpan(input.startDate, input.endDate)}. Nothing is booked until you approve.`,
+        ],
+        cta: "Approve or decline in Fleet",
+      };
+    case "borrow_approved":
+      return {
+        title: `${input.assetName} is yours ${formatSpan(input.startDate, input.endDate)}`,
+        lines: [
+          `${input.answererName} approved your request. It is booked to you now — pick it up from them on the day, and check it in when you bring it back.`,
+        ],
+        cta: "Open my booking",
+      };
+    case "borrow_declined":
+      return {
+        title: `${input.answererName} cannot lend ${input.assetName}`,
+        lines: [
+          `Your request for ${formatSpan(input.startDate, input.endDate)} was declined.`,
+          `Ask ${input.answererName} directly if it is urgent, or book another unit of the same type.`,
+        ],
+        cta: "Open Fleet",
       };
   }
 }

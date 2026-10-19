@@ -111,8 +111,6 @@ const assetFields = {
   current_location: z.string().trim().max(160).nullable().optional(),
   current_holder_label: z.string().trim().max(160).nullable().optional(),
   notes: z.string().trim().max(500).nullable().optional(),
-  /** Which units can stand in for this one; normalised to a slug by the handler. */
-  kind_key: z.string().trim().max(60).nullable().optional(),
 };
 
 const createAssetSchema = z.object({ action: z.literal("create_asset"), ...assetFields });
@@ -138,7 +136,6 @@ const updateAssetSchema = z.object({
   current_location: assetFields.current_location,
   current_holder_label: assetFields.current_holder_label,
   notes: assetFields.notes,
-  kind_key: assetFields.kind_key,
 });
 
 const archiveAssetSchema = z.object({
@@ -162,11 +159,15 @@ const changeDatesSchema = z.object({
   end_date: dateKey,
 });
 
-/** The next booker's answer to an extension request. */
+/**
+ * The recipient's answer to a request: `shorten` / `cancel` / `decline` for an
+ * extension, `approve` / `decline` for a borrow. The handler refuses a reply
+ * that does not fit the request's kind.
+ */
 const respondRequestSchema = z.object({
   action: z.literal("respond_request"),
   request_id: z.string().uuid(),
-  reply: z.enum(["shorten", "cancel", "decline"]),
+  reply: z.enum(["shorten", "cancel", "decline", "approve"]),
 });
 
 export const postSchema = z.discriminatedUnion("action", [

@@ -422,49 +422,79 @@ export function expiryFor(span: ReservationSpan, today: string): "no_show" | "ex
 /* -------------------------------------------------------------------------- */
 
 /**
- * The slug admins give a kind of unit ("elios-3"). Lower-cased, trimmed,
- * runs of anything that is not a letter or digit become one dash, so "Elios 3"
- * and " elios-3 " are the same kind. Empty → null (no kind).
+ * How long the open booking behind an assignment runs before it is renewed.
+ * `assign` writes it, and the borrow flow re-opens it with the same length
+ * once a borrowed unit goes back to the person it is assigned to.
  */
-export function normalizeKindKey(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const slug = raw
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug.length > 0 ? slug : null;
-}
+export const ASSIGNMENT_SPAN_DAYS = 30;
 
 export type SiblingAsset = {
   id: string;
   name: string;
-  kind_key: string | null;
+  /** The type ("Type" in Manage): every unit of one type stands in for every other. */
+  category: string;
   pooled: boolean;
   status: string;
   active?: boolean;
   current_location?: string | null;
+  current_holder_user_id?: string | null;
+  current_holder_label?: string | null;
 };
 
-export type FreeSibling = { asset_id: string; name: string; location: string | null };
+export type FreeSibling = {
+  asset_id: string;
+  name: string;
+  location: string | null;
+  /** True for a unit assigned to someone: it can be asked for, not booked outright. */
+  assigned: boolean;
+  /** Who it is assigned to (display name, else the label on the unit); null when pooled. */
+  holder: string | null;
+};
 
 /**
- * Other units of the same kind that are free for the whole span: bookable
- * (pooled, not retired or in repair), still active, and with no live booking
- * on any of the days — an overdue unit still out counts as taken through today
- * (`blockedUntil`). A unit with no kind has no siblings; nothing is guessed
- * from the model text.
+ * The open booking that stands for an assignment itself — "this unit lives
+ * with Charles" — rather than for anyone borrowing it. `assign` writes one
+ * (`picked_up`, `source = 'sheet_import'`) and the sheet import did the same,
+ * so on an assigned unit that is the mark. A borrow is an ordinary `app`
+ * booking and never matches.
+ */
+export function isAssignmentSpan(span: Pick<ReservationSpan, "status" | "source">): boolean {
+  return span.status === "picked_up" && span.source === "sheet_import";
+}
+
+/**
+ * Whether an assigned unit could be lent for a span: still active, not retired
+ * or in repair. Who approves is the holder's business; this only says whether
+ * asking makes sense at all.
+ */
+export function isRequestable(asset: { pooled: boolean; status: string; active?: boolean }): boolean {
+  return !asset.pooled && asset.active !== false && asset.status !== "retired" && asset.status !== "in_repair";
+}
+
+/**
+ * Other units of the same type that are free for the whole span (owner
+ * decision 2026-10-19: type, not a hand-set kind — every unit of one type
+ * stands in for every other).
+ *
+ * Pooled units come first: bookable (not retired or in repair), active, and
+ * with no live booking on any of the days — an overdue unit still out counts
+ * as taken through today (`blockedUntil`). Then the assigned units of that
+ * type (`assigned: true`): those can be asked for, and the person they are
+ * assigned to approves. For them the assignment's own open booking is not a
+ * clash (it is what being assigned looks like); only a borrow already booked
+ * for those days is.
  */
 export function freeSiblings(args: {
-  asset: Pick<SiblingAsset, "id" | "kind_key">;
+  asset: Pick<SiblingAsset, "id" | "category">;
   startDate: string;
   endDate: string;
   today: string;
   assets: SiblingAsset[];
   spans: ReservationSpan[];
+  /** Display names for `current_holder_user_id`, when the caller has them. */
+  names?: ReadonlyMap<string, string>;
 }): FreeSibling[] {
-  const { asset, startDate, endDate, today, assets, spans } = args;
-  if (!asset.kind_key) return [];
+  const { asset, startDate, endDate, today, assets, spans, names } = args;
   const candidate: ReservationSpan = {
     id: "candidate",
     asset_id: "",
@@ -473,22 +503,32 @@ export function freeSiblings(args: {
     end_date: endDate,
     status: "reserved",
   };
-  return assets
-    .filter(
-      (a) =>
-        a.id !== asset.id &&
-        a.kind_key === asset.kind_key &&
-        a.active !== false &&
-        isBookable(a) &&
-        !spans.some(
-          (s) =>
-            s.asset_id === a.id &&
-            isBlocking(s.status) &&
-            spansOverlap({ ...s, end_date: blockedUntil(s, today) }, candidate),
-        ),
-    )
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-    .map((a) => ({ asset_id: a.id, name: a.name, location: a.current_location ?? null }));
+  const taken = (unit: SiblingAsset) =>
+    spans.some(
+      (s) =>
+        s.asset_id === unit.id &&
+        isBlocking(s.status) &&
+        !(!unit.pooled && isAssignmentSpan(s)) &&
+        spansOverlap({ ...s, end_date: blockedUntil(s, today) }, candidate),
+    );
+  const byName = (a: SiblingAsset, b: SiblingAsset) => a.name.localeCompare(b.name, undefined, { numeric: true });
+  const sameType = assets.filter((a) => a.id !== asset.id && a.category === asset.category && a.active !== false);
+
+  const pooled = sameType
+    .filter((a) => isBookable(a) && !taken(a))
+    .sort(byName)
+    .map((a): FreeSibling => ({ asset_id: a.id, name: a.name, location: a.current_location ?? null, assigned: false, holder: null }));
+  const assigned = sameType
+    .filter((a) => isRequestable(a) && !taken(a))
+    .sort(byName)
+    .map((a): FreeSibling => ({
+      asset_id: a.id,
+      name: a.name,
+      location: a.current_location ?? null,
+      assigned: true,
+      holder: (a.current_holder_user_id ? names?.get(a.current_holder_user_id) : null) ?? a.current_holder_label ?? null,
+    }));
+  return [...pooled, ...assigned];
 }
 
 /** How late a completed return was; 0 when it landed on or before the due date. */

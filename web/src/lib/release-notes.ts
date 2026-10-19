@@ -20,6 +20,17 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-19-fleet-borrow",
+    date: "Oct 19, 2026",
+    title: "Fleet: every unit of a type is a twin, and assigned material can be asked for",
+    highlights: [
+      "When a unit is taken, every free unit of the same type is offered — nothing to set up any more",
+      "Assigned material shows up too: Ask the person it is assigned to, and it is booked the moment they approve",
+      "Got a request for your unit? Approve or decline it in Fleet → Mine; nothing is booked until you do",
+      "A borrowed unit is picked up from, and checked back in to, the person it is assigned to",
+    ],
+  },
+  {
     version: "2026-10-19-fleet-alternatives",
     date: "Oct 19, 2026",
     title: "Fleet: when a unit is taken, take its twin",

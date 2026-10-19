@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { restoreAssignment } from "@/lib/fleet-assignment";
 import { recordAssetEvent } from "@/lib/fleet-queries";
 import { loadReservation, promoteWaitlist, settleRequestsFor, type FleetActionContext } from "./shared";
 import type { FleetPayload } from "./schemas";
@@ -40,8 +41,13 @@ export async function handleCancel(
       actor_user_id: viewer.id,
     }),
     promoteWaitlist(admin, reservation.asset_id, { origin, today, actorUserId: viewer.id }),
-    // A cancelled booking neither wants to grow nor stands in anyone's way.
+    // A cancelled booking neither wants to grow nor stands in anyone's way. For a
+    // pending borrow this is also what withdraws the question.
     settleRequestsFor(admin, reservation.id, { asRequester: "cancelled", asTarget: "expired" }),
   ]);
+  // An approved borrow that is cancelled gives the days back to the assignee.
+  if (reservation.asset?.pooled === false && reservation.status === "reserved") {
+    await restoreAssignment(admin, { assetId: reservation.asset_id, today, actorUserId: viewer.id });
+  }
   return NextResponse.json({ ok: true, promoted: promoted?.id ?? null });
 }

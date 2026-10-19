@@ -81,6 +81,36 @@ describe("fleet notices", () => {
     expect(sheetOnly.email.text).toMatch(/Nobody has it booked next/);
   });
 
+  it("asks the assignee for a unit, and tells the requester the answer", () => {
+    const toHolder = renderFleetNotice(
+      { kind: "borrow_request", assetName: "SVA-412", requesterName: "Mel", startDate: "2026-09-15", endDate: "2026-09-16", assignedTo: null, linkReservationId: link },
+      base,
+    );
+    expect(toHolder.push.title).toBe("Mel asks to borrow SVA-412");
+    expect(toHolder.push.body).toMatch(/assigned to you/);
+    expect(toHolder.email.text).toMatch(/Nothing is booked until you approve/);
+
+    const toAdmins = renderFleetNotice(
+      { kind: "borrow_request", assetName: "SVA-412", requesterName: "Mel", startDate: "2026-09-15", endDate: "2026-09-16", assignedTo: "Charles", linkReservationId: link },
+      base,
+    );
+    expect(toAdmins.push.body).toMatch(/assigned to Charles, who has no account/);
+
+    const yes = renderFleetNotice(
+      { kind: "borrow_approved", assetName: "SVA-412", answererName: "Charles", startDate: "2026-09-15", endDate: "2026-09-16", linkReservationId: link },
+      base,
+    );
+    expect(yes.push.title).toMatch(/SVA-412 is yours/);
+    expect(yes.email.text).toMatch(/pick it up from them/i);
+
+    const no = renderFleetNotice(
+      { kind: "borrow_declined", assetName: "SVA-412", answererName: "Charles", startDate: "2026-09-15", endDate: "2026-09-16", linkReservationId: link },
+      base,
+    );
+    expect(no.push.title).toBe("Charles cannot lend SVA-412");
+    expect(no.email.text).toMatch(/another unit of the same type/);
+  });
+
   it("escapes HTML in names", () => {
     const r = renderFleetNotice(
       { kind: "extension_declined", assetName: "SVA-257", answererName: "<b>Eve</b>", currentEnd: "2026-09-16", linkReservationId: link },

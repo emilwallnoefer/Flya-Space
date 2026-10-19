@@ -392,26 +392,38 @@ describe("a self-chosen profile name proves nothing (audit run-4 F7)", () => {
   });
 });
 
-describe("only the shared pool can be booked (audit run-4 F5)", () => {
-  it("refuses a unit an admin assigned out of the pool", async () => {
+describe("only the shared pool can be booked outright (audit run-4 F5)", () => {
+  it("turns a booking on an assigned unit into a request nobody can grant but the assignee or an admin", async () => {
     for (const viewer of [MEMBER, ADMIN]) {
       const res = await post(
         {
           viewer,
           adminEmails: [ADMIN.email!],
+          users: [MEMBER, ADMIN],
           tables: {
-            fleet_assets: assets({ pooled: false, current_holder_label: "Customer loan: Acme" }),
+            fleet_assets: assets({ pooled: false, status: "out", current_holder_label: "Customer loan: Acme" }),
             fleet_reservations: [],
           },
         },
         { action: "reserve", asset_id: ASSET_ID, start_date: TODAY, end_date: "2026-09-16" },
       );
-      expect(res.status).toBe(409);
-      expect(String(res.body.error)).toMatch(/not in the shared pool/i);
-      expect(res.tables.fleet_reservations).toHaveLength(0);
+      expect(res.status).toBe(200);
+      expect(res.body.requested).toBe(true);
+      // Nothing is booked: the row waits for an approval, and blocks nobody.
+      expect(res.tables.fleet_reservations.map((r) => r.status)).toEqual(["waitlisted"]);
+      expect(res.tables.fleet_booking_requests.map((r) => [r.kind, r.status])).toEqual([["borrow", "pending"]]);
       // The assignment is untouched.
       expect(res.tables.fleet_assets[0].current_holder_label).toBe("Customer loan: Acme");
     }
+  });
+
+  it("still refuses a unit that is retired or in repair, assigned or not", async () => {
+    const res = await post(
+      { viewer: MEMBER, tables: { fleet_assets: assets({ pooled: false, status: "in_repair", current_holder_label: "Acme" }), fleet_reservations: [] } },
+      { action: "reserve", asset_id: ASSET_ID, start_date: TODAY, end_date: "2026-09-16" },
+    );
+    expect(res.status).toBe(409);
+    expect(res.tables.fleet_reservations).toHaveLength(0);
   });
 });
 
