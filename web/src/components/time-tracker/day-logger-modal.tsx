@@ -216,22 +216,24 @@ export function DayLoggerModal({ state }: { state: TimeTrackerState }) {
 
               <div className="mt-4 space-y-3">
                 <p className="text-xs text-ink-3/80">{panelDateLabel}</p>
-                <label className="block">
+                <div>
                   <span className="mb-1 block text-xs text-ink-2/90">Start</span>
                   <TimeField
+                    aria-label="Start"
                     value={formStart}
                     disabled={!selectedDay || readOnly}
                     onChange={setFormStart}
                   />
-                </label>
-                <label className="block">
+                </div>
+                <div>
                   <span className="mb-1 block text-xs text-ink-2/90">Stop</span>
                   <TimeField
+                    aria-label="Stop"
                     value={formStop}
                     disabled={!selectedDay || readOnly}
                     onChange={setFormStop}
                   />
-                </label>
+                </div>
                 <div>
                   <span className="mb-1.5 block text-xs text-ink-2/90">Day type</span>
                   <div

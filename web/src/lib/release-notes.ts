@@ -25,7 +25,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     title: "Time Tracker: 24-hour times everywhere",
     highlights: [
       "Start and Stop are always 24-hour (07:30, 19:30) — no more AM/PM, whatever your computer's clock setting",
-      "Type 0730, 7:30 or just 7; arrow keys move by 15 minutes; the clock icon lists quarter hours",
+      "Type the hours, then the minutes — or use the arrow keys, or pick from the clock icon's list",
     ],
   },
   {
