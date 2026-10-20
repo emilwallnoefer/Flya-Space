@@ -2,9 +2,10 @@
 
 import { useRef } from "react";
 import { AnimatePresence } from "framer-motion";
-import { Button, Input, Toast } from "@/components/ui";
+import { Button, Toast } from "@/components/ui";
 import { useFocusTrap } from "@/lib/use-focus-trap";
 import { playUiSound } from "@/lib/ui-sounds";
+import { TimeField } from "./time-field";
 import { dayLabel, escapeHtml, fmtHM, type WeekResponse } from "./types";
 import type { TimeTrackerState } from "./use-time-tracker";
 
@@ -217,20 +218,18 @@ export function DayLoggerModal({ state }: { state: TimeTrackerState }) {
                 <p className="text-xs text-ink-3/80">{panelDateLabel}</p>
                 <label className="block">
                   <span className="mb-1 block text-xs text-ink-2/90">Start</span>
-                  <Input
-                    type="time"
+                  <TimeField
                     value={formStart}
                     disabled={!selectedDay || readOnly}
-                    onChange={(event) => setFormStart(event.target.value)}
+                    onChange={setFormStart}
                   />
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-xs text-ink-2/90">Stop</span>
-                  <Input
-                    type="time"
+                  <TimeField
                     value={formStop}
                     disabled={!selectedDay || readOnly}
-                    onChange={(event) => setFormStop(event.target.value)}
+                    onChange={setFormStop}
                   />
                 </label>
                 <div>
