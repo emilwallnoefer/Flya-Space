@@ -20,6 +20,15 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-20-day-logger-24h",
+    date: "Oct 20, 2026",
+    title: "Time Tracker: 24-hour times everywhere",
+    highlights: [
+      "Start and Stop are always 24-hour (07:30, 19:30) — no more AM/PM, whatever your computer's clock setting",
+      "Type 0730, 7:30 or just 7; arrow keys move by 15 minutes; the clock icon lists quarter hours",
+    ],
+  },
+  {
     version: "2026-10-19-fleet-waitlist-days",
     date: "Oct 19, 2026",
     title: "Fleet: pick any day, booked or not",
