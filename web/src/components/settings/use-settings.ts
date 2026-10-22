@@ -57,14 +57,14 @@ export function useSettings(
 
   useEffect(() => {
     (async () => {
-      if (!access.mail && !access.time) return;
+      if (!access.mail && !access.travel) return;
       if (seededRef.current) {
         seededRef.current = false;
         return;
       }
       const [gmailResponse, mappingResponse] = await Promise.all([
         access.mail ? fetch("/api/gmail/status") : null,
-        access.time ? fetch("/api/settings/travel-mapping") : null,
+        access.travel ? fetch("/api/settings/travel-mapping") : null,
       ]);
       if (gmailResponse?.ok) {
         const data = (await gmailResponse.json()) as GmailStatus;

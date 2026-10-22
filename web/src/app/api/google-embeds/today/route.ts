@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { forbidHeldAccount } from "@/lib/app-access";
 import { isAdminEmail } from "@/lib/admin";
-import { canSeeGoogleEmbeds } from "@/lib/google-embeds";
+import { canSeeGoogleEmbed, canSeeGoogleEmbeds } from "@/lib/role-access";
 import { todayCellFor } from "@/lib/google-embed-today";
 import { normalizeUserRole } from "@/lib/user-role";
 
@@ -28,6 +28,10 @@ export async function GET(request: Request) {
   const sheet = new URL(request.url).searchParams.get("sheet");
   if (sheet !== "planning" && sheet !== "fleet") {
     return NextResponse.json({ error: "unknown sheet" }, { status: 400 });
+  }
+  // Each sheet for the roles that see its card (lib/role-access.ts).
+  if (!canSeeGoogleEmbed(role, isAdminEmail(user.email), sheet === "fleet" ? "fleetsheet" : "planning")) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const cell = await todayCellFor(sheet);
   return NextResponse.json({ cell }, { headers: { "Cache-Control": "private, no-store" } });
