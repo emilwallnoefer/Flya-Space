@@ -1,17 +1,19 @@
 "use client";
 import { SettingsPanel } from "@/components/settings-panel";
 import type { SettingsSectionId } from "@/components/settings/types";
+import type { ModuleGrant } from "@/lib/role-access";
 import type { UserRole } from "@/lib/user-role";
 
 type SettingsShellProps = {
   email: string;
   userRole: UserRole | null;
   isAdmin: boolean;
+  moduleGrants: ModuleGrant[];
   /** Section to open on load, parsed server-side from `?section=`. */
   initialSection?: SettingsSectionId | null;
 };
 
-export function SettingsShell({ email, userRole, isAdmin, initialSection = null }: SettingsShellProps) {
+export function SettingsShell({ email, userRole, isAdmin, moduleGrants, initialSection = null }: SettingsShellProps) {
   return (
     <main id="main-content" className="relative min-h-dvh overflow-hidden bg-background text-foreground">
       <div className="absolute inset-0 aurora-bg" />
@@ -21,6 +23,7 @@ export function SettingsShell({ email, userRole, isAdmin, initialSection = null 
           showStandaloneActions
           userRole={userRole ?? "eu_pilot"}
           isAdmin={isAdmin}
+          moduleGrants={moduleGrants}
           initialSection={initialSection}
         />
       </section>

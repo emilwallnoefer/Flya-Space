@@ -8,6 +8,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  */
 export type AdminAuditAction =
   | "role_change"
+  // A module switched on for one person beyond their role (Users & roles).
+  | "module_grant_change"
   | "reminder_pause"
   | "reminder_resume"
   | "mail_brief_model_change"

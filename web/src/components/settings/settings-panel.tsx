@@ -1,5 +1,6 @@
 "use client";
 
+import type { ModuleGrant } from "@/lib/role-access";
 import { SETTINGS_NAV, type SettingsPanelProps } from "./types";
 import { useSettings } from "./use-settings";
 import { SettingsNav } from "./settings-nav";
@@ -12,16 +13,20 @@ import { NotificationsSection } from "./sections/notifications-section";
 import { SecuritySection } from "./sections/security-section";
 import { ReadmeSection } from "./sections/readme-section";
 
+// One stable empty default for the settings access memo.
+const NO_GRANTS: ModuleGrant[] = [];
+
 export function SettingsPanel({
   email: _email,
   showStandaloneActions = false,
   autoOpenProgramReadmeToken = 0,
   userRole = "eu_pilot",
   isAdmin = false,
+  moduleGrants = NO_GRANTS,
   initialData = null,
   initialSection = null,
 }: SettingsPanelProps) {
-  const s = useSettings(userRole, isAdmin, autoOpenProgramReadmeToken, initialData, initialSection);
+  const s = useSettings(userRole, isAdmin, moduleGrants, autoOpenProgramReadmeToken, initialData, initialSection);
 
   return (
     <section className="underwater-panel relative overflow-hidden rounded-2xl">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ModuleGrant } from "@/lib/role-access";
 import type { UserRole } from "@/lib/user-role";
 import { useViewParam } from "@/lib/view-params";
 import {
@@ -18,11 +19,15 @@ import {
 export function useSettings(
   userRole: UserRole,
   isAdmin: boolean,
+  moduleGrants: readonly ModuleGrant[],
   autoOpenProgramReadmeToken: number,
   initialData?: InitialSettings | null,
   initialSection?: SettingsSectionId | null,
 ) {
-  const access = useMemo(() => settingsAccessFor(userRole, isAdmin), [userRole, isAdmin]);
+  const access = useMemo(
+    () => settingsAccessFor(userRole, isAdmin, moduleGrants),
+    [userRole, isAdmin, moduleGrants],
+  );
   // Mirrored into `?section=` so a reload reopens the same settings section.
   const [activeSection, setActiveSection] = useViewParam<SettingsSectionId>(
     "section",

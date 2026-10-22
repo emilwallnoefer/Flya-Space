@@ -2,7 +2,7 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { isAdminEmail } from "@/lib/admin";
-import { canUseModule, GATED_MODULE_LABELS, type GatedModule } from "@/lib/role-access";
+import { canUseModule, GATED_MODULE_LABELS, readModuleGrants, type GatedModule } from "@/lib/role-access";
 import { normalizeUserRole, type UserRole } from "@/lib/user-role";
 
 /**
@@ -64,7 +64,7 @@ export function userCanUseModule(
   user: { email?: string | null; app_metadata?: unknown },
   module: GatedModule,
 ): boolean {
-  return canUseModule(roleOf(user), isAdminEmail(user.email), module);
+  return canUseModule(roleOf(user), isAdminEmail(user.email), module, readModuleGrants(user.app_metadata));
 }
 
 function roleOf(user: { app_metadata?: unknown }): UserRole | null {
@@ -97,7 +97,7 @@ export function roleInAccessToken(accessToken: string | null | undefined): strin
  * `getUser()` the middleware already makes, lets the other device catch up on
  * its next page load instead of up to an hour later.
  */
-export type TokenClaims = { role: string | null; theme: string | null; accent: string | null };
+export type TokenClaims = { role: string | null; grants: string; theme: string | null; accent: string | null };
 
 function decodeClaims(accessToken: string | null | undefined): TokenClaims | null {
   if (!accessToken) return null;
@@ -110,6 +110,7 @@ function decodeClaims(accessToken: string | null | undefined): TokenClaims | nul
     };
     return {
       role: str(claims.app_metadata?.role),
+      grants: grantsKey(claims.app_metadata),
       theme: str(claims.user_metadata?.appearance_theme),
       accent: str(claims.user_metadata?.appearance_accent),
     };
@@ -118,13 +119,18 @@ function decodeClaims(accessToken: string | null | undefined): TokenClaims | nul
   }
 }
 
+/** The module grants as one comparable string (lib/role-access.ts). */
+function grantsKey(appMetadata: unknown): string {
+  return readModuleGrants(appMetadata).join(",");
+}
+
 function str(v: unknown): string | null {
   return typeof v === "string" && v ? v : null;
 }
 
 /**
- * True when an access token was issued before the account's role or appearance
- * last changed, i.e. the session should be reissued now. `user` is the fresh
+ * True when an access token was issued before the account's role, module
+ * grants or appearance last changed, i.e. the session should be reissued now. `user` is the fresh
  * record from `getUser()`.
  */
 export function accessTokenIsStale(
@@ -137,6 +143,7 @@ export function accessTokenIsStale(
   const meta = (user.user_metadata ?? {}) as { appearance_theme?: unknown; appearance_accent?: unknown };
   return (
     inToken.role !== str(app.role) ||
+    inToken.grants !== grantsKey(user.app_metadata) ||
     inToken.theme !== str(meta.appearance_theme) ||
     inToken.accent !== str(meta.appearance_accent)
   );

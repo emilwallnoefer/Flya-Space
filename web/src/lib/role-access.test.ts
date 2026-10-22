@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { availableModulesFor, canSeeGoogleEmbed, canSeeGoogleEmbeds, canUseModule } from "./role-access";
+import {
+  availableModulesFor,
+  canSeeGoogleEmbed,
+  canSeeGoogleEmbeds,
+  canUseModule,
+  readModuleGrants,
+  withModuleGrant,
+} from "./role-access";
 
 const ALL_EMBEDS = { planning: true, fleetsheet: true, roaddays: true };
 const NO_EMBEDS = { planning: false, fleetsheet: false, roaddays: false };
@@ -107,5 +114,48 @@ describe("canUseModule", () => {
       fleet: canUseModule(role, isAdmin, "fleet"),
       travel: canUseModule(role, isAdmin, "travel"),
     }).toEqual(expected);
+  });
+});
+
+describe("module grants (Admin → Users & roles)", () => {
+  it("a Time Tracker grant adds Time to any role", () => {
+    expect(canUseModule("sales", false, "time", ["time"])).toBe(true);
+    expect(canUseModule("us_pilot", false, "time", ["time"])).toBe(true);
+    expect(canUseModule("hr", false, "time", ["time"])).toBe(true);
+    expect(availableModulesFor("hr", false, ALL_EMBEDS, ["time"])).toEqual(["time", "settings", "admin"]);
+    expect(availableModulesFor("sales", false, ALL_EMBEDS, ["time"])).toEqual([
+      "time",
+      "fleet",
+      "settings",
+      "planning",
+      "fleetsheet",
+    ]);
+  });
+
+  it("grants nothing else: not Mail, Fleet or the travel sheet", () => {
+    expect(canUseModule("hr", false, "mail", ["time"])).toBe(false);
+    expect(canUseModule("us_pilot", false, "fleet", ["time"])).toBe(false);
+    expect(canUseModule("sales", false, "travel", ["time"])).toBe(false);
+  });
+
+  it("does nothing for an account without a role (still held)", () => {
+    expect(canUseModule(null, false, "time", ["time"])).toBe(false);
+    expect(availableModulesFor(null, false, ALL_EMBEDS, ["time"])).toEqual(["settings"]);
+  });
+
+  it("switches one grant on or off, cleaning out unknown values", () => {
+    expect(withModuleGrant({ role: "sales" }, "time", true)).toEqual(["time"]);
+    expect(withModuleGrant({ module_grants: ["time"] }, "time", true)).toEqual(["time"]);
+    expect(withModuleGrant({ module_grants: ["time", "bogus"] }, "time", false)).toEqual([]);
+    expect(withModuleGrant(null, "time", false)).toEqual([]);
+  });
+
+  it("reads grants from app_metadata, dropping anything unknown", () => {
+    expect(readModuleGrants({ module_grants: ["time"] })).toEqual(["time"]);
+    expect(readModuleGrants({ module_grants: ["time", "mail", "admin", 7] })).toEqual(["time"]);
+    expect(readModuleGrants({ module_grants: "time" })).toEqual([]);
+    expect(readModuleGrants({})).toEqual([]);
+    expect(readModuleGrants(null)).toEqual([]);
+    expect(readModuleGrants(["time"])).toEqual([]);
   });
 });

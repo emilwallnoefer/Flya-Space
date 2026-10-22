@@ -17,6 +17,7 @@ type AuditEntry = {
 
 const ACTION_LABELS: Record<string, string> = {
   role_change: "Role change",
+  module_grant_change: "Access change",
   reminder_pause: "Reminder paused",
   reminder_resume: "Reminder resumed",
   mail_brief_model_change: "Mail model change",
@@ -40,6 +41,10 @@ function describeDetail(entry: AuditEntry): string | null {
   if (!detail) return null;
   if (entry.action === "role_change") {
     return `${roleText(detail.from)} → ${roleText(detail.to)}`;
+  }
+  if (entry.action === "module_grant_change") {
+    const moduleName = detail.module === "time" ? "Time Tracker" : String(detail.module);
+    return `${moduleName}: ${detail.to ? "switched on" : "switched off"}`;
   }
   if (entry.action === "mail_brief_model_change") {
     return detail.model ? `→ ${String(detail.model)}` : null;

@@ -1,4 +1,4 @@
-import { canUseModule, type GatedModule } from "@/lib/role-access";
+import { canUseModule, type GatedModule, type ModuleGrant } from "@/lib/role-access";
 import type { UserRole } from "@/lib/user-role";
 
 export type SettingsSectionId =
@@ -37,12 +37,16 @@ export const SETTINGS_NAV: { id: SettingsSectionId; label: string; needs?: Gated
 /** Which of the role-gated modules this person has, for Settings to show only theirs. */
 export type SettingsAccess = Record<GatedModule, boolean>;
 
-export function settingsAccessFor(role: UserRole | null, isAdmin: boolean): SettingsAccess {
+export function settingsAccessFor(
+  role: UserRole | null,
+  isAdmin: boolean,
+  grants: readonly ModuleGrant[] = [],
+): SettingsAccess {
   return {
-    mail: canUseModule(role, isAdmin, "mail"),
-    time: canUseModule(role, isAdmin, "time"),
-    fleet: canUseModule(role, isAdmin, "fleet"),
-    travel: canUseModule(role, isAdmin, "travel"),
+    mail: canUseModule(role, isAdmin, "mail", grants),
+    time: canUseModule(role, isAdmin, "time", grants),
+    fleet: canUseModule(role, isAdmin, "fleet", grants),
+    travel: canUseModule(role, isAdmin, "travel", grants),
   };
 }
 
@@ -70,6 +74,7 @@ export type SettingsPanelProps = {
   autoOpenProgramReadmeToken?: number;
   userRole?: UserRole;
   isAdmin?: boolean;
+  moduleGrants?: ModuleGrant[];
   /** When provided, seeds the panel so it doesn't refetch on mount. */
   initialData?: InitialSettings | null;
   /**

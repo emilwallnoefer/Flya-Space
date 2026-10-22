@@ -42,7 +42,7 @@ import type { AdminListedUser, AdminTimeOverview } from "@/lib/admin-queries";
 import { greetingFromEmail, timeGreeting } from "@/lib/greeting";
 import { playUiSound } from "@/lib/ui-sounds";
 import type { ModuleKey } from "@/lib/dashboard-modules";
-import { availableModulesFor } from "@/lib/role-access";
+import { availableModulesFor, type ModuleGrant } from "@/lib/role-access";
 import { writeViewParams } from "@/lib/view-params";
 import { LATEST_RELEASE } from "@/lib/release-notes";
 import { PhoneTour } from "@/components/phone-tour";
@@ -141,6 +141,8 @@ export type DashboardShellProps = {
   email: string;
   initialRole: UserRole | null;
   isAdmin?: boolean;
+  /** Modules an admin switched on for this person beyond the role (lib/role-access.ts). */
+  moduleGrants?: ModuleGrant[];
   initialWeek?: WeekResponse | null;
   /** SSR-prefetched Settings data (Gmail status + travel mapping). */
   initialSettings?: InitialSettingsData | null;
@@ -167,6 +169,9 @@ export type DashboardShellProps = {
 };
 
 import type { FleetBoardResponse } from "@/components/fleet/types";
+
+// One stable empty default, so the modules memo does not recompute every render.
+const NO_GRANTS: ModuleGrant[] = [];
 
 // One-time flag: the first-launch README prompt is for brand-new users only,
 // so it keys on "seen ever" rather than the deploy/version (which used to
@@ -230,6 +235,7 @@ export function DashboardShell({
   email,
   initialRole,
   isAdmin = false,
+  moduleGrants = NO_GRANTS,
   initialWeek = null,
   initialSettings = null,
   initialAdminUsers = RESOLVED_NULL,
@@ -254,8 +260,8 @@ export function DashboardShell({
         planning: Boolean(missionPlanning),
         fleetsheet: Boolean(fleetSheet),
         roaddays: Boolean(roadDays),
-      }),
-    [userRole, isAdmin, missionPlanning, fleetSheet, roadDays],
+      }, moduleGrants),
+    [userRole, isAdmin, missionPlanning, fleetSheet, roadDays, moduleGrants],
   );
   // HR's team time view is a card on the home; for admins it is Admin in the
   // burger menu.
@@ -833,6 +839,7 @@ export function DashboardShell({
                       autoOpenProgramReadmeToken={settingsReadmeOpenToken}
                       userRole={userRole ?? "eu_pilot"}
                       isAdmin={isAdmin}
+                      moduleGrants={moduleGrants}
                       initialData={initialSettings}
                     />
                   ) : (

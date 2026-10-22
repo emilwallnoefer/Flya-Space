@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseInteger, toDateString } from "@/lib/time-tracker-queries";
 import { normalizeUserRole, type UserRole } from "@/lib/user-role";
 import { TIME_TRACKER_TARGET_MINS } from "@/lib/time-tracker-rules";
+import { readModuleGrants } from "@/lib/role-access";
+import { isAdminEmail } from "@/lib/admin";
 
 /**
  * Shared read helpers for the Admin panel's user table and time overview.
@@ -19,6 +21,10 @@ export type AdminListedUser = {
   id: string;
   email: string;
   role: UserRole | null;
+  /** An admin switched the Time Tracker on for this person (app_metadata.module_grants). */
+  time_access: boolean;
+  /** In ADMIN_EMAILS: every module is included, whatever the role. */
+  is_admin: boolean;
   created_at: string | null;
   last_sign_in_at: string | null;
 };
@@ -70,6 +76,8 @@ export async function fetchAdminUsers(admin: SupabaseClient): Promise<AdminListe
         id: user.id,
         email: user.email ?? "",
         role: extractRole(user.app_metadata),
+        time_access: readModuleGrants(user.app_metadata).includes("time"),
+        is_admin: isAdminEmail(user.email),
         created_at: user.created_at ?? null,
         last_sign_in_at: user.last_sign_in_at ?? null,
       });

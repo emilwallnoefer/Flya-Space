@@ -23,7 +23,7 @@ import {
 import { buildFleetBoard, type FleetBoardPayload } from "@/lib/fleet-board";
 import { DEFAULT_WINDOW_DAYS, displayNameFor } from "@/lib/fleet-queries";
 import { formEmbed, sheetEmbed } from "@/lib/google-embeds";
-import { availableModulesFor, canSeeGoogleEmbed, type EmbedKey } from "@/lib/role-access";
+import { availableModulesFor, canSeeGoogleEmbed, readModuleGrants, type EmbedKey } from "@/lib/role-access";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -69,7 +69,15 @@ export default async function DashboardPage({
   const initialRole = normalizeUserRole(userRoleRaw);
   const isAdmin = isAdminEmail(email);
   // The role's modules, sheets aside (those are settled further down).
-  const roleModules = availableModulesFor(initialRole, isAdmin, { planning: false, fleetsheet: false, roaddays: false });
+  // Modules an admin switched on for this person beyond the role (app_metadata
+  // only, like the role).
+  const moduleGrants = readModuleGrants(appMetadata);
+  const roleModules = availableModulesFor(
+    initialRole,
+    isAdmin,
+    { planning: false, fleetsheet: false, roaddays: false },
+    moduleGrants,
+  );
   const hasMail = roleModules.includes("mail");
   // A role can only be written by PATCH /api/admin/users, so a brand-new
   // account arrives with none and is held on the "waiting for access" screen
@@ -207,6 +215,7 @@ export default async function DashboardPage({
     email: email ?? "Signed in",
     initialRole,
     isAdmin,
+    moduleGrants,
     initialWeek,
     initialSettings,
     initialAdminUsers: adminUsersPromise,
