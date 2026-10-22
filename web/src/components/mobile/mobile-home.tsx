@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { NAVBAR_TITLE, NAVBAR_TITLE_CLASS } from "@/components/workspace-home-layout";
+import { NAVBAR_TITLE, NAVBAR_TITLE_CLASS, TEAM_TIME_CARD } from "@/components/workspace-home-layout";
 import { IconClock, IconDrone, IconMail } from "@/components/module-icons";
 import { fmtSignedHM } from "@/components/time-tracker/types";
 import type { ModuleKey } from "@/lib/dashboard-modules";
@@ -34,6 +34,7 @@ export function MobileHome({
   availableModules,
   summary,
   embeds,
+  teamTime = false,
   onOpenModule,
   onOpenMore,
 }: {
@@ -41,6 +42,8 @@ export function MobileHome({
   availableModules: ModuleKey[];
   summary: Summary;
   embeds: Array<{ key: ModuleKey; title: string; href: string }>;
+  /** HR: a tile for the read-only team time view (the "admin" module). */
+  teamTime?: boolean;
   onOpenModule: (module: ModuleKey, options?: { editToday?: boolean }) => void;
   onOpenMore: () => void;
 }) {
@@ -55,6 +58,7 @@ export function MobileHome({
   const todayState = todayStatus(today, todayKey);
 
   const shortcuts: Array<{ key: ModuleKey; label: string; icon: ReactNode; href?: string }> = [
+    ...(teamTime ? [{ key: "admin" as const, label: TEAM_TIME_CARD.title, icon: <IconClock className="h-5 w-5" /> }] : []),
     ...(hasMail ? [{ key: "mail" as const, label: "New mail", icon: <IconMail className="h-5 w-5" /> }] : []),
     ...embeds.map((embed) => ({
       key: embed.key,

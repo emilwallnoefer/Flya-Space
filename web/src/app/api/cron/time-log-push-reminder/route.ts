@@ -190,7 +190,8 @@ export async function GET(request: Request) {
       const { data: userData } = await admin.auth.admin.getUserById(userId);
       const owner = userData?.user ?? null;
       const role = normalizeUserRole((owner?.app_metadata as Record<string, unknown> | undefined)?.role);
-      if (!owner || !role || role === "hr") continue;
+      // Sales and HR have no Time Tracker (lib/role-access.ts).
+      if (!owner || !role || role === "hr" || role === "sales") continue;
       considered += 1;
 
       const [{ data: days, error: daysError }, { count: compCount, error: compError }] = await Promise.all([

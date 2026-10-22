@@ -57,8 +57,9 @@ export function phoneTourSteps(availableModules: ModuleKey[]): PhoneTourStep[] {
   const has = (key: ModuleKey) => availableModules.includes(key);
   const hasMail = has("mail");
   const hasFleet = has("fleet");
+  const hasTime = has("time");
   const sheetCount = (["planning", "fleetsheet", "roaddays"] as const).filter(has).length;
-  const tabCount = 2 + (hasMail ? 1 : 0) + (hasFleet ? 1 : 0);
+  const tabCount = 1 + (hasTime ? 1 : 0) + (hasMail ? 1 : 0) + (hasFleet ? 1 : 0);
   const steps: Array<PhoneTourStep | null> = [
     {
       key: "welcome",
@@ -76,22 +77,26 @@ export function phoneTourSteps(availableModules: ModuleKey[]): PhoneTourStep[] {
       spot: "avatar",
       activeTab: null,
     },
-    {
-      key: "tile-overtime",
-      title: "Overtime",
-      body: "Your overtime bank, through the last day you logged. Tap it to open the Time tracker.",
-      screen: "home",
-      spot: "tile-overtime",
-      activeTab: null,
-    },
-    {
-      key: "tile-today",
-      title: "Today",
-      body: "The hours logged today, or Weekend, Vacation, Holiday or Sick when there is nothing to log. Tap it to log today straight away.",
-      screen: "home",
-      spot: "tile-today",
-      activeTab: null,
-    },
+    hasTime
+      ? {
+          key: "tile-overtime",
+          title: "Overtime",
+          body: "Your overtime bank, through the last day you logged. Tap it to open the Time tracker.",
+          screen: "home",
+          spot: "tile-overtime",
+          activeTab: null,
+        }
+      : null,
+    hasTime
+      ? {
+          key: "tile-today",
+          title: "Today",
+          body: "The hours logged today, or Weekend, Vacation, Holiday or Sick when there is nothing to log. Tap it to log today straight away.",
+          screen: "home",
+          spot: "tile-today",
+          activeTab: null,
+        }
+      : null,
     hasFleet
       ? {
           key: "card-with-you",
@@ -124,20 +129,22 @@ export function phoneTourSteps(availableModules: ModuleKey[]): PhoneTourStep[] {
       : null,
     {
       key: "tabs",
-      title: `${tabCount === 4 ? "Four" : tabCount === 3 ? "Three" : "Two"} buttons along the bottom`,
+      title: tabCount === 1 ? "One button along the bottom" : `${tabCount === 4 ? "Four" : tabCount === 3 ? "Three" : "Two"} buttons along the bottom`,
       body: "Every module is one tap away, in thumb reach. The back chevron at the top left returns to the home board.",
       screen: "home",
       spot: "tabbar",
       activeTab: null,
     },
-    {
-      key: "tab-time",
-      title: "Time",
-      body: "Your week as a plain list, with this week's hours and your overtime bank on top. Open a day to log it.",
-      screen: "time",
-      spot: "tab-time",
-      activeTab: "time",
-    },
+    hasTime
+      ? {
+          key: "tab-time",
+          title: "Time",
+          body: "Your week as a plain list, with this week's hours and your overtime bank on top. Open a day to log it.",
+          screen: "time",
+          spot: "tab-time",
+          activeTab: "time",
+        }
+      : null,
     hasMail
       ? {
           key: "tab-mail",
@@ -166,38 +173,46 @@ export function phoneTourSteps(availableModules: ModuleKey[]): PhoneTourStep[] {
       spot: "tab-chat",
       activeTab: "chat",
     },
-    {
-      key: "log-pick",
-      title: "Logging a day: tap it",
-      body: "In Time, each row is a day. Today is marked; tap any day to open it.",
-      screen: "time",
-      spot: "today-row",
-      activeTab: "time",
-    },
-    {
-      key: "log-fill",
-      title: "Start and Stop",
-      body: "Tap a box for the time picker, set the break below, then Save at the bottom. The button shows the net hours before you commit.",
-      screen: "day-empty",
-      spot: "start-stop",
-      activeTab: "time",
-    },
-    {
-      key: "log-quick",
-      title: "Or fill the day with one tap",
-      body: "Standard day sets 09:00 to 17:54 with a 30 minute break. Compensate day tops up a short day from your overtime bank. Both save on their own.",
-      screen: "day-filled",
-      spot: "quick-fill",
-      activeTab: "time",
-    },
-    {
-      key: "log-type",
-      title: "Vacation, holiday, sick",
-      body: "Mark the day as vacation, a public holiday or sick leave instead. Those days need no times.",
-      screen: "day-filled",
-      spot: "day-type",
-      activeTab: "time",
-    },
+    hasTime
+      ? {
+          key: "log-pick",
+          title: "Logging a day: tap it",
+          body: "In Time, each row is a day. Today is marked; tap any day to open it.",
+          screen: "time",
+          spot: "today-row",
+          activeTab: "time",
+        }
+      : null,
+    hasTime
+      ? {
+          key: "log-fill",
+          title: "Start and Stop",
+          body: "Tap a box for the time picker, set the break below, then Save at the bottom. The button shows the net hours before you commit.",
+          screen: "day-empty",
+          spot: "start-stop",
+          activeTab: "time",
+        }
+      : null,
+    hasTime
+      ? {
+          key: "log-quick",
+          title: "Or fill the day with one tap",
+          body: "Standard day sets 09:00 to 17:54 with a 30 minute break. Compensate day tops up a short day from your overtime bank. Both save on their own.",
+          screen: "day-filled",
+          spot: "quick-fill",
+          activeTab: "time",
+        }
+      : null,
+    hasTime
+      ? {
+          key: "log-type",
+          title: "Vacation, holiday, sick",
+          body: "Mark the day as vacation, a public holiday or sick leave instead. Those days need no times.",
+          screen: "day-filled",
+          spot: "day-type",
+          activeTab: "time",
+        }
+      : null,
     {
       key: "install-safari",
       title: "Install it: open flya.space in Safari",

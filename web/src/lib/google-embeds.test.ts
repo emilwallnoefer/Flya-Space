@@ -6,10 +6,10 @@ const ID = "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcd";
 const FORM_ID = "1FAIpQLSfakeFakeFakeFakeFakeFakeFakeFakeFakeFake";
 
 describe("canSeeGoogleEmbeds", () => {
-  it("shows the embeds to pilots and admins only", () => {
+  it("shows the embeds to EU pilots, sales and admins only", () => {
     expect(canSeeGoogleEmbeds("eu_pilot", false)).toBe(true);
-    expect(canSeeGoogleEmbeds("us_pilot", false)).toBe(true);
-    expect(canSeeGoogleEmbeds("sales", false)).toBe(false);
+    expect(canSeeGoogleEmbeds("sales", false)).toBe(true);
+    expect(canSeeGoogleEmbeds("us_pilot", false)).toBe(false);
     expect(canSeeGoogleEmbeds("hr", false)).toBe(false);
     expect(canSeeGoogleEmbeds(null, false)).toBe(false);
   });

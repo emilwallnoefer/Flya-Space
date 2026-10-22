@@ -12,6 +12,7 @@ import { IconClock, IconDrone, IconMail } from "@/components/module-icons";
 import {
   BETA_BADGE_CLASS,
   HOME_CARDS,
+  TEAM_TIME_CARD,
   HOME_CONTENT_CLASS,
   HOME_EYEBROW_CLASS,
   HOME_GREETING_CLASS,
@@ -41,6 +42,7 @@ import type { AdminListedUser, AdminTimeOverview } from "@/lib/admin-queries";
 import { greetingFromEmail, timeGreeting } from "@/lib/greeting";
 import { playUiSound } from "@/lib/ui-sounds";
 import type { ModuleKey } from "@/lib/dashboard-modules";
+import { availableModulesFor } from "@/lib/role-access";
 import { writeViewParams } from "@/lib/view-params";
 import { LATEST_RELEASE } from "@/lib/release-notes";
 import { PhoneTour } from "@/components/phone-tour";
@@ -68,7 +70,7 @@ const SettingsPanel = dynamic(
 const ChatWidget = dynamic(() => import("@/components/chat-widget").then((m) => m.ChatWidget), {
   ssr: false,
 });
-// The Google sheets and form are cards for pilots and admins only; the chunk is
+// The Google sheets and form are cards for EU pilots, sales and admins; the chunk is
 // tiny, but no iframe should exist until someone opens one.
 const GoogleEmbedPanel = dynamic(
   () => import("@/components/google-embed-panel").then((m) => m.GoogleEmbedPanel),
@@ -246,24 +248,30 @@ export function DashboardShell({
   // lifetime of the shell.
   const userRole: UserRole | null = initialRole;
 
-  const availableModules = useMemo<ModuleKey[]>(() => {
-    const base: ModuleKey[] =
-      userRole === "sales" || userRole === "hr"
-        ? ["time", "fleet", "settings"]
-        : ["mail", "time", "fleet", "settings"];
-    if (missionPlanning) base.push("planning");
-    if (fleetSheet) base.push("fleetsheet");
-    if (roadDays) base.push("roaddays");
-    if (isAdmin || userRole === "hr") base.push("admin");
-    return base;
-  }, [userRole, isAdmin, missionPlanning, fleetSheet, roadDays]);
+  const availableModules = useMemo<ModuleKey[]>(
+    () =>
+      availableModulesFor(userRole, isAdmin, {
+        planning: Boolean(missionPlanning),
+        fleetsheet: Boolean(fleetSheet),
+        roaddays: Boolean(roadDays),
+      }),
+    [userRole, isAdmin, missionPlanning, fleetSheet, roadDays],
+  );
+  // HR's team time view is a card on the home; for admins it is Admin in the
+  // burger menu.
+  const teamTimeCard = !isAdmin && availableModules.includes("admin");
+  const menuModules = useMemo(
+    () => (teamTimeCard ? availableModules.filter((key) => key !== "admin") : availableModules),
+    [teamTimeCard, availableModules],
+  );
 
-  // Cards on the workspace home: Time Tracker always, the rest when available.
-  // Settings and Admin live in the burger menu, not here.
+  // Cards on the workspace home, each when available. Settings and Admin live
+  // in the burger menu, not here.
   const homeCardCount =
-    1 +
-    (["mail", "fleet", "planning", "fleetsheet", "roaddays"] as const).filter((key) => availableModules.includes(key))
-      .length;
+    (teamTimeCard ? 1 : 0) +
+    (["mail", "time", "fleet", "planning", "fleetsheet", "roaddays"] as const).filter((key) =>
+      availableModules.includes(key),
+    ).length;
 
   const [showComposer, setShowComposer] = useState(initialModule != null);
   const [beginAnimating, setBeginAnimating] = useState(false);
@@ -273,7 +281,7 @@ export function DashboardShell({
   // corrective effect that re-set the state after the first render; doing it
   // before there is a state to correct is both cheaper and one less render.
   const [activeModule, setActiveModule] = useState<ModuleKey>(() => {
-    const preferred = initialModule ?? (userRole === "sales" || userRole === "hr" ? "time" : "mail");
+    const preferred = initialModule ?? availableModules[0];
     return availableModules.includes(preferred) ? preferred : availableModules[0];
   });
   // A Google embed covers the whole window while it is open.
@@ -304,7 +312,7 @@ export function DashboardShell({
   const composer = useMailComposer(userRole);
 
   const canManageUsers = isAdmin;
-  const adminModuleLabel = canManageUsers ? "Admin" : "Team time";
+  const adminModuleLabel = canManageUsers ? "Admin" : TEAM_TIME_CARD.title;
 
   // Warm the Time Tracker's current week as soon as the dashboard loads, so the
   // Time Logger shows data immediately on open instead of fetching on mount.
@@ -356,7 +364,7 @@ export function DashboardShell({
     };
   }, [availableModules, initialWeek]);
 
-  // Warm the Google sheets for pilots and admins. Finding today's cell is a
+  // Warm the Google sheets for the roles that see them. Finding today's cell is a
   // server-side sheet read of a few seconds; started here, it is usually done
   // before anyone clicks a card, so the sheet opens on today without waiting.
   // The connection to Google and the panel's chunk are readied too, so the
@@ -373,16 +381,17 @@ export function DashboardShell({
   // already seeded it (pilots), so it is correct on first paint without a
   // client round-trip; still runs as a fallback when props were absent.
   const gmailStatusSeeded = initialSettings?.gmail != null;
+  const hasMail = availableModules.includes("mail");
   useEffect(() => {
     if (gmailStatusSeeded) return;
     (async () => {
-      if (userRole === "sales" || userRole === "hr") return;
+      if (!hasMail) return;
       const response = await fetch("/api/gmail/status");
       if (!response.ok) return;
       const data = (await response.json()) as { connected: boolean; gmail_email?: string | null };
       setGmailStatus(data);
     })();
-  }, [userRole, gmailStatusSeeded]);
+  }, [hasMail, gmailStatusSeeded]);
 
   // Settings disconnected (or reconnected) Gmail while the composer is mounted.
   useEffect(() => {
@@ -527,7 +536,7 @@ export function DashboardShell({
       <section className="page-shell">
         <AuthNavbar
           activeModule={activeModule}
-          availableModules={availableModules}
+          availableModules={menuModules}
           adminModuleLabel={adminModuleLabel}
           onSelectModule={(module) => {
             if (!availableModules.includes(module)) return;
@@ -607,29 +616,57 @@ export function DashboardShell({
                   </m.button>
                 ) : null}
 
-                <m.button
-                  type="button"
-                  initial={false}
-                  whileTap={{ scale: 0.97 }}
-                  {...reveal()}
-                  onClick={() => openModuleCard("time")}
-                  className={`${MODULE_CARD_CLASS} hover:border-emerald-400/35 hover:shadow-[0_28px_56px_-12px_rgba(52,211,153,0.1)] focus-visible:outline-emerald-400/80`}
-                >
-                  <span className={MODULE_CARD_CORE_CLASS}>
-                    <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-emerald-400/12 blur-2xl transition group-hover:bg-emerald-400/22" aria-hidden />
-                    <span className={`${MODULE_CARD_ICON_CLASS} border-emerald-400/25 bg-emerald-400/10 text-positive`}>
-                      <IconClock className="h-5 w-5" />
-                    </span>
-                    <span className={MODULE_CARD_TITLE_CLASS}>{HOME_CARDS[1].title}</span>
-                    <span className={MODULE_CARD_DESCRIPTION_CLASS}>{HOME_CARDS[1].description}</span>
-                    <span className={`${MODULE_CARD_CTA_CLASS} text-positive/90`}>
-                      Continue
-                      <span className={MODULE_CARD_ARROW_CLASS}>
-                        <IconArrow className="h-3.5 w-3.5" />
+                {availableModules.includes("time") ? (
+                  <m.button
+                    type="button"
+                    initial={false}
+                    whileTap={{ scale: 0.97 }}
+                    {...reveal()}
+                    onClick={() => openModuleCard("time")}
+                    className={`${MODULE_CARD_CLASS} hover:border-emerald-400/35 hover:shadow-[0_28px_56px_-12px_rgba(52,211,153,0.1)] focus-visible:outline-emerald-400/80`}
+                  >
+                    <span className={MODULE_CARD_CORE_CLASS}>
+                      <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-emerald-400/12 blur-2xl transition group-hover:bg-emerald-400/22" aria-hidden />
+                      <span className={`${MODULE_CARD_ICON_CLASS} border-emerald-400/25 bg-emerald-400/10 text-positive`}>
+                        <IconClock className="h-5 w-5" />
+                      </span>
+                      <span className={MODULE_CARD_TITLE_CLASS}>{HOME_CARDS[1].title}</span>
+                      <span className={MODULE_CARD_DESCRIPTION_CLASS}>{HOME_CARDS[1].description}</span>
+                      <span className={`${MODULE_CARD_CTA_CLASS} text-positive/90`}>
+                        Continue
+                        <span className={MODULE_CARD_ARROW_CLASS}>
+                          <IconArrow className="h-3.5 w-3.5" />
+                        </span>
                       </span>
                     </span>
-                  </span>
-                </m.button>
+                  </m.button>
+                ) : null}
+
+                {teamTimeCard ? (
+                  <m.button
+                    type="button"
+                    initial={false}
+                    whileTap={{ scale: 0.97 }}
+                    {...reveal()}
+                    onClick={() => openModuleCard("admin")}
+                    className={`${MODULE_CARD_CLASS} hover:border-emerald-400/35 hover:shadow-[0_28px_56px_-12px_rgba(52,211,153,0.1)] focus-visible:outline-emerald-400/80`}
+                  >
+                    <span className={MODULE_CARD_CORE_CLASS}>
+                      <span className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-emerald-400/12 blur-2xl transition group-hover:bg-emerald-400/22" aria-hidden />
+                      <span className={`${MODULE_CARD_ICON_CLASS} border-emerald-400/25 bg-emerald-400/10 text-positive`}>
+                        <IconClock className="h-5 w-5" />
+                      </span>
+                      <span className={MODULE_CARD_TITLE_CLASS}>{TEAM_TIME_CARD.title}</span>
+                      <span className={MODULE_CARD_DESCRIPTION_CLASS}>{TEAM_TIME_CARD.description}</span>
+                      <span className={`${MODULE_CARD_CTA_CLASS} text-positive/90`}>
+                        Continue
+                        <span className={MODULE_CARD_ARROW_CLASS}>
+                          <IconArrow className="h-3.5 w-3.5" />
+                        </span>
+                      </span>
+                    </span>
+                  </m.button>
+                ) : null}
 
                 {availableModules.includes("fleet") ? (
                   <m.button

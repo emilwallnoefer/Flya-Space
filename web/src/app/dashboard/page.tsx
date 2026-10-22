@@ -23,6 +23,7 @@ import {
 import { buildFleetBoard, type FleetBoardPayload } from "@/lib/fleet-board";
 import { DEFAULT_WINDOW_DAYS, displayNameFor } from "@/lib/fleet-queries";
 import { canSeeGoogleEmbeds, formEmbed, sheetEmbed } from "@/lib/google-embeds";
+import { availableModulesFor } from "@/lib/role-access";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -67,7 +68,9 @@ export default async function DashboardPage({
   const userId = typeof claims.sub === "string" ? claims.sub : null;
   const initialRole = normalizeUserRole(userRoleRaw);
   const isAdmin = isAdminEmail(email);
-  const isPilot = initialRole !== "sales" && initialRole !== "hr";
+  // The role's modules, sheets aside (those are settled further down).
+  const roleModules = availableModulesFor(initialRole, isAdmin, { planning: false, fleetsheet: false, roaddays: false });
+  const hasMail = roleModules.includes("mail");
   // A role can only be written by PATCH /api/admin/users, so a brand-new
   // account arrives with none and is held on the "waiting for access" screen
   // below. Admins are exempt: they are the people who assign the role, and
@@ -106,8 +109,10 @@ export default async function DashboardPage({
   // non-blocking: on failure we log and fall back to the panel's client fetch.
   const weekStartDate = getWeekStartDate();
 
+  // The week holds the first paint only when the URL opens the Time Tracker;
+  // otherwise the shell warms it in the background.
   const initialWeekPromise: Promise<WeekResponse | null> =
-    (initialRole === "sales" || initialRole === "hr") && weekStartDate
+    requestedModule === "time" && roleModules.includes("time") && weekStartDate
       ? fetchCurrentUserWeek(supabase, weekStartDate)
           .then((week) => week as WeekResponse)
           .catch((error) => {
@@ -119,7 +124,7 @@ export default async function DashboardPage({
   // Settings data is cheap: the travel mapping comes from the JWT metadata
   // we already have; only the Gmail connection needs a service-role read.
   const initialSettingsPromise: Promise<InitialSettingsData | null> =
-    isPilot && userId
+    hasMail && userId
       ? fetchInitialSettings(userId, userMetadata).catch((error) => {
           console.error("Dashboard SSR: fetchInitialSettings failed", error);
           return null;
@@ -176,15 +181,15 @@ export default async function DashboardPage({
       })
     : Promise.resolve(null);
 
-  // Only what the landing view needs holds the first paint: the week (the
-  // Time landing for sales/HR) and the Gmail status (the Mail landing's navbar
-  // pill). When Fleet or Admin was requested, their promises are handed to the
+  // Only what the landing view needs holds the first paint: the week (when
+  // Time is the module being opened) and the Gmail status (the Mail landing's
+  // navbar pill). When Fleet or Admin was requested, their promises are handed to the
   // shell unawaited — they are the slow ones (the fleet board runs the holder
   // auto-link and then its own queries, the admin list pages through the Auth
   // admin API) — and stream in after the page is already on screen.
   const [initialWeek, initialSettings] = await Promise.all([initialWeekPromise, initialSettingsPromise]);
 
-  // Embedded Google Sheets / Forms: pilots and admins only. The URLs are built
+  // Embedded Google Sheets / Forms: EU pilots, sales and admins. The URLs are built
   // here and handed down only to them, so no other role's page ever carries
   // one. An unset id yields null, which hides that card.
   const seesEmbeds = canSeeGoogleEmbeds(initialRole, isAdmin);

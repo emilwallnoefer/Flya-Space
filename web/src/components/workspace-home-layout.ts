@@ -69,9 +69,9 @@ export const MODULE_CARD_ARROW_CLASS =
 export const BETA_BADGE_CLASS = "beta-badge rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-normal uppercase tracking-wider text-warn";
 
 /**
- * The home's cards, in order. Time Tracker is always there; the rest depend on
- * the role (the Google sheets and form: pilots and admins only, and only once
- * their id is configured).
+ * The home's cards, in order. Which ones a person sees depends on the role
+ * (lib/role-access.ts); the Google sheets and form also need their id
+ * configured.
  */
 export const HOME_CARDS = [
   { key: "mail", title: "Mail Composer", description: "Training email drafts and Gmail handoff in one flow.", beta: false },
@@ -106,6 +106,16 @@ export const HOME_CARDS = [
     beta: false,
   },
 ] as const;
+
+/**
+ * HR's one card: the read-only team time view (the "admin" module, which for a
+ * non-admin shows only its Time section). Not in HOME_CARDS: no other role
+ * gets it, and admins reach the same view through Admin in the menu.
+ */
+export const TEAM_TIME_CARD = {
+  title: "Time",
+  description: "Everyone's logged hours, week by week. Read-only.",
+} as const;
 
 /**
  * The open module's name in the header row above it ("← Workspace overview …
