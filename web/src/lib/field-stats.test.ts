@@ -39,6 +39,7 @@ describe("field stats detail by role", () => {
       ],
       travel: [{ pilot: "A", date: "2026-01-06", activity: "Doctor appointment", status: "out of office" }],
       salesNames: ["S"],
+      days: [],
     };
     const stripped = withoutDetail(stats);
     expect(stripped.events).toEqual([]);
@@ -339,6 +340,26 @@ describe("workdays", () => {
     const stats = computeFieldStats({ header: HEADER, rows, today: "2026-02-01", firstDays: { Emil: "2026-01-13" } });
     expect(emil(stats, "2026-01")).toEqual({ pilot: "Emil", workDays: 14, pocDays: 0, trainingDays: 1, travelDays: 0 });
     expect(stats.all.workdays.find((w) => w.pilot === "Philipp")?.workDays).toBe(22);
+  });
+
+  it("counts, per weekday, the pilots travelling and the pilots at home", () => {
+    const stats = computeFieldStats({
+      header: HEADER,
+      rows,
+      today: "2026-02-03",
+      offCells: new Set([offCellKey(2, EMIL), offCellKey(3, EMIL), offCellKey(4, EMIL)]),
+    });
+    // Andrei, Philipp, Emil, Mike, Sam are on (Tiago starts in May; Charles and Matteo are not field pilots).
+    const day = (date: string) => stats.days.find((d) => d.date === date);
+    expect(day("2026-01-05")).toEqual({ date: "2026-01-05", travel: 1, home: 4 });
+    expect(day("2026-01-06")).toEqual({ date: "2026-01-06", travel: 1, home: 4 });
+    expect(day("2026-01-07")).toEqual({ date: "2026-01-07", travel: 0, home: 4 }); // Emil red: off
+    expect(day("2026-01-13")).toEqual({ date: "2026-01-13", travel: 0, home: 5 }); // training in Lausanne
+    expect(day("2026-01-10")).toBeUndefined(); // Saturday
+    expect(stats.days).toHaveLength(23); // 22 weekdays in January + 2 February
+    expect(stats.days.at(-1)?.date).toBe("2026-02-02");
+    // Counts only: nothing from a cell's text, so sales and HR keep it.
+    expect(withoutDetail(stats).days).toEqual(stats.days);
   });
 
   it("starts Tiago on 4 May 2026", () => {

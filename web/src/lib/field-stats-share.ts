@@ -1,4 +1,16 @@
-import type { PilotWorkdays } from "@/lib/field-stats";
+import type { FieldDay, PilotWorkdays } from "@/lib/field-stats";
+
+/**
+ * The team's running balance, day by day: each pilot on the road that day adds
+ * one, each pilot at home takes one away. Rising means more travel than home.
+ */
+export function runningBalance(days: readonly FieldDay[]): (FieldDay & { balance: number })[] {
+  let balance = 0;
+  return days.map((day) => {
+    balance += day.travel - day.home;
+    return { ...day, balance };
+  });
+}
 
 /**
  * The whole team's share: everyone's days over everyone's workdays, so a pilot
