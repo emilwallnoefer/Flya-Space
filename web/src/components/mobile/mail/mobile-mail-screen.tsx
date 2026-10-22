@@ -9,7 +9,6 @@ import { DISCIPLINE_LABEL, LAUSANNE_SITE_OPTIONS, TRAINING_DISCIPLINES } from "@
 import type { UserRole } from "@/lib/user-role";
 import { cn } from "@/lib/cn";
 import { MobileButton, MobileSegmented, MobileSheet } from "../primitives";
-import { useBriefCostNotice } from "@/components/mail-composer/use-brief-cost-notice";
 
 /**
  * The Mail Composer on a phone: one column, big choices, the preview as a
@@ -29,6 +28,8 @@ export function MobileMailScreen({ composer, userRole, gmailConnected }: { compo
     mailGenMode,
     mailGenSaving,
     handleSetMailGenMode,
+    showBriefCostNotice,
+    dismissBriefCostNotice,
     briefText,
     setBriefText,
     briefContent,
@@ -53,8 +54,7 @@ export function MobileMailScreen({ composer, userRole, gmailConnected }: { compo
     if (result) setPreviewOpen(true);
   }
 
-  const { showBriefCostNotice, dismissBriefCostNotice } = useBriefCostNotice();
-  const canGenerate =!loading && (mailGenMode === "brief" ? form.recipient_name.trim() !== "" && briefText.trim() !== "" : !generateDisabled);
+  const canGenerate = !loading && (mailGenMode === "brief" ? form.recipient_name.trim() !== "" && briefText.trim() !== "" : !generateDisabled);
 
   return (
     <div className="space-y-5 px-4 pt-1">

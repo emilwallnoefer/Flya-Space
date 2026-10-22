@@ -12,7 +12,6 @@ import { AssetChecklist } from "./asset-checklist";
 import { ComposerChoiceRow, composerSegmentClass, ProgressiveField } from "./composer-fields";
 import { FlightDataLinkInput } from "./flight-data-link-input";
 import { LivePreview } from "./live-preview";
-import { useBriefCostNotice } from "./use-brief-cost-notice";
 import { DAY_DISCIPLINE_KEYS, DAY_SITE_KEYS } from "./types";
 import type { MailComposerState } from "./use-mail-composer";
 
@@ -37,6 +36,8 @@ export function MailComposerPanel({
     mailGenMode,
     mailGenSaving,
     handleSetMailGenMode,
+    showBriefCostNotice,
+    dismissBriefCostNotice,
     briefText,
     setBriefText,
     briefContent,
@@ -51,7 +52,6 @@ export function MailComposerPanel({
     generateDisabled,
     preDayCount,
   } = composer;
-  const { showBriefCostNotice, dismissBriefCostNotice } = useBriefCostNotice();
 
   /**
    * Has the mail started appearing in the preview?
