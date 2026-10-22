@@ -9,7 +9,8 @@
 //   2. The T0.1 fix: a user can still write user_metadata.role, but it does NOT
 //      become app_metadata.role (which is what the app authorizes on).
 //   3. The T0.5 fix: a spoofed chat sender_email is overwritten by the JWT email.
-//   4. Service-role-only tables (security_events) are unreadable by a user.
+//   4. Service-role-only tables (security_events, the fleet tables) are
+//      unreadable by a user.
 //   5. The run-3 F1/F2 fix: SECURITY DEFINER RPCs are not a way around RLS —
 //      tt_refresh_overtime_bank_stats refuses a foreign p_user (while still
 //      working for your own), and tt_resolve_audit_user_id is not callable.
@@ -156,6 +157,16 @@ async function main() {
     const { data, error } = await a.supabase.from("security_events").select("id").limit(1);
     // Deny-all RLS returns an empty set (or an error); either means "no access".
     check("security_events: not readable by a user", (data?.length ?? 0) === 0, error ? `error: ${error.code}` : "0 rows");
+  }
+
+  // 4b. Fleet tables are service-role only (2026-10-22-fleet-tables-service-
+  // role-only.sql): /api/fleet decides which roles see the fleet, so a user's
+  // token must not reach the tables directly. Only permission-denied proves
+  // the grant is gone; an empty result could just be an empty table.
+  for (const table of ["fleet_assets", "fleet_reservations", "fleet_asset_events", "fleet_settings", "fleet_holder_directory"]) {
+    const { error } = await a.supabase.from(table).select("*").limit(1);
+    const refused = error?.code === "42501";
+    check(`${table}: not readable with a user's token`, refused, refused ? "refused: 42501" : error ? `error: ${error.code}` : "READABLE");
   }
 
   // 5. run-3 F1/F2 — SECURITY DEFINER RPCs must not be a way around RLS.
