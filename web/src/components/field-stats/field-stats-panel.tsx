@@ -6,6 +6,7 @@ import { InfoTooltip } from "@/components/info-tooltip";
 import { HoverTooltip, type HoverPos } from "@/components/mail-tracking/stat-tile";
 import { fmtRelative } from "@/lib/admin-format";
 import type { FieldEvent, FieldStats, FieldStatsBucket, FieldTravelDay } from "@/lib/field-stats";
+import { teamShare } from "@/lib/field-stats-share";
 
 type Loaded = { stats: FieldStats; fetchedAt: string; stale: boolean };
 
@@ -261,7 +262,7 @@ export function FieldStatsPanel() {
               </>
             )}
           </div>
-          {month === "all" && stats.months.length > 1 ? <MonthlyCard stats={stats} onPick={setMonth} /> : null}
+          {month === "all" && stats.months.length > 1 ? <MonthlyCard stats={stats} onPick={setMonth} percent={measure === "percent"} /> : null}
         </>
       ) : null}
     </Card>
@@ -445,8 +446,20 @@ function BarCard({
   );
 }
 
-/** Team totals per month; a column opens that month. */
-function MonthlyCard({ stats, onPick }: { stats: FieldStats; onPick: (month: string) => void }) {
+/**
+ * Team totals per month; a column opens that month. In % mode a column is the
+ * team's travel days over the team's workdays that month, so short months and
+ * holiday months compare fairly.
+ */
+function MonthlyCard({
+  stats,
+  onPick,
+  percent,
+}: {
+  stats: FieldStats;
+  onPick: (month: string) => void;
+  percent: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<HoverPos>(null);
   const months = useMemo(
@@ -455,11 +468,20 @@ function MonthlyCard({ stats, onPick }: { stats: FieldStats; onPick: (month: str
         const bucket = stats.byMonth[m];
         const sum = (field: "poc" | "training" | "travelDays") =>
           bucket.pilots.reduce((acc, p) => acc + p[field], 0);
-        return { month: m, travelDays: sum("travelDays"), poc: sum("poc"), training: sum("training") };
+        const share = teamShare(bucket.workdays, "travelDays");
+        return {
+          month: m,
+          value: percent ? share.percent : sum("travelDays"),
+          travelDays: sum("travelDays"),
+          share,
+          poc: sum("poc"),
+          training: sum("training"),
+        };
       }),
-    [stats],
+    [stats, percent],
   );
-  const max = Math.max(1, ...months.map((m) => m.travelDays));
+  const max = Math.max(1, ...months.map((m) => m.value));
+  const title = percent ? "Team travel, % of workdays per month" : "Team travel days per month";
 
   return (
     <div
@@ -468,9 +490,12 @@ function MonthlyCard({ stats, onPick }: { stats: FieldStats; onPick: (month: str
       onMouseLeave={() => setHover(null)}
     >
       <div className="mb-2 flex items-center gap-1.5">
-        <h3 className="text-xs font-semibold text-ink">Team travel days per month</h3>
-        <InfoTooltip label="About team travel days per month">
-          All pilots&apos; travel days added up per month. Click a month to see its breakdown.
+        <h3 className="text-xs font-semibold text-ink">{title}</h3>
+        <InfoTooltip label={`About ${title.toLowerCase()}`}>
+          {percent
+            ? "All pilots' travel workdays over all pilots' workdays, per month (Monday to Friday, minus red off days)."
+            : "All pilots' travel days added up per month."}{" "}
+          Click a month to see its breakdown.
         </InfoTooltip>
       </div>
       <div className="flex h-36 items-end gap-1.5">
@@ -479,7 +504,7 @@ function MonthlyCard({ stats, onPick }: { stats: FieldStats; onPick: (month: str
             key={m.month}
             type="button"
             onClick={() => onPick(m.month)}
-            aria-label={`${monthLabel(m.month)}: ${plural(m.travelDays, "travel day")}`}
+            aria-label={`${monthLabel(m.month)}: ${percent ? `${m.value}% of workdays travelling` : plural(m.travelDays, "travel day")}`}
             className="group flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1"
             onMouseEnter={(event) => {
               const parent = containerRef.current;
@@ -488,12 +513,21 @@ function MonthlyCard({ stats, onPick }: { stats: FieldStats; onPick: (month: str
               const parentRect = parent.getBoundingClientRect();
               setHover({
                 x: rect.left - parentRect.left + rect.width / 2,
-                y: rect.top - parentRect.top + rect.height * (1 - m.travelDays / max),
+                y: rect.top - parentRect.top + rect.height * (1 - m.value / max),
                 width: parentRect.width,
                 content: (
                   <div className="min-w-[140px]">
                     <div className="font-semibold text-ink">{monthLabel(m.month)}</div>
-                    <div className="text-ink-2">{plural(m.travelDays, "travel day")}</div>
+                    {percent ? (
+                      <>
+                        <div className="text-ink-2">{m.value}% of workdays travelling</div>
+                        <div className="text-ink-4">
+                          {plural(m.share.days, "day")} of {plural(m.share.workDays, "workday")}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-ink-2">{plural(m.travelDays, "travel day")}</div>
+                    )}
                     <div className="text-ink-4">
                       {plural(m.poc, "POC")} · {plural(m.training, "training")}
                     </div>
@@ -502,11 +536,13 @@ function MonthlyCard({ stats, onPick }: { stats: FieldStats; onPick: (month: str
               });
             }}
           >
-            <span className="text-[10px] tabular-nums text-ink-4">{m.travelDays || ""}</span>
+            <span className="text-[10px] tabular-nums text-ink-4">
+              {m.value ? (percent ? `${m.value}%` : m.value) : ""}
+            </span>
             <span className="flex min-h-0 w-full flex-1 items-end justify-center">
               <span
                 className="w-full max-w-10 rounded-t bg-accent/80 transition group-hover:bg-accent"
-                style={{ height: `${(m.travelDays / max) * 100}%`, minHeight: m.travelDays > 0 ? 2 : 0 }}
+                style={{ height: `${(m.value / max) * 100}%`, minHeight: m.value > 0 ? 2 : 0 }}
               />
             </span>
             <span className="text-[10px] text-ink-4">{monthLabel(m.month, MONTH_SHORT)}</span>
