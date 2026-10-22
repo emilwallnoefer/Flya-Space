@@ -270,7 +270,7 @@ function pilotRows(
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
 }
 
-/** Each pilot's days as a share of their workdays; pilots with no workdays in the period are left out. */
+/** Each pilot's days as a share of their workdays; pilots at 0% (or with no workdays in the period) are left out. */
 function shareRows(
   bucket: FieldStatsBucket,
   field: "pocDays" | "trainingDays" | "travelDays",
@@ -285,6 +285,7 @@ function shareRows(
       detail: `${plural(w[field], "day")} of ${plural(w.workDays, "workday")}`,
       items: w[field] > 0 ? itemsFor(w.pilot) : [],
     }))
+    .filter((row) => row.value > 0)
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
 }
 
@@ -307,7 +308,7 @@ function BarCard({
   unit: string;
   rows: BarRow[];
   empty: string;
-  /** Values are shares out of 100: shown with "%", and bars drawn against 100% rather than the largest. */
+  /** Values are shares out of 100, shown with "%". Bars still run to the largest, so the leader fills the row. */
   percent?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -318,7 +319,6 @@ function BarCard({
   const max = useMemo(() => rows.reduce((acc, row) => Math.max(acc, row.value), 0), [rows]);
   const total = useMemo(() => rows.reduce((acc, row) => acc + row.value, 0), [rows]);
   const show = (value: number) => (percent ? `${value}% of workdays` : plural(value, unit));
-  const scale = percent ? 100 : max;
 
   return (
     <div
@@ -341,7 +341,7 @@ function BarCard({
       ) : (
         <ul className="space-y-1.5">
           {rows.map((row) => {
-            const widthPct = scale > 0 ? Math.max(row.value > 0 ? 2 : 0, Math.min(100, (row.value / scale) * 100)) : 0;
+            const widthPct = max > 0 ? Math.max(row.value > 0 ? 2 : 0, (row.value / max) * 100) : 0;
             return (
               <li key={row.key}>
                 <button

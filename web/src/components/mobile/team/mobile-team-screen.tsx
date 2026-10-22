@@ -32,7 +32,7 @@ export function MobileTeamScreen({ field, onBack }: { field: Loaded; onBack: () 
   // Regions have no workdays to divide by: they always show counts.
   const percent = measure === "percent" && chart !== "regions";
   const rows = useMemo(() => (stats && bucket ? rowsFor(chart, bucket, stats, month, percent) : []), [stats, bucket, chart, month, percent]);
-  const max = percent ? 100 : rows.reduce((acc, r) => Math.max(acc, r.value), 0);
+  const max = rows.reduce((acc, r) => Math.max(acc, r.value), 0);
   const unit = percent
     ? chart === "travel" ? "% of workdays travelling" : chart === "poc" ? "% of workdays on POCs" : "% of workdays training"
     : chart === "regions" ? "events" : chart === "travel" ? "days" : chart === "poc" ? "POCs" : "trainings";
@@ -157,6 +157,7 @@ function rowsFor(chart: "regions" | "travel" | "poc" | "training", bucket: Field
         detail: `${w[days]} of ${w.workDays} workdays`,
         items: w[days] > 0 ? itemsFor(w.pilot) : [],
       }))
+      .filter((row) => row.value > 0)
       .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
   }
   const field = chart === "travel" ? "travelDays" : chart;
