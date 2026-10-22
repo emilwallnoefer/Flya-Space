@@ -6,7 +6,7 @@ import { guardAdmin } from "@/lib/admin-guard";
 import { checkRateLimit, createRateLimitHeaders, getClientIp } from "@/lib/security/rate-limit";
 import { serverError } from "@/lib/api-errors";
 import { normalizeUserRole } from "@/lib/user-role";
-import { canUseModule } from "@/lib/role-access";
+import { canUseModule, readModuleGrants } from "@/lib/role-access";
 import { displayNameFor } from "@/lib/fleet-queries";
 import { isPushConfigured, type PushSubscriptionRow } from "@/lib/push/send";
 import { pushToDevices } from "@/lib/push/notify-users";
@@ -192,7 +192,7 @@ export async function GET(request: Request) {
       const owner = userData?.user ?? null;
       const role = normalizeUserRole((owner?.app_metadata as Record<string, unknown> | undefined)?.role);
       // Only the roles with a Time Tracker (lib/role-access.ts).
-      if (!owner || !role || !canUseModule(role, false, "time")) continue;
+      if (!owner || !role || !canUseModule(role, false, "time", readModuleGrants(owner.app_metadata))) continue;
       considered += 1;
 
       const [{ data: days, error: daysError }, { count: compCount, error: compError }] = await Promise.all([

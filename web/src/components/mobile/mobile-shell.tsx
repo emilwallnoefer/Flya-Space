@@ -12,7 +12,7 @@ import { todayCell } from "@/lib/google-embed-today-client";
 import { withAuthUser, withRange, type EmbedSheet } from "@/lib/google-embeds";
 import type { FleetBoardResponse } from "@/components/fleet/types";
 import { HOME_CARDS } from "@/components/workspace-home-layout";
-import { availableModulesFor } from "@/lib/role-access";
+import { availableModulesFor, type ModuleGrant } from "@/lib/role-access";
 import { MODULE_KEYS, type ModuleKey } from "@/lib/dashboard-modules";
 import { LATEST_RELEASE } from "@/lib/release-notes";
 import { playUiSound } from "@/lib/ui-sounds";
@@ -32,6 +32,9 @@ import { useFieldStats } from "./team/use-field-stats";
 import { MobileAvatar, MobileButton, MobileGroup, MobileRow, MobileSheet, MobileTopBar } from "./primitives";
 import { useHomeSummary } from "./use-home-summary";
 import { useChatUnreadCount } from "@/components/chat/hooks/use-chat-unread";
+
+// One stable empty default, so the modules memo does not recompute every render.
+const NO_GRANTS: ModuleGrant[] = [];
 
 // Chat pulls supabase-js realtime into the browser; it loads only when opened.
 const MobileChatScreen = dynamic(() => import("./chat/mobile-chat-screen").then((m) => m.MobileChatScreen), { ssr: false });
@@ -70,6 +73,7 @@ export function MobileShell({
   email,
   initialRole,
   isAdmin = false,
+  moduleGrants = NO_GRANTS,
   initialWeek = null,
   initialSettings = null,
   initialAdminUsers = RESOLVED_NULL,
@@ -89,8 +93,8 @@ export function MobileShell({
         planning: Boolean(missionPlanning),
         fleetsheet: Boolean(fleetSheet),
         roaddays: Boolean(roadDays),
-      }),
-    [userRole, isAdmin, missionPlanning, fleetSheet, roadDays],
+      }, moduleGrants),
+    [userRole, isAdmin, missionPlanning, fleetSheet, roadDays, moduleGrants],
   );
   // HR's team time view is a tile on the home; for admins it sits under More.
   const teamTimeTile = !isAdmin && availableModules.includes("admin");
@@ -341,7 +345,7 @@ export function MobileShell({
         </div>
       ) : activeModule === "settings" ? (
         <div className="m-screen">
-          <MobileSettingsScreen userRole={userRole} isAdmin={isAdmin} initialData={initialSettings} onBack={goHome} />
+          <MobileSettingsScreen userRole={userRole} isAdmin={isAdmin} moduleGrants={moduleGrants} initialData={initialSettings} onBack={goHome} />
         </div>
       ) : (
         <div className="m-screen">

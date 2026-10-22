@@ -33,12 +33,16 @@ import { AdminOnboardingPanel } from "@/components/admin-onboarding-panel";
 import { WeekStepper } from "@/components/week-stepper";
 import { FreshnessPill } from "@/components/freshness-pill";
 import { userRoleLabel, type UserRole } from "@/lib/user-role";
+import { canUseModule } from "@/lib/role-access";
 import { useViewParam } from "@/lib/view-params";
 
 type AdminUser = {
   id: string;
   email: string;
   role: UserRole | null;
+  /** The Time Tracker switched on for this person beyond the role. */
+  time_access: boolean;
+  is_admin: boolean;
   created_at: string | null;
   last_sign_in_at: string | null;
 };
@@ -239,6 +243,31 @@ export function AdminPanel({ canManageUsers = true, initialUsers = null, initial
       setSection("time");
     }
   }, [canManageUsers, section, setSection]);
+
+  const changeTimeAccess = useCallback(async (userId: string, next: boolean) => {
+    setRolePending((prev) => ({ ...prev, [userId]: true }));
+    setRoleError(null);
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, time_access: next }),
+      });
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "Failed to update Time Tracker access.");
+      }
+      setUsers((prev) => prev.map((user) => (user.id === userId ? { ...user, time_access: next } : user)));
+    } catch (error) {
+      setRoleError((error as Error).message || "Failed to update Time Tracker access.");
+    } finally {
+      setRolePending((prev) => {
+        const nextState = { ...prev };
+        delete nextState[userId];
+        return nextState;
+      });
+    }
+  }, []);
 
   const changeRole = useCallback(async (userId: string, next: UserRole | null) => {
     setRolePending((prev) => ({ ...prev, [userId]: true }));
@@ -606,6 +635,14 @@ export function AdminPanel({ canManageUsers = true, initialUsers = null, initial
                                 </select>
                                 {pending ? <span className="text-[11px] text-ink-4">Saving...</span> : null}
                               </label>
+                              <div className="mt-2 flex items-center gap-2">
+                                <span className="text-[11px] text-ink-4">Time Tracker</span>
+                                <TimeAccessSwitch
+                                  user={user}
+                                  pending={pending}
+                                  onChange={(on) => void changeTimeAccess(user.id, on)}
+                                />
+                              </div>
                             </div>
                           );
                         })
@@ -621,18 +658,19 @@ export function AdminPanel({ canManageUsers = true, initialUsers = null, initial
                             <th className="px-3 py-2">Current role</th>
                             <th className="px-3 py-2">Last sign-in</th>
                             <th className="px-3 py-2">Change role</th>
+                            <th className="px-3 py-2">Time Tracker</th>
                           </tr>
                         </thead>
                         <tbody>
                           {usersLoading && users.length === 0 ? (
                             <tr>
-                              <td colSpan={4} className="px-3 py-6 text-center text-sm text-ink-3/80">
+                              <td colSpan={5} className="px-3 py-6 text-center text-sm text-ink-3/80">
                                 Loading users...
                               </td>
                             </tr>
                           ) : filteredUsers.length === 0 ? (
                             <tr>
-                              <td colSpan={4} className="px-3 py-6 text-center text-sm text-ink-3/80">
+                              <td colSpan={5} className="px-3 py-6 text-center text-sm text-ink-3/80">
                                 {users.length === 0 ? "No users found." : "No users match your filter."}
                               </td>
                             </tr>
@@ -670,6 +708,13 @@ export function AdminPanel({ canManageUsers = true, initialUsers = null, initial
                                       <span className="ml-2 text-[11px] text-ink-4">Saving...</span>
                                     ) : null}
                                   </td>
+                                  <td className="px-3 py-2">
+                                    <TimeAccessSwitch
+                                      user={user}
+                                      pending={pending}
+                                      onChange={(on) => void changeTimeAccess(user.id, on)}
+                                    />
+                                  </td>
                                 </tr>
                               );
                             })
@@ -685,5 +730,54 @@ export function AdminPanel({ canManageUsers = true, initialUsers = null, initial
         </section>
       </div>
     </section>
+  );
+}
+
+/**
+ * Users & roles → "Time Tracker": switches the module on for one person beyond
+ * their role (app_metadata.module_grants, lib/role-access.ts). Shown on and
+ * locked when the role (or admin status) already includes it, and locked off
+ * for an account without a role, which a grant would not open.
+ */
+function TimeAccessSwitch({
+  user,
+  pending,
+  onChange,
+}: {
+  user: AdminUser;
+  pending: boolean;
+  onChange: (on: boolean) => void;
+}) {
+  const included = canUseModule(user.role, user.is_admin, "time");
+  const held = user.role === null && !user.is_admin;
+  const on = included || user.time_access;
+  const locked = included || held || pending;
+  const note = included
+    ? `Included in ${user.is_admin ? "Admin" : userRoleLabel(user.role)}`
+    : held
+      ? "Needs a role first"
+      : null;
+  return (
+    <span className="inline-flex items-center gap-2">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label={`Time Tracker for ${user.email || user.id}`}
+        disabled={locked}
+        onClick={() => onChange(!user.time_access)}
+        className={`ui-switch relative h-5 w-9 shrink-0 rounded-full border p-0.5 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/80 disabled:opacity-50 ${
+          on ? "border-accent-deep/25 bg-accent-deep/40" : "border-glass/15 bg-glass/[0.08]"
+        }`}
+      >
+        <span
+          className={`block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform duration-200 ease-out ${
+            on ? "translate-x-4" : "translate-x-0"
+          }`}
+          aria-hidden
+        />
+      </button>
+      {note ? <span className="text-[11px] text-ink-4">{note}</span> : null}
+    </span>
   );
 }

@@ -10,7 +10,7 @@ import {
   toDateString,
 } from "@/lib/time-tracker-queries";
 import { normalizeUserRole, type UserRole } from "@/lib/user-role";
-import { canUseModule } from "@/lib/role-access";
+import { canUseModule, readModuleGrants } from "@/lib/role-access";
 import {
   isResendConfigured,
   sendEmailViaResend,
@@ -453,7 +453,7 @@ export async function GET(request: Request) {
     for (const user of pageUsers) {
       const role = extractRole(user.app_metadata);
       // Only the roles with a Time Tracker (lib/role-access.ts).
-      if (!role || !canUseModule(role, false, "time")) continue;
+      if (!role || !canUseModule(role, false, "time", readModuleGrants(user.app_metadata))) continue;
       if (!user.email) continue;
       candidates.push({
         user_id: user.id,

@@ -92,6 +92,13 @@ describe("accessTokenIsStale", () => {
     expect(accessTokenIsStale(current, fresh)).toBe(false);
   });
 
+  it("is stale once an admin switched a module grant on or off", () => {
+    expect(accessTokenIsStale(current, { ...fresh, app_metadata: { role: "sales", module_grants: ["time"] } })).toBe(true);
+    const granted = token({ app_metadata: { role: "sales", module_grants: ["time"] }, user_metadata: fresh.user_metadata });
+    expect(accessTokenIsStale(granted, { ...fresh, app_metadata: { role: "sales", module_grants: ["time"] } })).toBe(false);
+    expect(accessTokenIsStale(granted, fresh)).toBe(true);
+  });
+
   it("is stale once the skin was changed elsewhere", () => {
     // The phone saved neu; the laptop's token still says dark.
     expect(
@@ -140,6 +147,19 @@ describe("forbidWithoutModule", () => {
   it("lets an admin through whatever role they hold", () => {
     expect(forbidWithoutModule(user("hr", "Boss@Flyability.com"), "time")).toBeNull();
     expect(forbidWithoutModule(user(undefined, "boss@flyability.com"), "fleet")).toBeNull();
+  });
+
+  it("lets in a role without the module when an admin granted it", () => {
+    const granted = { email: "a@flyability.com", app_metadata: { role: "us_pilot", module_grants: ["time"] } };
+    expect(forbidWithoutModule(granted, "time")).toBeNull();
+    expect(forbidWithoutModule(granted, "fleet")?.status).toBe(403);
+    const held = { email: "a@flyability.com", app_metadata: { module_grants: ["time"] } };
+    expect(forbidWithoutModule(held, "time")?.status).toBe(403);
+  });
+
+  it("never reads a grant from user_metadata, which the user can rewrite", () => {
+    const forged = { email: "a@flyability.com", app_metadata: { role: "sales" }, user_metadata: { module_grants: ["time"] } };
+    expect(forbidWithoutModule(forged, "time")?.status).toBe(403);
   });
 
   it("never reads the role from user_metadata, which the user can rewrite", () => {

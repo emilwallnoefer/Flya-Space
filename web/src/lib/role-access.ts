@@ -12,6 +12,11 @@
  *   non-admin shows only its Time section), opened from a home card.
  * - Admins: everything, whatever role they hold.
  *
+ * On top of the role, an admin can switch a module on for one person
+ * (Admin → Users & roles): `app_metadata.module_grants`, service-role
+ * writable only, like the role itself. Only the Time Tracker is grantable so
+ * far, and a grant does nothing for an account without a role.
+ *
  * Settings is everyone's. The same rules are enforced on the server: every
  * Mail, Time Tracker, Fleet and travel-sheet route asks `forbidWithoutModule()`
  * (lib/app-access.ts), which reads `canUseModule` below.
@@ -49,18 +54,55 @@ export const GATED_MODULE_LABELS: Record<GatedModule, string> = {
   travel: "the travel sheet",
 };
 
-export function canUseModule(role: UserRole | null, isAdmin: boolean, module: GatedModule): boolean {
+/** Modules an admin can switch on for one person beyond their role. */
+export type ModuleGrant = "time";
+export const GRANTABLE_MODULES: readonly ModuleGrant[] = ["time"];
+
+/**
+ * The grants on an account, from `app_metadata.module_grants` ONLY — never
+ * user_metadata, which the user can rewrite (SECURITY.md T0.1). Unknown values
+ * are dropped.
+ */
+export function readModuleGrants(appMetadata: unknown): ModuleGrant[] {
+  if (!appMetadata || typeof appMetadata !== "object" || Array.isArray(appMetadata)) return [];
+  const raw = (appMetadata as Record<string, unknown>).module_grants;
+  if (!Array.isArray(raw)) return [];
+  return GRANTABLE_MODULES.filter((module) => raw.includes(module));
+}
+
+/**
+ * The grant list after switching one module on or off — for the admin route
+ * to write back into app_metadata. Keeps the order of GRANTABLE_MODULES and
+ * drops unknown values.
+ */
+export function withModuleGrant(appMetadata: unknown, module: ModuleGrant, on: boolean): ModuleGrant[] {
+  const current = readModuleGrants(appMetadata);
+  return GRANTABLE_MODULES.filter((m) => (m === module ? on : current.includes(m)));
+}
+
+export function canUseModule(
+  role: UserRole | null,
+  isAdmin: boolean,
+  module: GatedModule,
+  grants: readonly ModuleGrant[] = [],
+): boolean {
   if (isAdmin || role === "eu_pilot") return true;
+  if (role !== null && (grants as readonly string[]).includes(module)) return true;
   if (module === "fleet") return role === "sales";
   if (module === "mail") return role === "us_pilot";
   return false;
 }
 
-export function availableModulesFor(role: UserRole | null, isAdmin: boolean, embeds: ConfiguredEmbeds): ModuleKey[] {
+export function availableModulesFor(
+  role: UserRole | null,
+  isAdmin: boolean,
+  embeds: ConfiguredEmbeds,
+  grants: readonly ModuleGrant[] = [],
+): ModuleKey[] {
   const modules: ModuleKey[] = [];
-  if (canUseModule(role, isAdmin, "mail")) modules.push("mail");
-  if (canUseModule(role, isAdmin, "time")) modules.push("time");
-  if (canUseModule(role, isAdmin, "fleet")) modules.push("fleet");
+  if (canUseModule(role, isAdmin, "mail", grants)) modules.push("mail");
+  if (canUseModule(role, isAdmin, "time", grants)) modules.push("time");
+  if (canUseModule(role, isAdmin, "fleet", grants)) modules.push("fleet");
   modules.push("settings");
   for (const embed of ["planning", "fleetsheet", "roaddays"] as const) {
     if (embeds[embed] && canSeeGoogleEmbed(role, isAdmin, embed)) modules.push(embed);

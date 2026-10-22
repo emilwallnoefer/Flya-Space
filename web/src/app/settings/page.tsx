@@ -1,6 +1,7 @@
 import { SettingsShell } from "@/components/settings-shell";
 import { SETTINGS_SECTION_IDS, type SettingsSectionId } from "@/components/settings/types";
 import { normalizeUserRole } from "@/lib/user-role";
+import { readModuleGrants } from "@/lib/role-access";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { isAdminEmail } from "@/lib/admin";
@@ -58,6 +59,7 @@ export default async function SettingsPage({
       email={user.email ?? "Signed in"}
       userRole={userRole}
       isAdmin={isAdminEmail(user.email)}
+      moduleGrants={readModuleGrants(user.app_metadata)}
       initialSection={initialSection} />
   );
 }

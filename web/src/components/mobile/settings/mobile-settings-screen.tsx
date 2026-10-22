@@ -10,6 +10,7 @@ import { TimeDataSection } from "@/components/settings/sections/time-data-sectio
 import { TravelMappingSection } from "@/components/settings/sections/travel-mapping-section";
 import { SETTINGS_NAV, visibleSettingsNav, type InitialSettings, type SettingsSectionId } from "@/components/settings/types";
 import { useSettings } from "@/components/settings/use-settings";
+import type { ModuleGrant } from "@/lib/role-access";
 import type { UserRole } from "@/lib/user-role";
 import { useState } from "react";
 import { MobileGroup, MobileRow, MobileTopBar } from "../primitives";
@@ -35,15 +36,17 @@ const DETAIL: Record<SettingsSectionId, string> = {
 export function MobileSettingsScreen({
   userRole,
   isAdmin,
+  moduleGrants,
   initialData,
   onBack,
 }: {
   userRole: UserRole | null;
   isAdmin: boolean;
+  moduleGrants: ModuleGrant[];
   initialData: InitialSettings | null;
   onBack: () => void;
 }) {
-  const s = useSettings(userRole ?? "eu_pilot", isAdmin, 0, initialData);
+  const s = useSettings(userRole ?? "eu_pilot", isAdmin, moduleGrants, 0, initialData);
   const items = visibleSettingsNav(s.access);
   // The list comes first on a phone; the hook always holds a section, so
   // "which one is open" is this screen's own state.
