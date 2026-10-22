@@ -26,11 +26,16 @@ export function MobileTeamScreen({ field, onBack }: { field: Loaded; onBack: () 
   const [month, setMonth] = useState<string>("all");
   const [chart, setChart] = useState<"regions" | "travel" | "poc" | "training">("regions");
   const [open, setOpen] = useState<string | null>(null);
+  const [measure, setMeasure] = useState<"count" | "percent">("count");
 
   const bucket: FieldStatsBucket | null = stats ? (month === "all" ? stats.all : (stats.byMonth[month] ?? null)) : null;
-  const rows = useMemo(() => (stats && bucket ? rowsFor(chart, bucket, stats, month) : []), [stats, bucket, chart, month]);
-  const max = rows.reduce((acc, r) => Math.max(acc, r.value), 0);
-  const unit = chart === "regions" ? "events" : chart === "travel" ? "days" : chart === "poc" ? "POCs" : "trainings";
+  // Regions have no workdays to divide by: they always show counts.
+  const percent = measure === "percent" && chart !== "regions";
+  const rows = useMemo(() => (stats && bucket ? rowsFor(chart, bucket, stats, month, percent) : []), [stats, bucket, chart, month, percent]);
+  const max = percent ? 100 : rows.reduce((acc, r) => Math.max(acc, r.value), 0);
+  const unit = percent
+    ? chart === "travel" ? "% of workdays travelling" : chart === "poc" ? "% of workdays on POCs" : "% of workdays training"
+    : chart === "regions" ? "events" : chart === "travel" ? "days" : chart === "poc" ? "POCs" : "trainings";
 
   return (
     <>
@@ -62,6 +67,22 @@ export function MobileTeamScreen({ field, onBack }: { field: Loaded; onBack: () 
             { value: "training", label: "Trainings" },
           ]}
         />
+        {chart !== "regions" ? (
+          <MobileSegmented
+            label="Show"
+            value={measure}
+            onChange={(m) => { setMeasure(m); setOpen(null); }}
+            options={[
+              { value: "count", label: "Count" },
+              { value: "percent", label: "% of workdays" },
+            ]}
+          />
+        ) : null}
+        {percent ? (
+          <p className="text-xs text-ink-4">
+            Workdays are Monday to Friday, minus red (off) days in the sheet, from each pilot&apos;s first day (Tiago: 4 May).
+          </p>
+        ) : null}
         <MobileGroup title={`${unit} · ${month === "all" ? "year to date" : monthLabel(month)}`}>
           {!stats && loading ? <MobileEmpty>Reading the planning sheet…</MobileEmpty> : null}
           {stats && rows.length === 0 ? <MobileEmpty>Nothing in this period.</MobileEmpty> : null}
@@ -74,7 +95,7 @@ export function MobileTeamScreen({ field, onBack }: { field: Loaded; onBack: () 
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline justify-between gap-2">
                       <span className="truncate text-[15px] text-ink">{row.label}</span>
-                      <span className="shrink-0 text-sm font-semibold tabular-nums text-ink">{row.value}</span>
+                      <span className="shrink-0 text-sm font-semibold tabular-nums text-ink">{percent ? `${row.value}%` : row.value}</span>
                     </span>
                     {row.detail ? <span className="block text-xs text-ink-4">{row.detail}</span> : null}
                     <span className="mt-1.5 block h-1.5 w-full overflow-hidden rounded-full bg-glass/10" aria-hidden>
@@ -102,7 +123,7 @@ export function MobileTeamScreen({ field, onBack }: { field: Loaded; onBack: () 
   );
 }
 
-function rowsFor(chart: "regions" | "travel" | "poc" | "training", bucket: FieldStatsBucket, stats: FieldStats, month: string): Row[] {
+function rowsFor(chart: "regions" | "travel" | "poc" | "training", bucket: FieldStatsBucket, stats: FieldStats, month: string, percent: boolean): Row[] {
   const inPeriod = (date: string) => month === "all" || date.startsWith(month);
   const events = stats.events.filter((e) => inPeriod(e.start));
   const travel = stats.travel.filter((d) => inPeriod(d.date));
@@ -121,18 +142,30 @@ function rowsFor(chart: "regions" | "travel" | "poc" | "training", bucket: Field
       items: events.filter((e) => e.region === r.region).map((e) => eventItem(e, `${e.pilot} · ${e.kind === "poc" ? "POC" : "Training"}`)),
     })).sort((a, b) => b.value - a.value);
   }
+  const itemsFor = (pilot: string) =>
+    chart === "travel"
+      ? travel.filter((d) => d.pilot === pilot).map(travelItem)
+      : events.filter((e) => e.pilot === pilot && e.kind === chart).map((e) => eventItem(e, e.region));
+  if (percent) {
+    const days = chart === "travel" ? "travelDays" : chart === "poc" ? "pocDays" : "trainingDays";
+    return bucket.workdays
+      .filter((w) => w.workDays > 0)
+      .map((w) => ({
+        key: w.pilot,
+        label: w.pilot,
+        value: Math.round((w[days] / w.workDays) * 100),
+        detail: `${w[days]} of ${w.workDays} workdays`,
+        items: w[days] > 0 ? itemsFor(w.pilot) : [],
+      }))
+      .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+  }
   const field = chart === "travel" ? "travelDays" : chart;
   return bucket.pilots
     .map((p) => ({
       key: p.pilot,
       label: p.pilot,
       value: p[field],
-      items:
-        p[field] > 0
-          ? chart === "travel"
-            ? travel.filter((d) => d.pilot === p.pilot).map(travelItem)
-            : events.filter((e) => e.pilot === p.pilot && e.kind === chart).map((e) => eventItem(e, e.region))
-          : [],
+      items: p[field] > 0 ? itemsFor(p.pilot) : [],
     }))
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
 }

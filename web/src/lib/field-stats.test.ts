@@ -4,6 +4,9 @@ import {
   classifyDay,
   computeFieldStats,
   findPilotColumns,
+  isOffRed,
+  offCellKey,
+  PILOT_FIRST_DAYS,
   regionFor,
   salesNameFrom,
   sameBooking,
@@ -23,7 +26,7 @@ describe("field stats detail by role", () => {
   });
 
   it("strips every sheet text but keeps the counts", () => {
-    const bucket = { pilots: [{ pilot: "A", poc: 1, training: 0, travelDays: 1 }], regions: [] };
+    const bucket = { pilots: [{ pilot: "A", poc: 1, training: 0, travelDays: 1 }], regions: [], workdays: [] };
     const stats: FieldStats = {
       from: "2026-01-01",
       to: "2026-01-31",
@@ -267,5 +270,72 @@ describe("computeFieldStats", () => {
       today: "2026-03-31",
     });
     expect(again.all.pilots.find((p) => p.pilot === "Emil")?.poc).toBe(2);
+  });
+});
+
+describe("workdays", () => {
+  const rows = [
+    row("January 2026", 5, "travel to Tronder Energie", "travel time"),
+    row("", 6, "Tronder Energie POC", "booked out of the office"),
+    row("", 7, "Bank holiday"),
+    row("", 10, "travel home", "travel time"), // a Saturday
+    row("", 12, ""), // red with nothing written: off
+    row("", 13, "Apave Training", "booked in Lausanne"),
+  ];
+  const emil = (stats: FieldStats, month?: string) =>
+    (month ? stats.byMonth[month] : stats.all).workdays.find((w) => w.pilot === "Emil");
+
+  it("counts weekdays minus the red cells, and only workdays in the shares", () => {
+    const stats = computeFieldStats({
+      header: HEADER,
+      rows,
+      today: "2026-02-03",
+      offCells: new Set([offCellKey(2, EMIL), offCellKey(3, EMIL), offCellKey(4, EMIL)]),
+    });
+    // January has 22 weekdays; the 7th and 12th are red (the red Saturday was no workday anyway).
+    expect(emil(stats, "2026-01")).toEqual({ pilot: "Emil", workDays: 20, pocDays: 1, trainingDays: 1, travelDays: 2 });
+    // February adds Monday the 2nd.
+    expect(emil(stats)).toEqual({ pilot: "Emil", workDays: 21, pocDays: 1, trainingDays: 1, travelDays: 2 });
+    // The counts are unchanged: the Saturday still counts as a travel day there.
+    expect(stats.all.pilots.find((p) => p.pilot === "Emil")?.travelDays).toBe(3);
+  });
+
+  it("does not count a red day's work against the workdays", () => {
+    const stats = computeFieldStats({
+      header: HEADER,
+      rows,
+      today: "2026-02-01",
+      offCells: new Set([offCellKey(1, EMIL)]),
+    });
+    expect(emil(stats)).toMatchObject({ workDays: 21, pocDays: 0, travelDays: 1 });
+  });
+
+  it("falls back to the cell text when the colours are unknown", () => {
+    const stats = computeFieldStats({ header: HEADER, rows, today: "2026-02-01" });
+    // Only "Bank holiday" reads as off; the empty red cell cannot be seen.
+    expect(emil(stats)).toMatchObject({ workDays: 21 });
+  });
+
+  it("starts a late joiner's workdays on their first day", () => {
+    const stats = computeFieldStats({ header: HEADER, rows, today: "2026-02-01", firstDays: { Emil: "2026-01-13" } });
+    expect(emil(stats, "2026-01")).toEqual({ pilot: "Emil", workDays: 14, pocDays: 0, trainingDays: 1, travelDays: 0 });
+    expect(stats.all.workdays.find((w) => w.pilot === "Philipp")?.workDays).toBe(22);
+  });
+
+  it("starts Tiago on 4 May 2026", () => {
+    expect(PILOT_FIRST_DAYS.Tiago).toBe("2026-05-04");
+  });
+
+  it.each([
+    [{ red: 1 }, true],
+    [{ red: 1, green: 0, blue: 0 }, true],
+    [{ red: 0.8, green: 0.1, blue: 0.1 }, true],
+    [{ red: 1, green: 0.85, blue: 0.6 }, false], // travel beige
+    [{ red: 1, green: 1 }, false], // yellow
+    [{ red: 1, blue: 1 }, false], // magenta
+    [{ red: 1, green: 1, blue: 1 }, false],
+    [undefined, false],
+  ])("isOffRed(%j) is %s", (color, expected) => {
+    expect(isOffRed(color)).toBe(expected);
   });
 });

@@ -9,6 +9,12 @@ import type { FieldEvent, FieldStats, FieldStatsBucket, FieldTravelDay } from "@
 
 type Loaded = { stats: FieldStats; fetchedAt: string; stale: boolean };
 
+type Measure = "count" | "percent";
+const MEASURES: { value: Measure; label: string }[] = [
+  { value: "count", label: "Count" },
+  { value: "percent", label: "% of workdays" },
+];
+
 const MONTH_FORMAT = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
 const MONTH_SHORT = new Intl.DateTimeFormat("en-GB", { month: "short", timeZone: "UTC" });
 
@@ -54,6 +60,7 @@ export function FieldStatsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [month, setMonth] = useState<string>("all");
+  const [measure, setMeasure] = useState<Measure>("count");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -90,6 +97,9 @@ export function FieldStatsPanel() {
             Counted from the &ldquo;Mission planning&rdquo; tab of the planning sheet, from 1 January 2026 up to
             yesterday — today and anything planned later are not counted. Back-to-back days for the same customer count as one POC or training, in the month it starts. Unconfirmed entries (TBC,
             pre-booked) and days off are not counted. Regions follow the salesperson in &ldquo;Reporting to&rdquo;.
+            &ldquo;% of workdays&rdquo; divides each pilot&apos;s days by their workdays: Monday to Friday, minus the days
+            their cell is red (off, bank holiday, compensation), counted from their first day for anyone who joined
+            later (Tiago: 4 May).
             {stats && stats.events.length + stats.travel.length > 0
               ? " Click a name in a chart to see exactly what it counts."
               : null}
@@ -102,6 +112,22 @@ export function FieldStatsPanel() {
               {fmtRelative(data.fetchedAt)}
             </span>
           ) : null}
+          <div role="group" aria-label="Show" className="inline-flex rounded-lg border border-glass/10 bg-overlay/50 p-0.5 text-xs">
+            {MEASURES.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setMeasure(option.value)}
+                disabled={!stats}
+                aria-pressed={measure === option.value}
+                className={`rounded-md px-2.5 py-1 transition ${
+                  measure === option.value ? "bg-amber-400/15 text-warn" : "text-ink-3 enabled:hover:text-ink"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
           <Select
             aria-label="Period"
             value={month}
@@ -145,36 +171,76 @@ export function FieldStatsPanel() {
               }))}
               empty="No POCs or trainings in this period."
             />
-            <BarCard
-              title="Travel days per pilot"
-              info="Days spent travelling or away: “travel to …”, “travel time”, “out of the office”, and POC/training days not marked as in the office."
-              period={periodLabel}
-              unit="day"
-              rows={pilotRows(bucket, "travelDays", (pilot) =>
-                travel.filter((d) => d.pilot === pilot).map(travelItem),
-              )}
-              empty="No travel days in this period."
-            />
-            <BarCard
-              title="POCs per pilot"
-              info="Entries naming a POC or demo. Back-to-back days for the same customer count as one POC."
-              period={periodLabel}
-              unit="POC"
-              rows={pilotRows(bucket, "poc", (pilot) =>
-                events.filter((e) => e.pilot === pilot && e.kind === "poc").map((e) => eventItem(e, e.region)),
-              )}
-              empty="No POCs in this period."
-            />
-            <BarCard
-              title="Trainings per pilot"
-              info="Entries naming a training. Back-to-back days for the same customer count as one training, even when the course changes (Intro, then AIIM)."
-              period={periodLabel}
-              unit="training"
-              rows={pilotRows(bucket, "training", (pilot) =>
-                events.filter((e) => e.pilot === pilot && e.kind === "training").map((e) => eventItem(e, e.region)),
-              )}
-              empty="No trainings in this period."
-            />
+            {measure === "count" ? (
+              <>
+                <BarCard
+                  title="Travel days per pilot"
+                  info="Days spent travelling or away: “travel to …”, “travel time”, “out of the office”, and POC/training days not marked as in the office."
+                  period={periodLabel}
+                  unit="day"
+                  rows={pilotRows(bucket, "travelDays", (pilot) =>
+                    travel.filter((d) => d.pilot === pilot).map(travelItem),
+                  )}
+                  empty="No travel days in this period."
+                />
+                <BarCard
+                  title="POCs per pilot"
+                  info="Entries naming a POC or demo. Back-to-back days for the same customer count as one POC."
+                  period={periodLabel}
+                  unit="POC"
+                  rows={pilotRows(bucket, "poc", (pilot) =>
+                    events.filter((e) => e.pilot === pilot && e.kind === "poc").map((e) => eventItem(e, e.region)),
+                  )}
+                  empty="No POCs in this period."
+                />
+                <BarCard
+                  title="Trainings per pilot"
+                  info="Entries naming a training. Back-to-back days for the same customer count as one training, even when the course changes (Intro, then AIIM)."
+                  period={periodLabel}
+                  unit="training"
+                  rows={pilotRows(bucket, "training", (pilot) =>
+                    events.filter((e) => e.pilot === pilot && e.kind === "training").map((e) => eventItem(e, e.region)),
+                  )}
+                  empty="No trainings in this period."
+                />
+              </>
+            ) : (
+              <>
+                <BarCard
+                  title="Travelling, % of workdays"
+                  info="Workdays spent travelling or away, out of each pilot's workdays: Monday to Friday, minus red (off) days, from their first day. Weekend travel is left out."
+                  period={periodLabel}
+                  unit="day"
+                  percent
+                  rows={shareRows(bucket, "travelDays", (pilot) =>
+                    travel.filter((d) => d.pilot === pilot).map(travelItem),
+                  )}
+                  empty="No travel days in this period."
+                />
+                <BarCard
+                  title="On POCs, % of workdays"
+                  info="Workdays spent on a POC or demo, out of each pilot's workdays: Monday to Friday, minus red (off) days, from their first day. Every day of a multi-day POC counts here."
+                  period={periodLabel}
+                  unit="day"
+                  percent
+                  rows={shareRows(bucket, "pocDays", (pilot) =>
+                    events.filter((e) => e.pilot === pilot && e.kind === "poc").map((e) => eventItem(e, e.region)),
+                  )}
+                  empty="No POC days in this period."
+                />
+                <BarCard
+                  title="Training, % of workdays"
+                  info="Workdays spent training customers, out of each pilot's workdays: Monday to Friday, minus red (off) days, from their first day. Every day of a multi-day training counts here."
+                  period={periodLabel}
+                  unit="day"
+                  percent
+                  rows={shareRows(bucket, "trainingDays", (pilot) =>
+                    events.filter((e) => e.pilot === pilot && e.kind === "training").map((e) => eventItem(e, e.region)),
+                  )}
+                  empty="No training days in this period."
+                />
+              </>
+            )}
           </div>
           {month === "all" && stats.months.length > 1 ? <MonthlyCard stats={stats} onPick={setMonth} /> : null}
         </>
@@ -204,6 +270,24 @@ function pilotRows(
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
 }
 
+/** Each pilot's days as a share of their workdays; pilots with no workdays in the period are left out. */
+function shareRows(
+  bucket: FieldStatsBucket,
+  field: "pocDays" | "trainingDays" | "travelDays",
+  itemsFor: (pilot: string) => DetailItem[],
+): BarRow[] {
+  return bucket.workdays
+    .filter((w) => w.workDays > 0)
+    .map((w) => ({
+      key: w.pilot,
+      label: w.pilot,
+      value: Math.round((w[field] / w.workDays) * 100),
+      detail: `${plural(w[field], "day")} of ${plural(w.workDays, "workday")}`,
+      items: w[field] > 0 ? itemsFor(w.pilot) : [],
+    }))
+    .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+}
+
 function plural(n: number, unit: string) {
   return `${n} ${unit}${n === 1 ? "" : "s"}`;
 }
@@ -215,6 +299,7 @@ function BarCard({
   unit,
   rows,
   empty,
+  percent = false,
 }: {
   title: string;
   info: string;
@@ -222,6 +307,8 @@ function BarCard({
   unit: string;
   rows: BarRow[];
   empty: string;
+  /** Values are shares out of 100: shown with "%", and bars drawn against 100% rather than the largest. */
+  percent?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<HoverPos>(null);
@@ -230,6 +317,8 @@ function BarCard({
   const selected = rows.find((row) => row.key === selectedKey && row.items.length > 0) ?? null;
   const max = useMemo(() => rows.reduce((acc, row) => Math.max(acc, row.value), 0), [rows]);
   const total = useMemo(() => rows.reduce((acc, row) => acc + row.value, 0), [rows]);
+  const show = (value: number) => (percent ? `${value}% of workdays` : plural(value, unit));
+  const scale = percent ? 100 : max;
 
   return (
     <div
@@ -243,7 +332,7 @@ function BarCard({
           <InfoTooltip label={`About ${title.toLowerCase()}`}>{info}</InfoTooltip>
         </div>
         <span className="text-[11px] text-ink-4">
-          {plural(total, unit)} · {period}
+          {percent ? "of workdays" : plural(total, unit)} · {period}
         </span>
       </div>
 
@@ -252,7 +341,7 @@ function BarCard({
       ) : (
         <ul className="space-y-1.5">
           {rows.map((row) => {
-            const widthPct = max > 0 ? Math.max(row.value > 0 ? 2 : 0, (row.value / max) * 100) : 0;
+            const widthPct = scale > 0 ? Math.max(row.value > 0 ? 2 : 0, Math.min(100, (row.value / scale) * 100)) : 0;
             return (
               <li key={row.key}>
                 <button
@@ -275,9 +364,9 @@ function BarCard({
                       content: (
                         <div className="min-w-[140px]">
                           <div className="font-semibold text-ink">{row.label}</div>
-                          <div className="text-ink-2">{plural(row.value, unit)}</div>
+                          <div className="text-ink-2">{show(row.value)}</div>
                           {row.detail ? <div className="text-ink-4">{row.detail}</div> : null}
-                          {total > 0 ? (
+                          {total > 0 && !percent ? (
                             <div className="text-ink-4">
                               {Math.round((row.value / total) * 100)}% of all {unit}s{" "}
                               {period.startsWith("since") ? period : `in ${period}`}
@@ -297,7 +386,7 @@ function BarCard({
                       />
                     </span>
                   </span>
-                  <span className="shrink-0 text-xs tabular-nums text-ink-2">{row.value}</span>
+                  <span className="shrink-0 text-xs tabular-nums text-ink-2">{percent ? `${row.value}%` : row.value}</span>
                 </button>
               </li>
             );
@@ -308,7 +397,7 @@ function BarCard({
         <div className="mt-3 border-t border-glass/10 pt-2">
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <p className="text-xs font-semibold text-ink">
-              {selected.label} · {plural(selected.value, unit)}
+              {selected.label} · {show(selected.value)}
             </p>
             <button
               type="button"
