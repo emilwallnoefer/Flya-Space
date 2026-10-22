@@ -5,6 +5,7 @@ import {
   computeFieldStats,
   findPilotColumns,
   isOffRed,
+  NOT_FIELD_PILOTS,
   offCellKey,
   PILOT_FIRST_DAYS,
   regionFor,
@@ -270,6 +271,24 @@ describe("computeFieldStats", () => {
       today: "2026-03-31",
     });
     expect(again.all.pilots.find((p) => p.pilot === "Emil")?.poc).toBe(2);
+  });
+
+  it("leaves out the columns that are not field pilots: Charles, Matteo, Marketing", () => {
+    const header = [...HEADER, "MARKETING", "Status"];
+    const r = row("January 2026", 5, "Kiwa POC", "booked out of the office", "Igor");
+    r[6] = "Vigier POC"; // Charles
+    r[24] = "Apave Training"; // Matteo
+    r.push("Trade show POC", "out of the office"); // Marketing
+    const stats = computeFieldStats({ header, rows: [r], today: "2026-01-06" });
+    const names = stats.all.pilots.map((p) => p.pilot);
+    expect(names).not.toContain("Charles");
+    expect(names).not.toContain("Matteo");
+    expect(names).not.toContain("Marketing");
+    expect(names).toContain("Emil");
+    expect(stats.all.workdays.map((w) => w.pilot)).toEqual(names);
+    expect(stats.events.map((e) => e.title)).toEqual(["Kiwa POC"]);
+    expect(stats.all.regions).toEqual([{ region: "Igor", events: 1, poc: 1, training: 0 }]);
+    expect(NOT_FIELD_PILOTS).toEqual(["Charles", "Matteo", "Marketing"]);
   });
 });
 
