@@ -9,7 +9,7 @@
  * the user's browser, with their own Google session. Who may edit a sheet or
  * answer a form is decided by Google's sharing, and every edit or response is
  * recorded under that person's account. What this module decides is only who
- * sees the embeds at all — pilots and admins, not sales or HR — and the page
+ * sees the embeds at all — EU pilots, sales and admins (see lib/role-access.ts) — and the page
  * builds the URLs only for them, so other roles never receive them.
  *
  * Signed out of Google, the frame shows Google's sign-in prompt, and Google's
@@ -37,11 +37,8 @@
  * as `range=` to the URL (`withRange`), the only way to steer a cross-origin frame.
  */
 
-import type { UserRole } from "@/lib/user-role";
-
-export function canSeeGoogleEmbeds(role: UserRole | null, isAdmin: boolean): boolean {
-  return isAdmin || role === "eu_pilot" || role === "us_pilot";
-}
+// Who sees the embeds is decided with the rest of the role rules.
+export { canSeeGoogleEmbeds } from "@/lib/role-access";
 
 /** The calendar sheets whose today cell the server can find (`google-embed-today.ts`). */
 export type EmbedSheet = "planning" | "fleet";

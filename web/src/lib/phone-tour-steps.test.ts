@@ -39,6 +39,17 @@ describe("phoneTourSteps", () => {
     expect(phoneTourSteps(["time", "fleet", "settings"]).find((step) => step.key === "tabs")?.title).toMatch(/^Three/);
   });
 
+  it("drops the Time steps for roles without the Time Tracker (sales, HR)", () => {
+    const sales = phoneTourSteps(["fleet", "settings", "planning"]);
+    const keys = sales.map((step) => step.key);
+    for (const key of ["tile-overtime", "tile-today", "tab-time", "log-pick", "log-fill", "log-quick", "log-type"]) {
+      expect(keys).not.toContain(key);
+    }
+    expect(sales.some((step) => step.activeTab === "time")).toBe(false);
+    expect(sales.find((step) => step.key === "tabs")?.title).toMatch(/^Two/);
+    expect(phoneTourSteps(["settings", "admin"]).find((step) => step.key === "tabs")?.title).toMatch(/^One button/);
+  });
+
   it("has no separate Save step: the quick fills save on their own", () => {
     const steps = phoneTourSteps([...ALL]);
     expect(steps.some((step) => step.key === "log-save")).toBe(false);

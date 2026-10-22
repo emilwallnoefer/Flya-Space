@@ -20,6 +20,16 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-22-role-modules",
+    date: "Oct 22, 2026",
+    title: "Your dashboard, trimmed to your role",
+    highlights: [
+      "Sales: Fleet, Mission planning, Fleet management and Road Days",
+      "US pilots: Mail Composer and Time Tracker",
+      "HR: the team's hours are now a Time card on the dashboard",
+    ],
+  },
+  {
     version: "2026-10-22-field-stats-workdays",
     date: "Oct 22, 2026",
     title: "Field stats: % of workdays",

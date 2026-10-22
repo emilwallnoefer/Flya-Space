@@ -12,6 +12,7 @@ import { todayCell } from "@/lib/google-embed-today-client";
 import { withAuthUser, withRange, type EmbedSheet } from "@/lib/google-embeds";
 import type { FleetBoardResponse } from "@/components/fleet/types";
 import { HOME_CARDS } from "@/components/workspace-home-layout";
+import { availableModulesFor } from "@/lib/role-access";
 import { MODULE_KEYS, type ModuleKey } from "@/lib/dashboard-modules";
 import { LATEST_RELEASE } from "@/lib/release-notes";
 import { playUiSound } from "@/lib/ui-sounds";
@@ -82,14 +83,17 @@ export function MobileShell({
   const userRole = initialRole;
 
   // Same role → modules mapping as the desktop shell.
-  const availableModules = useMemo<ModuleKey[]>(() => {
-    const base: ModuleKey[] = userRole === "sales" || userRole === "hr" ? ["time", "fleet", "settings"] : ["mail", "time", "fleet", "settings"];
-    if (missionPlanning) base.push("planning");
-    if (fleetSheet) base.push("fleetsheet");
-    if (roadDays) base.push("roaddays");
-    if (isAdmin || userRole === "hr") base.push("admin");
-    return base;
-  }, [userRole, isAdmin, missionPlanning, fleetSheet, roadDays]);
+  const availableModules = useMemo<ModuleKey[]>(
+    () =>
+      availableModulesFor(userRole, isAdmin, {
+        planning: Boolean(missionPlanning),
+        fleetsheet: Boolean(fleetSheet),
+        roaddays: Boolean(roadDays),
+      }),
+    [userRole, isAdmin, missionPlanning, fleetSheet, roadDays],
+  );
+  // HR's team time view is a tile on the home; for admins it sits under More.
+  const teamTimeTile = !isAdmin && availableModules.includes("admin");
 
   const [activeModule, setActiveModule] = useState<ModuleKey | null>(() =>
     initialModule && availableModules.includes(initialModule) ? initialModule : null,
@@ -131,7 +135,6 @@ export function MobileShell({
     initialSettings?.gmail ?? { connected: false },
   );
   const composer = useMailComposer(userRole);
-  const adminModuleLabel = isAdmin ? "Admin" : "Team time";
 
   const summary = useHomeSummary({
     initialWeek,
@@ -147,14 +150,14 @@ export function MobileShell({
     markLaunchReady();
   }, []);
   useEffect(() => {
-    if (gmailStatusSeeded || userRole === "sales" || userRole === "hr") return;
+    if (gmailStatusSeeded || !availableModules.includes("mail")) return;
     fetch("/api/gmail/status")
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { connected: boolean; gmail_email?: string | null } | null) => {
         if (data) setGmailStatus(data);
       })
       .catch(() => {});
-  }, [userRole, gmailStatusSeeded]);
+  }, [availableModules, gmailStatusSeeded]);
   useEffect(() => {
     function refresh() {
       fetch("/api/gmail/status")
@@ -320,6 +323,7 @@ export function MobileShell({
           availableModules={availableModules}
           summary={summary}
           embeds={embeds}
+          teamTime={teamTimeTile}
           onOpenModule={openModule}
           onOpenMore={() => setMoreOpen(true)}
         />
@@ -374,8 +378,8 @@ export function MobileShell({
       <MobileSheet open={moreOpen} onClose={() => setMoreOpen(false)} title="More">
         <MobileGroup>
           <MobileRow label="Settings" detail="Appearance, Gmail, data" chevron onClick={() => openModule("settings")} />
-          {availableModules.includes("admin") ? (
-            <MobileRow label={adminModuleLabel} detail={isAdmin ? "Team time and users · the rest on desktop" : "Everyone's hours"} chevron onClick={() => openModule("admin")} />
+          {isAdmin ? (
+            <MobileRow label="Admin" detail="Team time and users · the rest on desktop" chevron onClick={() => openModule("admin")} />
           ) : null}
           <MobileRow
             label="Team in the field"

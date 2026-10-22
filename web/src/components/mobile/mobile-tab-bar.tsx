@@ -9,7 +9,7 @@ import { cn } from "@/lib/cn";
 export type MobileTab = "mail" | "time" | "fleet" | "chat";
 
 /**
- * The phone's navigation: Time, Mail, Fleet and Chat as icon-only tabs along
+ * The phone's navigation: Time, Mail, Fleet (each when the role has it) and Chat as icon-only tabs along
  * the bottom edge, in thumb reach (the name is the button's accessible label,
  * not shown). Module items come from `availableModules`
  * (role-clamped on the server). There is no Home tab: every module screen
@@ -32,7 +32,7 @@ export function MobileTabBar({
 }) {
   if (hidden) return null;
   const items: Array<{ key: MobileTab; label: string; icon: ReactNode; badge?: number }> = [
-    { key: "time", label: "Time", icon: <IconClock className="h-6 w-6" /> },
+    ...(availableModules.includes("time") ? [{ key: "time" as const, label: "Time", icon: <IconClock className="h-6 w-6" /> }] : []),
     ...(availableModules.includes("mail") ? [{ key: "mail" as const, label: "Mail", icon: <IconMail className="h-6 w-6" /> }] : []),
     ...(availableModules.includes("fleet") ? [{ key: "fleet" as const, label: "Fleet", icon: <IconDrone className="h-6 w-6" /> }] : []),
     { key: "chat", label: "Chat", icon: <ChatBubbleIcon className="h-6 w-6" />, badge: chatUnread },

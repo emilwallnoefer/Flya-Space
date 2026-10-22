@@ -23,8 +23,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const TIMEZONE = "Europe/Zurich";
+// The roles with a Time Tracker (lib/role-access.ts); sales and HR have none.
 const REMINDER_ROLES: ReadonlySet<UserRole> = new Set<UserRole>([
-  "sales",
   "eu_pilot",
   "us_pilot",
 ]);

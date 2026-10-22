@@ -337,7 +337,7 @@ function Avatar({ first }: { first: string }) {
 
 function TabBar({ activeTab, availableModules }: { activeTab: PhoneTourStep["activeTab"]; availableModules: ModuleKey[] }) {
   const items: Array<{ key: NonNullable<PhoneTourStep["activeTab"]>; spot: PhoneSpot; icon: ReactNode }> = [
-    { key: "time", spot: "tab-time", icon: <IconClock className="h-5 w-5" /> },
+    ...(availableModules.includes("time") ? [{ key: "time" as const, spot: "tab-time" as const, icon: <IconClock className="h-5 w-5" /> }] : []),
     ...(availableModules.includes("mail") ? [{ key: "mail" as const, spot: "tab-mail" as const, icon: <IconMail className="h-5 w-5" /> }] : []),
     ...(availableModules.includes("fleet") ? [{ key: "fleet" as const, spot: "tab-fleet" as const, icon: <IconDrone className="h-5 w-5" /> }] : []),
     { key: "chat", spot: "tab-chat", icon: <ChatBubbleIcon className="h-5 w-5" /> },
@@ -397,8 +397,12 @@ function HomeBoard({ first, availableModules, activeTab }: { first: string; avai
         </Spot>
       </div>
       <div className="grid grid-cols-2 gap-2.5 px-3 pt-1">
-        <Tile label="Overtime" value="+6:30" sub="Through Thu" tone="accent" spot="tile-overtime" />
-        <Tile label="Today" value="--:--" sub="Not logged yet" spot="tile-today" />
+        {has("time") ? (
+          <>
+            <Tile label="Overtime" value="+6:30" sub="Through Thu" tone="accent" spot="tile-overtime" />
+            <Tile label="Today" value="--:--" sub="Not logged yet" spot="tile-today" />
+          </>
+        ) : null}
         {has("fleet") ? (
           <Spot id="card-with-you" className="col-span-2 rounded-2xl border border-glass/10 bg-panel">
             <p className="px-3 pb-0.5 pt-2 text-[10px] font-medium text-ink-4">With you</p>
