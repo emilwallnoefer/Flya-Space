@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { forbidHeldAccount } from "@/lib/app-access";
+import { forbidHeldAccount, forbidWithoutModule } from "@/lib/app-access";
 
 /**
  * Settings → Notifications → "Fleet notices": whether this person is told
@@ -30,6 +30,8 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const held = forbidHeldAccount(user);
   if (held) return held;
+  const noModule = forbidWithoutModule(user, "fleet");
+  if (noModule) return noModule;
   return NextResponse.json({ enabled: readEnabled(user.user_metadata) });
 }
 
@@ -41,6 +43,8 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const held = forbidHeldAccount(user);
   if (held) return held;
+  const noModule = forbidWithoutModule(user, "fleet");
+  if (noModule) return noModule;
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Expected { enabled: boolean }." }, { status: 400 });

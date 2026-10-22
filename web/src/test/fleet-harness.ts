@@ -159,7 +159,24 @@ export const OTHER: FakeUser = {
   email: "other@flyability.com",
   user_metadata: { full_name: "Otto Other" },
   identities: [{ provider: "google", identity_data: { full_name: "Otto Other" } }],
+  app_metadata: { role: "sales" },
+};
+
+/** A role without Fleet (lib/role-access.ts): refused like a held account. */
+export const US_PILOT: FakeUser = {
+  id: "55555555-5555-4555-8555-555555555555",
+  email: "us@flyability.com",
+  user_metadata: { full_name: "Uma US" },
+  identities: [{ provider: "google", identity_data: { full_name: "Uma US" } }],
   app_metadata: { role: "us_pilot" },
+};
+
+export const HR: FakeUser = {
+  id: "66666666-6666-4666-8666-666666666666",
+  email: "hr@flyability.com",
+  user_metadata: { full_name: "Hal HR" },
+  identities: [{ provider: "google", identity_data: { full_name: "Hal HR" } }],
+  app_metadata: { role: "hr" },
 };
 
 /** Signed in, but no admin has assigned a role yet: sees only the role gate. */

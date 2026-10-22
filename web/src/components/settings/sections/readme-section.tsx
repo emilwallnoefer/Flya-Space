@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReadmeKey } from "../types";
+import type { ReadmeKey, SettingsAccess } from "../types";
 
 /* Disclosure rows + bodies for the README section (repeated 4×). */
 const README_TOGGLE_CLASS =
@@ -8,12 +8,12 @@ const README_TOGGLE_CLASS =
 const README_BODY_CLASS = "rounded-lg border border-glass/10 bg-panel/45 p-3 text-xs text-ink-2/90";
 
 type ReadmeSectionProps = {
-  isSalesOnly: boolean;
+  access: SettingsAccess;
   openReadme: ReadmeKey | null;
   onToggle: (key: ReadmeKey) => void;
 };
 
-export function ReadmeSection({ isSalesOnly, openReadme, onToggle }: ReadmeSectionProps) {
+export function ReadmeSection({ access, openReadme, onToggle }: ReadmeSectionProps) {
   return (
     <div className="mt-5 space-y-2">
       <p className="text-sm text-ink-4">In-app guides for integrations and workflows.</p>
@@ -25,23 +25,25 @@ export function ReadmeSection({ isSalesOnly, openReadme, onToggle }: ReadmeSecti
         <div className={README_BODY_CLASS}>
           <p className="font-medium text-accent-soft">What this program does</p>
           <ul className="mt-2 list-disc space-y-1 pl-4">
-            {!isSalesOnly ? (
+            {access.mail ? (
               <li>
                 <strong>Mail Composer</strong> creates pre/post training mails from structured inputs (language,
                 context, materials, and custom notes).
               </li>
             ) : null}
-            {!isSalesOnly ? (
+            {access.mail ? (
               <li>
                 <strong>Gmail Draft Mode</strong> allows generated mails to be saved as drafts directly in the
                 connected Gmail account.
               </li>
             ) : null}
-            <li>
-              <strong>Time Tracker</strong> records work logs, compensation, and overtime bank per authenticated
-              user.
-            </li>
-            {!isSalesOnly ? (
+            {access.time ? (
+              <li>
+                <strong>Time Tracker</strong> records work logs, compensation, and overtime bank per authenticated
+                user.
+              </li>
+            ) : null}
+            {access.time ? (
               <li>
                 <strong>Travel Integration</strong> enriches tracker days with travel context from Google Sheets using
                 per-user mapping.
@@ -54,13 +56,13 @@ export function ReadmeSection({ isSalesOnly, openReadme, onToggle }: ReadmeSecti
         </div>
       ) : null}
 
-      {!isSalesOnly ? (
+      {access.mail ? (
         <button type="button" onClick={() => onToggle("gmail")} className={README_TOGGLE_CLASS}>
           <span>Gmail setup README</span>
           <span>{openReadme === "gmail" ? "Hide" : "Show"}</span>
         </button>
       ) : null}
-      {!isSalesOnly && openReadme === "gmail" ? (
+      {access.mail && openReadme === "gmail" ? (
         <div className={README_BODY_CLASS}>
           <p className="font-medium text-accent-soft">What it does</p>
           <p className="mt-1 text-ink-3/90">
@@ -80,13 +82,13 @@ export function ReadmeSection({ isSalesOnly, openReadme, onToggle }: ReadmeSecti
         </div>
       ) : null}
 
-      {!isSalesOnly ? (
+      {access.time ? (
         <button type="button" onClick={() => onToggle("mapping")} className={README_TOGGLE_CLASS}>
           <span>Travel mapping setup README</span>
           <span>{openReadme === "mapping" ? "Hide" : "Show"}</span>
         </button>
       ) : null}
-      {!isSalesOnly && openReadme === "mapping" ? (
+      {access.time && openReadme === "mapping" ? (
         <div className={README_BODY_CLASS}>
           <p className="font-medium text-accent-soft">What it does</p>
           <p className="mt-1 text-ink-3/90">
@@ -106,11 +108,13 @@ export function ReadmeSection({ isSalesOnly, openReadme, onToggle }: ReadmeSecti
         </div>
       ) : null}
 
-      <button type="button" onClick={() => onToggle("import")} className={README_TOGGLE_CLASS}>
-        <span>Time import setup README</span>
-        <span>{openReadme === "import" ? "Hide" : "Show"}</span>
-      </button>
-      {openReadme === "import" ? (
+      {access.time ? (
+        <button type="button" onClick={() => onToggle("import")} className={README_TOGGLE_CLASS}>
+          <span>Time import setup README</span>
+          <span>{openReadme === "import" ? "Hide" : "Show"}</span>
+        </button>
+      ) : null}
+      {access.time && openReadme === "import" ? (
         <div className={README_BODY_CLASS}>
           <p className="font-medium text-accent-soft">What it does</p>
           <p className="mt-1 text-ink-3/90">

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { forbidHeldAccount } from "@/lib/app-access";
+import { forbidHeldAccount, forbidWithoutModule } from "@/lib/app-access";
 import { createClient } from "@/lib/supabase/server";
 import { readGmailConnection } from "@/lib/gmail-tokens";
 import {
@@ -28,6 +28,8 @@ export async function handleGetWeek(request: Request): Promise<NextResponse> {
   // is reissued, which the session refresher forces on the next page load.
   const held = forbidHeldAccount(claims);
   if (held) return held;
+  const noModule = forbidWithoutModule(claims, "time");
+  if (noModule) return noModule;
 
   const url = new URL(request.url);
   const weekStartDate = getWeekStartDate(url.searchParams.get("weekStart") ?? undefined);

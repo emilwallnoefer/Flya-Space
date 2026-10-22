@@ -10,8 +10,9 @@
  *   non-admin shows only its Time section), opened from a home card.
  * - Admins: everything, whatever role they hold.
  *
- * Settings is everyone's. This is what the UI offers; it is not a security
- * boundary — the API routes and RLS policies are.
+ * Settings is everyone's. The same rules are enforced on the server: every
+ * Mail, Time Tracker and Fleet route asks `forbidWithoutModule()`
+ * (lib/app-access.ts), which reads `canUseModule` below.
  */
 
 import type { ModuleKey } from "@/lib/dashboard-modules";
@@ -24,11 +25,26 @@ export function canSeeGoogleEmbeds(role: UserRole | null, isAdmin: boolean): boo
   return isAdmin || role === "eu_pilot" || role === "sales";
 }
 
+/** The modules whose API routes check the role (the sheets have their own rule above). */
+export type GatedModule = "mail" | "time" | "fleet";
+
+export const GATED_MODULE_LABELS: Record<GatedModule, string> = {
+  mail: "the Mail Composer",
+  time: "the Time Tracker",
+  fleet: "Fleet",
+};
+
+export function canUseModule(role: UserRole | null, isAdmin: boolean, module: GatedModule): boolean {
+  if (isAdmin || role === "eu_pilot") return true;
+  if (module === "fleet") return role === "sales";
+  return role === "us_pilot";
+}
+
 export function availableModulesFor(role: UserRole | null, isAdmin: boolean, embeds: ConfiguredEmbeds): ModuleKey[] {
-  const pilot = isAdmin || role === "eu_pilot";
   const modules: ModuleKey[] = [];
-  if (pilot || role === "us_pilot") modules.push("mail", "time");
-  if (pilot || role === "sales") modules.push("fleet");
+  if (canUseModule(role, isAdmin, "mail")) modules.push("mail");
+  if (canUseModule(role, isAdmin, "time")) modules.push("time");
+  if (canUseModule(role, isAdmin, "fleet")) modules.push("fleet");
   modules.push("settings");
   if (canSeeGoogleEmbeds(role, isAdmin)) {
     if (embeds.planning) modules.push("planning");

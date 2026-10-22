@@ -140,7 +140,9 @@ export default async function DashboardPage({
   // a 0.5 GB instance that swaps — every query it can skip is memory it does
   // not have to page back in.
   const opensAdmin = requestedModule === "admin";
-  const opensFleet = requestedModule === "fleet";
+  // Only for a role with Fleet: `?module=fleet` is typed by anyone, and the
+  // board would otherwise ride along in the page for a role the API refuses.
+  const opensFleet = requestedModule === "fleet" && roleModules.includes("fleet");
 
   const adminUsersPromise: Promise<AdminListedUser[] | null> = isAdmin && opensAdmin
     ? fetchAdminUsers(createAdminClient()).catch((error) => {

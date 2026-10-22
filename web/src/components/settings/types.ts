@@ -1,3 +1,4 @@
+import { canUseModule, type GatedModule } from "@/lib/role-access";
 import type { UserRole } from "@/lib/user-role";
 
 export type SettingsSectionId =
@@ -21,10 +22,11 @@ export const SETTINGS_SECTION_IDS: SettingsSectionId[] = [
   "readme",
 ];
 
-export const SETTINGS_NAV: { id: SettingsSectionId; label: string; pilotOnly?: boolean }[] = [
-  { id: "gmail", label: "Gmail", pilotOnly: true },
-  { id: "travel_mapping", label: "Travel mapping", pilotOnly: true },
-  { id: "time_data", label: "Time data" },
+/** `needs`: the module a section belongs to; roles without it never see it (lib/role-access.ts). */
+export const SETTINGS_NAV: { id: SettingsSectionId; label: string; needs?: GatedModule }[] = [
+  { id: "gmail", label: "Gmail", needs: "mail" },
+  { id: "travel_mapping", label: "Travel mapping", needs: "time" },
+  { id: "time_data", label: "Time data", needs: "time" },
   { id: "appearance", label: "Appearance" },
   { id: "interface_sounds", label: "Interface sounds" },
   { id: "notifications", label: "Notifications" },
@@ -32,8 +34,23 @@ export const SETTINGS_NAV: { id: SettingsSectionId; label: string; pilotOnly?: b
   { id: "readme", label: "Help & README" },
 ];
 
-export function filterSettingsNav(isSalesOnly: boolean, navFilter: string) {
-  const visible = SETTINGS_NAV.filter((item) => !item.pilotOnly || !isSalesOnly);
+/** Which of the role-gated modules this person has, for Settings to show only theirs. */
+export type SettingsAccess = Record<GatedModule, boolean>;
+
+export function settingsAccessFor(role: UserRole | null, isAdmin: boolean): SettingsAccess {
+  return {
+    mail: canUseModule(role, isAdmin, "mail"),
+    time: canUseModule(role, isAdmin, "time"),
+    fleet: canUseModule(role, isAdmin, "fleet"),
+  };
+}
+
+export function visibleSettingsNav(access: SettingsAccess) {
+  return SETTINGS_NAV.filter((item) => !item.needs || access[item.needs]);
+}
+
+export function filterSettingsNav(access: SettingsAccess, navFilter: string) {
+  const visible = visibleSettingsNav(access);
   const q = navFilter.trim().toLowerCase();
   return q === "" ? visible : visible.filter((item) => item.label.toLowerCase().includes(q));
 }
@@ -51,6 +68,7 @@ export type SettingsPanelProps = {
   showStandaloneActions?: boolean;
   autoOpenProgramReadmeToken?: number;
   userRole?: UserRole;
+  isAdmin?: boolean;
   /** When provided, seeds the panel so it doesn't refetch on mount. */
   initialData?: InitialSettings | null;
   /**

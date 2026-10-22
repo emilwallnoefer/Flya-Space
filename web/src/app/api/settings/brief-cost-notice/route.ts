@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { forbidHeldAccount } from "@/lib/app-access";
+import { forbidHeldAccount, forbidWithoutModule } from "@/lib/app-access";
 
 /**
  * Marks the one-time AI brief cost note as seen for this user, so it never
@@ -17,6 +17,8 @@ export async function POST() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const held = forbidHeldAccount(user);
   if (held) return held;
+  const noModule = forbidWithoutModule(user, "mail");
+  if (noModule) return noModule;
 
   // updateUser merges top-level metadata keys, so only the flag is sent.
   const { error } = await supabase.auth.updateUser({ data: { brief_cost_notice_seen: true } });

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { accessTokenIsStale, forbidHeldAccount, hasAppAccess, roleInAccessToken } from "./app-access";
+import { accessTokenIsStale, forbidHeldAccount, forbidWithoutModule, hasAppAccess, roleInAccessToken } from "./app-access";
 
 /**
  * hasAppAccess is the line between a held account and a working one, on every
@@ -116,5 +116,34 @@ describe("accessTokenIsStale", () => {
   it("never refreshes on a token it cannot read", () => {
     expect(accessTokenIsStale(null, fresh)).toBe(false);
     expect(accessTokenIsStale("not-a-jwt", fresh)).toBe(false);
+  });
+});
+
+describe("forbidWithoutModule", () => {
+  const user = (role: unknown, email = "a@flyability.com") => ({ email, app_metadata: { role } });
+
+  it("refuses a role without the module, with a 403", async () => {
+    const res = forbidWithoutModule(user("sales"), "time");
+    expect(res?.status).toBe(403);
+    expect(await res?.json()).toEqual({ error: "Your role does not include the Time Tracker." });
+    expect(forbidWithoutModule(user("sales"), "mail")?.status).toBe(403);
+    expect(forbidWithoutModule(user("us_pilot"), "fleet")?.status).toBe(403);
+    expect(forbidWithoutModule(user("hr"), "time")?.status).toBe(403);
+  });
+
+  it("lets a role with the module through", () => {
+    expect(forbidWithoutModule(user("sales"), "fleet")).toBeNull();
+    expect(forbidWithoutModule(user("us_pilot"), "mail")).toBeNull();
+    expect(forbidWithoutModule(user("pilot"), "time")).toBeNull();
+  });
+
+  it("lets an admin through whatever role they hold", () => {
+    expect(forbidWithoutModule(user("hr", "Boss@Flyability.com"), "time")).toBeNull();
+    expect(forbidWithoutModule(user(undefined, "boss@flyability.com"), "fleet")).toBeNull();
+  });
+
+  it("never reads the role from user_metadata, which the user can rewrite", () => {
+    const forged = { email: "a@flyability.com", app_metadata: { role: "sales" }, user_metadata: { role: "eu_pilot" } };
+    expect(forbidWithoutModule(forged, "time")?.status).toBe(403);
   });
 });

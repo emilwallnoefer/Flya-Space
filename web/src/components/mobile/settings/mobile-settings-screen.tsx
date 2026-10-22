@@ -8,7 +8,7 @@ import { ReadmeSection } from "@/components/settings/sections/readme-section";
 import { SecuritySection } from "@/components/settings/sections/security-section";
 import { TimeDataSection } from "@/components/settings/sections/time-data-section";
 import { TravelMappingSection } from "@/components/settings/sections/travel-mapping-section";
-import { SETTINGS_NAV, type InitialSettings, type SettingsSectionId } from "@/components/settings/types";
+import { SETTINGS_NAV, visibleSettingsNav, type InitialSettings, type SettingsSectionId } from "@/components/settings/types";
 import { useSettings } from "@/components/settings/use-settings";
 import type { UserRole } from "@/lib/user-role";
 import { useState } from "react";
@@ -34,15 +34,17 @@ const DETAIL: Record<SettingsSectionId, string> = {
  */
 export function MobileSettingsScreen({
   userRole,
+  isAdmin,
   initialData,
   onBack,
 }: {
   userRole: UserRole | null;
+  isAdmin: boolean;
   initialData: InitialSettings | null;
   onBack: () => void;
 }) {
-  const s = useSettings(userRole ?? "eu_pilot", 0, initialData);
-  const items = SETTINGS_NAV.filter((item) => !item.pilotOnly || !s.isSalesOnly);
+  const s = useSettings(userRole ?? "eu_pilot", isAdmin, 0, initialData);
+  const items = visibleSettingsNav(s.access);
   // The list comes first on a phone; the hook always holds a section, so
   // "which one is open" is this screen's own state.
   const [chosen, setChosen] = useState<SettingsSectionId | null>(null);
@@ -81,9 +83,9 @@ export function MobileSettingsScreen({
         {open === "time_data" ? <TimeDataSection importing={s.importing} exporting={s.exporting} onImportFile={(file) => void s.handleImportFile(file)} onExport={() => void s.handleExportData()} /> : null}
         {open === "appearance" ? <AppearanceSection /> : null}
         {open === "interface_sounds" ? <InterfaceSoundsSection /> : null}
-        {open === "notifications" ? <NotificationsSection /> : null}
+        {open === "notifications" ? <NotificationsSection access={s.access} /> : null}
         {open === "security" ? <SecuritySection confirmText={s.deleteConfirmText} setConfirmText={s.setDeleteConfirmText} deleting={s.deletingAccount} onDelete={() => void s.handleDeleteAccount()} /> : null}
-        {open === "readme" ? <ReadmeSection isSalesOnly={s.isSalesOnly} openReadme={s.openReadme} onToggle={s.toggleReadme} /> : null}
+        {open === "readme" ? <ReadmeSection access={s.access} openReadme={s.openReadme} onToggle={s.toggleReadme} /> : null}
         {s.message ? <p className="mt-6 text-sm text-positive">{s.message}</p> : null}
         {s.error ? <p className="mt-2 text-sm text-danger">{s.error}</p> : null}
       </div>

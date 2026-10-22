@@ -1,7 +1,7 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isAdminEmail } from "@/lib/admin";
-import { hasAppAccess } from "@/lib/app-access";
+import { hasAppAccess, userCanUseModule } from "@/lib/app-access";
 import {
   displayNameFor,
   fetchAssetSpans,
@@ -23,13 +23,17 @@ import { sendFleetNotice } from "@/lib/fleet-notify";
 /** The service-role client, as returned by `createAdminClient()`. */
 export type Admin = ReturnType<typeof createAdminClient>;
 
-/** `hasAccess` is false for a held account (no role, not admin): see lib/app-access.ts. */
+/**
+ * `hasAccess` is false for a held account (no role, not admin); `canUseFleet`
+ * is false for a role without Fleet (US pilots, HR). See lib/app-access.ts.
+ */
 export type Viewer = {
   id: string;
   email: string | null;
   name: string;
   isAdmin: boolean;
   hasAccess: boolean;
+  canUseFleet: boolean;
 };
 
 /** Shared context handed to every POST action handler. */
@@ -69,6 +73,7 @@ export async function resolveViewer(): Promise<Viewer | null> {
     name: displayNameFor({ email: user.email, identities: user.identities }),
     isAdmin: isAdminEmail(user.email ?? null),
     hasAccess: hasAppAccess(user),
+    canUseFleet: userCanUseModule(user, "fleet"),
   };
 }
 

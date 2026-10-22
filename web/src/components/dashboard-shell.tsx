@@ -832,6 +832,7 @@ export function DashboardShell({
                       email={email}
                       autoOpenProgramReadmeToken={settingsReadmeOpenToken}
                       userRole={userRole ?? "eu_pilot"}
+                      isAdmin={isAdmin}
                       initialData={initialSettings}
                     />
                   ) : (
