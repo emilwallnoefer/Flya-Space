@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
+import { Floating } from "@/components/floating";
 import { InfoTooltip } from "@/components/info-tooltip";
 
 export function StatTile({
@@ -24,18 +25,23 @@ export function StatTile({
   );
 }
 
-export type HoverPos = { x: number; y: number; width: number; content: ReactNode } | null;
+/** Card-relative: `x` is the hovered thing's centre, `y` its top, `height` its height (0 for a point). */
+export type HoverPos = { x: number; y: number; height?: number; content: ReactNode } | null;
 
-export function HoverTooltip({ hover }: { hover: HoverPos }) {
+/** Floats above the hovered thing (below when there is no room), never clipped by its card. */
+export function HoverTooltip({ hover, anchor }: { hover: HoverPos; anchor: RefObject<HTMLElement | null> }) {
   if (!hover) return null;
-  const left = Math.min(Math.max(hover.x, 80), Math.max(80, hover.width - 80));
-  const top = Math.max(hover.y - 12, 8);
   return (
-    <div
-      className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-lg border border-glass/15 bg-surface/95 px-3 py-2 text-[11px] leading-tight text-ink shadow-lg backdrop-blur"
-      style={{ left, top }}
+    <Floating
+      side="top"
+      gap={12}
+      anchor={() => {
+        const card = anchor.current?.getBoundingClientRect();
+        return card ? { left: card.left + hover.x, top: card.top + hover.y, width: 0, height: hover.height ?? 0 } : null;
+      }}
+      className="rounded-lg border border-glass/15 bg-surface/95 px-3 py-2 text-[11px] leading-tight text-ink shadow-lg backdrop-blur"
     >
       {hover.content}
-    </div>
+    </Floating>
   );
 }

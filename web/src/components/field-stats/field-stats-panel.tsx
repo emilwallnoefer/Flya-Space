@@ -382,7 +382,7 @@ function BarCard({
                     setHover({
                       x: rect.left - parentRect.left + rect.width / 2,
                       y: rect.top - parentRect.top,
-                      width: parentRect.width,
+                      height: rect.height,
                       content: (
                         <div className="min-w-[140px]">
                           <div className="font-semibold text-ink">{row.label}</div>
@@ -441,7 +441,7 @@ function BarCard({
           </ul>
         </div>
       ) : null}
-      <HoverTooltip hover={hover} />
+      <HoverTooltip hover={hover} anchor={containerRef} />
     </div>
   );
 }
@@ -519,7 +519,6 @@ function MonthlyCard({
               setHover({
                 x: rect.left - parentRect.left + rect.width / 2,
                 y: rect.top - parentRect.top + rect.height * (1 - m.value / max),
-                width: parentRect.width,
                 content: (
                   <div className="min-w-[140px]">
                     <div className="font-semibold text-ink">{monthLabel(m.month)}</div>
@@ -554,7 +553,7 @@ function MonthlyCard({
           </button>
         ))}
       </div>
-      <HoverTooltip hover={hover} />
+      <HoverTooltip hover={hover} anchor={containerRef} />
     </div>
   );
 }
@@ -655,7 +654,6 @@ function DailyCard({
     setHover({
       x: rect.left - parentRect.left + (xAt(index) / 100) * rect.width,
       y: rect.top - parentRect.top + (yAt(point.value) / 100) * rect.height,
-      width: parentRect.width,
       content: (
         <div className="min-w-[160px]">
           <div className="font-semibold text-ink">{WEEKDAY_FORMAT.format(new Date(`${point.date}T00:00:00Z`))}</div>
@@ -749,7 +747,7 @@ function DailyCard({
           ))}
         </div>
       </div>
-      <HoverTooltip hover={hover} />
+      <HoverTooltip hover={hover} anchor={containerRef} />
     </div>
   );
 }
