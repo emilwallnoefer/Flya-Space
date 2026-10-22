@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Card, Notice, Select } from "@/components/ui";
+import { Card, Notice } from "@/components/ui";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { HoverTooltip, type HoverPos } from "@/components/mail-tracking/stat-tile";
 import { fmtRelative } from "@/lib/admin-format";
@@ -90,29 +90,51 @@ export function FieldStatsPanel() {
 
   return (
     <Card padding="lg" className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <h2 className="text-lg font-semibold text-ink">Field stats</h2>
-          <InfoTooltip label="Where these numbers come from">
-            Counted from the &ldquo;Mission planning&rdquo; tab of the planning sheet, from 1 January 2026 up to
-            yesterday — today and anything planned later are not counted. Back-to-back days for the same customer count as one POC or training, in the month it starts. Unconfirmed entries (TBC,
-            pre-booked) and days off are not counted. Regions follow the salesperson in &ldquo;Reporting to&rdquo;.
-            &ldquo;% of workdays&rdquo; divides each pilot&apos;s days by their workdays: Monday to Friday, minus the days
-            their cell is red (off, bank holiday, compensation), counted from their first day for anyone who joined
-            later (Tiago: 4 May).
-            {stats && stats.events.length + stats.travel.length > 0
-              ? " Click a name in a chart to see exactly what it counts."
-              : null}
-          </InfoTooltip>
+      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-ink">Field stats</h2>
+            <InfoTooltip label="Where these numbers come from">
+              Counted from the &ldquo;Mission planning&rdquo; tab of the planning sheet, from 1 January 2026 up to
+              yesterday — today and anything planned later are not counted. Back-to-back days for the same customer count as one POC or training, in the month it starts. Unconfirmed entries (TBC,
+              pre-booked) and days off are not counted. Regions follow the salesperson in &ldquo;Reporting to&rdquo;.
+              &ldquo;% of workdays&rdquo; divides each pilot&apos;s days by their workdays: Monday to Friday, minus the days
+              their cell is red (off, bank holiday, compensation), counted from their first day for anyone who joined
+              later (Tiago: 4 May). Pilots with nothing in a chart are left out of it.
+              {stats && stats.events.length + stats.travel.length > 0
+                ? " Click a name in a chart to see exactly what it counts."
+                : null}
+            </InfoTooltip>
+          </div>
+          <div className="mt-0.5 flex items-center gap-1.5 text-[11px]">
+            {data ? (
+              <>
+                <span className={data.stale ? "text-warn" : "text-ink-4"}>
+                  {data.stale ? "Sheet unreachable — showing data from " : "Updated "}
+                  {fmtRelative(data.fetchedAt)}
+                </span>
+                <span className="text-ink-5" aria-hidden>
+                  ·
+                </span>
+              </>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void load()}
+              disabled={loading}
+              className="font-medium text-ink-3 underline-offset-2 transition hover:text-ink hover:underline disabled:opacity-50"
+            >
+              {loading ? "Loading…" : "Refresh"}
+            </button>
+          </div>
         </div>
+        {/* Both controls share one height and one chrome, so they read as a single toolbar. */}
         <div className="flex flex-wrap items-center gap-2">
-          {data ? (
-            <span className={`text-[11px] ${data.stale ? "text-warn" : "text-ink-4"}`}>
-              {data.stale ? "Sheet unreachable — showing data from " : "Updated "}
-              {fmtRelative(data.fetchedAt)}
-            </span>
-          ) : null}
-          <div role="group" aria-label="Show" className="inline-flex rounded-lg border border-glass/10 bg-overlay/50 p-0.5 text-xs">
+          <div
+            role="group"
+            aria-label="Show"
+            className="inline-flex h-9 items-stretch rounded-lg border border-glass/15 bg-glass/5 p-0.5 text-xs"
+          >
             {MEASURES.map((option) => (
               <button
                 key={option.value}
@@ -120,31 +142,28 @@ export function FieldStatsPanel() {
                 onClick={() => setMeasure(option.value)}
                 disabled={!stats}
                 aria-pressed={measure === option.value}
-                className={`rounded-md px-2.5 py-1 transition ${
-                  measure === option.value ? "bg-amber-400/15 text-warn" : "text-ink-3 enabled:hover:text-ink"
+                className={`rounded-md px-3 font-medium transition disabled:opacity-50 ${
+                  measure === option.value ? "bg-glass/15 text-ink shadow-sm" : "text-ink-3 enabled:hover:text-ink"
                 }`}
               >
                 {option.label}
               </button>
             ))}
           </div>
-          <Select
+          <select
             aria-label="Period"
             value={month}
             onChange={(event) => setMonth(event.target.value)}
             disabled={!stats}
-            className="w-auto py-1.5 text-xs"
+            className="h-9 rounded-lg border border-glass/15 bg-glass/5 px-3 text-xs font-medium text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent/50 disabled:opacity-50"
           >
-            <option value="all">All of {stats?.months[0]?.slice(0, 4) ?? "2026"} →</option>
+            <option value="all">All of {stats?.months[0]?.slice(0, 4) ?? "2026"}</option>
             {[...(stats?.months ?? [])].reverse().map((m) => (
               <option key={m} value={m}>
                 {monthLabel(m)}
               </option>
             ))}
-          </Select>
-          <Button size="sm" variant="glass-quiet" onClick={() => void load()} disabled={loading}>
-            {loading ? "Loading…" : "Refresh"}
-          </Button>
+          </select>
         </div>
       </header>
 
@@ -260,13 +279,15 @@ type BarRow = {
   items: DetailItem[];
 };
 
+/** Pilots with at least one entry for this chart; nobody shows at zero. */
 function pilotRows(
   bucket: FieldStatsBucket,
   field: "poc" | "training" | "travelDays",
   itemsFor: (pilot: string) => DetailItem[],
 ): BarRow[] {
   return bucket.pilots
-    .map((p) => ({ key: p.pilot, label: p.pilot, value: p[field], items: p[field] > 0 ? itemsFor(p.pilot) : [] }))
+    .filter((p) => p[field] > 0)
+    .map((p) => ({ key: p.pilot, label: p.pilot, value: p[field], items: itemsFor(p.pilot) }))
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
 }
 
@@ -332,7 +353,7 @@ function BarCard({
           <InfoTooltip label={`About ${title.toLowerCase()}`}>{info}</InfoTooltip>
         </div>
         <span className="text-[11px] text-ink-4">
-          {percent ? "of workdays" : plural(total, unit)} · {period}
+          {percent ? period : `${plural(total, unit)} · ${period}`}
         </span>
       </div>
 

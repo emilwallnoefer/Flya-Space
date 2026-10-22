@@ -22,6 +22,12 @@ export const FIELD_STATS_FROM = "2026-01-01";
  */
 export const PILOT_FIRST_DAYS: Record<string, string> = { Tiago: "2026-05-04" };
 
+/**
+ * Columns laid out like a pilot's that are not part of the field team: left out
+ * of every chart, the region totals included (owner decision, 2026-10-22).
+ */
+export const NOT_FIELD_PILOTS = ["Charles", "Matteo", "Marketing"];
+
 /** Shown for an event whose "Reporting to" cell is empty. */
 export const UNASSIGNED_REGION = "Unassigned";
 
@@ -362,7 +368,8 @@ export function computeFieldStats({
   /** Pilot name → first day (YYYY-MM-DD), for pilots who joined after `from`. */
   firstDays?: Record<string, string>;
 }): FieldStats {
-  const pilots = findPilotColumns(header);
+  const excluded = new Set(NOT_FIELD_PILOTS.map((name) => name.toLowerCase()));
+  const pilots = findPilotColumns(header).filter((p) => !excluded.has(p.name.toLowerCase()));
   const pilotNames = pilots.map((p) => p.name);
   const months = today >= from ? monthsBetween(from, today) : [];
   const all = newTally(pilotNames);

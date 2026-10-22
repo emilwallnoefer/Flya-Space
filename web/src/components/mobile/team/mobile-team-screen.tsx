@@ -162,11 +162,12 @@ function rowsFor(chart: "regions" | "travel" | "poc" | "training", bucket: Field
   }
   const field = chart === "travel" ? "travelDays" : chart;
   return bucket.pilots
+    .filter((p) => p[field] > 0)
     .map((p) => ({
       key: p.pilot,
       label: p.pilot,
       value: p[field],
-      items: p[field] > 0 ? itemsFor(p.pilot) : [],
+      items: itemsFor(p.pilot),
     }))
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
 }
