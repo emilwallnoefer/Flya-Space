@@ -105,7 +105,7 @@ export function HeatmapCard({
                         setHover({
                           x: rect.left - parentRect.left + rect.width / 2,
                           y: rect.top - parentRect.top,
-                          width: parentRect.width,
+                          height: rect.height,
                           content: (
                             <div>
                               <div className="font-semibold text-warn">
@@ -133,7 +133,7 @@ export function HeatmapCard({
       <p className="mt-2 text-[11px] text-ink-5">
         Times are the click viewer&apos;s local hour (yours, looking at this dashboard).
       </p>
-      <HoverTooltip hover={hover} />
+      <HoverTooltip hover={hover} anchor={containerRef} />
     </div>
   );
 }

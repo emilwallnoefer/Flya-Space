@@ -60,7 +60,7 @@ export function TopLinksCard({
                   setHover({
                     x: rect.left - parentRect.left + rect.width / 2,
                     y: rect.top - parentRect.top,
-                    width: parentRect.width,
+                    height: rect.height,
                     content: (
                       <div className="min-w-[200px]">
                         <div className="font-semibold text-warn">{row.label}</div>
@@ -92,7 +92,7 @@ export function TopLinksCard({
           })}
         </ul>
       )}
-      <HoverTooltip hover={hover} />
+      <HoverTooltip hover={hover} anchor={containerRef} />
     </div>
   );
 }

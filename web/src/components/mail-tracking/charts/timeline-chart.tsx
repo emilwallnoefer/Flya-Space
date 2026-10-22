@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useRef, useState, type RefObject } from "react";
+import { Floating } from "@/components/floating";
 import { StatTile } from "../stat-tile";
 import { formatBucketFullLabel, formatBucketTick, shouldShowBucketTick } from "../format";
 import type { TimelineBucket, TimelinePeriod, TimelineResponse } from "../types";
@@ -195,6 +196,7 @@ export function MailClickTimelineChart({
             y={hover.y}
             containerWidth={hover.w}
             containerHeight={hover.h}
+            anchor={containerRef}
           />
         ) : null}
       </div>
@@ -214,6 +216,7 @@ function TimelineTooltip({
   y,
   containerWidth,
   containerHeight,
+  anchor,
 }: {
   bucket: TimelineBucket;
   period: TimelinePeriod;
@@ -222,27 +225,30 @@ function TimelineTooltip({
   y: number;
   containerWidth: number;
   containerHeight: number;
+  anchor: RefObject<HTMLDivElement | null>;
 }) {
   const visibleClicks = showBots ? bucket.real_clicks + bucket.bot_clicks : bucket.real_clicks;
   const mails = (bucket.mails ?? []).filter((mail) =>
     showBots ? mail.real_clicks + mail.bot_clicks > 0 : mail.real_clicks > 0,
   );
 
-  // Flip horizontally past the midpoint, and place above the pointer when it is
-  // in the lower half — keeps the card inside the chart area.
+  // Prefer the side of the pointer with more chart around it; Floating still
+  // flips and clamps so the card is never cut off by the panel or the window.
   const alignRight = x > containerWidth / 2;
   const placeAbove = y > containerHeight / 2;
-  const style: CSSProperties = {
-    left: alignRight ? undefined : x + 12,
-    right: alignRight ? containerWidth - x + 12 : undefined,
-    top: placeAbove ? undefined : y + 12,
-    bottom: placeAbove ? containerHeight - y + 12 : undefined,
-  };
 
   return (
-    <div
-      className="pointer-events-none absolute z-20 w-64 rounded-lg border border-glass/15 bg-surface/95 p-3 text-xs shadow-xl shadow-shade/40"
-      style={style}
+    <Floating
+      side={placeAbove ? "top" : "bottom"}
+      align={alignRight ? "end" : "start"}
+      gap={0}
+      anchor={() => {
+        const card = anchor.current?.getBoundingClientRect();
+        if (!card) return null;
+        // A pointer-sized box, offset 12px to the side the card opens towards.
+        return { left: card.left + x + (alignRight ? -12 : 12), top: card.top + y - 12, width: 0, height: 24 };
+      }}
+      className="w-64 rounded-lg border border-glass/15 bg-surface/95 p-3 text-xs shadow-xl shadow-shade/40"
     >
       <p className="font-semibold text-ink">{formatBucketFullLabel(bucket.bucket_start, period)}</p>
       <p className="mt-0.5 text-[11px] text-ink-4">
@@ -278,6 +284,6 @@ function TimelineTooltip({
             : "No clicks in this period."}
         </p>
       )}
-    </div>
+    </Floating>
   );
 }
