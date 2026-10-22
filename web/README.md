@@ -38,7 +38,7 @@ The `hr` role re-uses the admin time endpoints (`/api/admin/time-overview` and `
 
 A Vercel Cron Job hits `GET /api/cron/time-log-reminder` every Monday at 07:00 UTC **and** 08:00 UTC (configured in `vercel.json`). The route internally gates on "weekday = Monday AND hour = 9 in Europe/Zurich", so exactly one of the two invocations does work year-round — regardless of CET/CEST daylight-savings shifts.
 
-For each user whose `app_metadata.role` is `eu_pilot` or `us_pilot` (the roles with a Time Tracker), the route sums `time_day_logs.net_mins` across the previous Monday→Sunday window. If the total is **0 minutes**, a reminder email is sent via [Resend](https://resend.com).
+For each user whose `app_metadata.role` has a Time Tracker (`eu_pilot`; see `lib/role-access.ts`), the route sums `time_day_logs.net_mins` across the previous Monday→Sunday window. If the total is **0 minutes**, a reminder email is sent via [Resend](https://resend.com).
 
 Useful knobs (all admin-gated unless called with the cron secret):
 

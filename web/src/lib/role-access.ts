@@ -6,8 +6,8 @@
  * - Sales: Fleet, Mission planning and Fleet management. No Road Days, no
  *   Time Tracker, no Mail.
  * - EU Pilot: Mail, Time Tracker, Fleet and all three Google cards.
- * - US Pilot: Mail and Time Tracker only — and no travel sheet, so no Travel
- *   mapping or Time data in Settings (owner decision 2026-10-22).
+ * - US Pilot: the Mail Composer only — no Time Tracker, no travel sheet
+ *   (owner decision 2026-10-22).
  * - HR: the read-only team time view (the "admin" module, which for a
  *   non-admin shows only its Time section), opened from a home card.
  * - Admins: everything, whatever role they hold.
@@ -52,8 +52,8 @@ export const GATED_MODULE_LABELS: Record<GatedModule, string> = {
 export function canUseModule(role: UserRole | null, isAdmin: boolean, module: GatedModule): boolean {
   if (isAdmin || role === "eu_pilot") return true;
   if (module === "fleet") return role === "sales";
-  if (module === "travel") return false;
-  return role === "us_pilot";
+  if (module === "mail") return role === "us_pilot";
+  return false;
 }
 
 export function availableModulesFor(role: UserRole | null, isAdmin: boolean, embeds: ConfiguredEmbeds): ModuleKey[] {
