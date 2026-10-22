@@ -25,8 +25,8 @@ export const SETTINGS_SECTION_IDS: SettingsSectionId[] = [
 /** `needs`: the module a section belongs to; roles without it never see it (lib/role-access.ts). */
 export const SETTINGS_NAV: { id: SettingsSectionId; label: string; needs?: GatedModule }[] = [
   { id: "gmail", label: "Gmail", needs: "mail" },
-  { id: "travel_mapping", label: "Travel mapping", needs: "time" },
-  { id: "time_data", label: "Time data", needs: "time" },
+  { id: "travel_mapping", label: "Travel mapping", needs: "travel" },
+  { id: "time_data", label: "Time data", needs: "travel" },
   { id: "appearance", label: "Appearance" },
   { id: "interface_sounds", label: "Interface sounds" },
   { id: "notifications", label: "Notifications" },
@@ -42,6 +42,7 @@ export function settingsAccessFor(role: UserRole | null, isAdmin: boolean): Sett
     mail: canUseModule(role, isAdmin, "mail"),
     time: canUseModule(role, isAdmin, "time"),
     fleet: canUseModule(role, isAdmin, "fleet"),
+    travel: canUseModule(role, isAdmin, "travel"),
   };
 }
 

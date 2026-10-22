@@ -42,7 +42,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const held = forbidHeldAccount(user);
   if (held) return held;
-  const noModule = forbidWithoutModule(user, "time");
+  const noModule = forbidWithoutModule(user, "travel");
   if (noModule) return noModule;
   return NextResponse.json(readMappingFromUserMetadata(user.user_metadata));
 }
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const held = forbidHeldAccount(user);
   if (held) return held;
-  const noModule = forbidWithoutModule(user, "time");
+  const noModule = forbidWithoutModule(user, "travel");
   if (noModule) return noModule;
 
   const payload = await request.json();
@@ -119,7 +119,7 @@ export async function DELETE() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const held = forbidHeldAccount(user);
   if (held) return held;
-  const noModule = forbidWithoutModule(user, "time");
+  const noModule = forbidWithoutModule(user, "travel");
   if (noModule) return noModule;
 
   // updateUser merges metadata shallowly, so overwrite the key with null —

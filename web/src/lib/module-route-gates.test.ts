@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
  */
 const SRC = path.resolve(__dirname, "..");
 
-const GATED: Array<{ file: string; module: "mail" | "time" | "fleet"; checks: number }> = [
+const GATED: Array<{ file: string; module: "mail" | "time" | "fleet" | "travel"; checks: number }> = [
   { file: "app/api/generate/route.ts", module: "mail", checks: 1 },
   { file: "app/api/generate-brief/route.ts", module: "mail", checks: 1 },
   { file: "app/api/render-brief/route.ts", module: "mail", checks: 1 },
@@ -22,7 +22,7 @@ const GATED: Array<{ file: string; module: "mail" | "time" | "fleet"; checks: nu
   { file: "app/api/settings/brief-cost-notice/route.ts", module: "mail", checks: 1 },
   { file: "app/api/time-tracker/route.ts", module: "time", checks: 1 },
   { file: "app/api/time-tracker/handlers/get-week.ts", module: "time", checks: 1 },
-  { file: "app/api/settings/travel-mapping/route.ts", module: "time", checks: 3 },
+  { file: "app/api/settings/travel-mapping/route.ts", module: "travel", checks: 3 },
   { file: "app/api/settings/fleet-notices/route.ts", module: "fleet", checks: 2 },
 ];
 

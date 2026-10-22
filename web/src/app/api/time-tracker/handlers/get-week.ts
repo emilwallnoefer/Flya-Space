@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { forbidHeldAccount, forbidWithoutModule } from "@/lib/app-access";
+import { forbidHeldAccount, forbidWithoutModule, userCanUseModule } from "@/lib/app-access";
 import { createClient } from "@/lib/supabase/server";
 import { readGmailConnection } from "@/lib/gmail-tokens";
 import {
@@ -33,7 +33,9 @@ export async function handleGetWeek(request: Request): Promise<NextResponse> {
 
   const url = new URL(request.url);
   const weekStartDate = getWeekStartDate(url.searchParams.get("weekStart") ?? undefined);
-  const includeTravel = url.searchParams.get("includeTravel") !== "0";
+  // A role without the travel sheet (US pilots) never gets the lookup, nor
+  // its "no travel columns configured" note.
+  const includeTravel = url.searchParams.get("includeTravel") !== "0" && userCanUseModule(claims, "travel");
   if (!weekStartDate) return NextResponse.json({ error: "Invalid weekStart date" }, { status: 400 });
 
   let week;

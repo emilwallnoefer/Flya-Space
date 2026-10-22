@@ -48,7 +48,7 @@ export function SettingsPanel({
                   <GmailSection status={s.gmailStatus} onDisconnect={() => void s.handleDisconnectGmail()} />
                 ) : null}
 
-                {s.access.time && s.activeSection === "travel_mapping" ? (
+                {s.access.travel && s.activeSection === "travel_mapping" ? (
                   <TravelMappingSection
                     mapping={s.travelMapping}
                     setMapping={s.setTravelMapping}
@@ -58,7 +58,7 @@ export function SettingsPanel({
                   />
                 ) : null}
 
-                {s.access.time && s.activeSection === "time_data" ? (
+                {s.access.travel && s.activeSection === "time_data" ? (
                   <TimeDataSection
                     importing={s.importing}
                     exporting={s.exporting}

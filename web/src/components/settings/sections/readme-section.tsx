@@ -43,7 +43,7 @@ export function ReadmeSection({ access, openReadme, onToggle }: ReadmeSectionPro
                 user.
               </li>
             ) : null}
-            {access.time ? (
+            {access.travel ? (
               <li>
                 <strong>Travel Integration</strong> enriches tracker days with travel context from Google Sheets using
                 per-user mapping.
@@ -82,13 +82,13 @@ export function ReadmeSection({ access, openReadme, onToggle }: ReadmeSectionPro
         </div>
       ) : null}
 
-      {access.time ? (
+      {access.travel ? (
         <button type="button" onClick={() => onToggle("mapping")} className={README_TOGGLE_CLASS}>
           <span>Travel mapping setup README</span>
           <span>{openReadme === "mapping" ? "Hide" : "Show"}</span>
         </button>
       ) : null}
-      {access.time && openReadme === "mapping" ? (
+      {access.travel && openReadme === "mapping" ? (
         <div className={README_BODY_CLASS}>
           <p className="font-medium text-accent-soft">What it does</p>
           <p className="mt-1 text-ink-3/90">
@@ -108,13 +108,13 @@ export function ReadmeSection({ access, openReadme, onToggle }: ReadmeSectionPro
         </div>
       ) : null}
 
-      {access.time ? (
+      {access.travel ? (
         <button type="button" onClick={() => onToggle("import")} className={README_TOGGLE_CLASS}>
           <span>Time import setup README</span>
           <span>{openReadme === "import" ? "Hide" : "Show"}</span>
         </button>
       ) : null}
-      {access.time && openReadme === "import" ? (
+      {access.travel && openReadme === "import" ? (
         <div className={README_BODY_CLASS}>
           <p className="font-medium text-accent-soft">What it does</p>
           <p className="mt-1 text-ink-3/90">

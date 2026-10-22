@@ -22,8 +22,8 @@ import {
 } from "@/lib/admin-queries";
 import { buildFleetBoard, type FleetBoardPayload } from "@/lib/fleet-board";
 import { DEFAULT_WINDOW_DAYS, displayNameFor } from "@/lib/fleet-queries";
-import { canSeeGoogleEmbeds, formEmbed, sheetEmbed } from "@/lib/google-embeds";
-import { availableModulesFor } from "@/lib/role-access";
+import { formEmbed, sheetEmbed } from "@/lib/google-embeds";
+import { availableModulesFor, canSeeGoogleEmbed, type EmbedKey } from "@/lib/role-access";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -191,15 +191,17 @@ export default async function DashboardPage({
   // admin API) — and stream in after the page is already on screen.
   const [initialWeek, initialSettings] = await Promise.all([initialWeekPromise, initialSettingsPromise]);
 
-  // Embedded Google Sheets / Forms: EU pilots, sales and admins. The URLs are built
-  // here and handed down only to them, so no other role's page ever carries
-  // one. An unset id yields null, which hides that card.
-  const seesEmbeds = canSeeGoogleEmbeds(initialRole, isAdmin);
-  const missionPlanning = seesEmbeds
+  // Embedded Google Sheets / Forms, each for the roles that see it
+  // (lib/role-access.ts: the sheets for EU pilots, sales and admins; Road Days
+  // without sales). A URL is built here and handed down only to those roles,
+  // so no other role's page ever carries one. An unset id yields null, which
+  // hides that card.
+  const sees = (embed: EmbedKey) => canSeeGoogleEmbed(initialRole, isAdmin, embed);
+  const missionPlanning = sees("planning")
     ? sheetEmbed(process.env.GOOGLE_SHEETS_SPREADSHEET_ID, process.env.GOOGLE_SHEETS_GID, "planning")
     : null;
-  const fleetSheet = seesEmbeds ? sheetEmbed(process.env.FLEET_SHEET_ID, process.env.FLEET_SHEET_GID, "fleet") : null;
-  const roadDays = seesEmbeds ? formEmbed(process.env.ROAD_DAYS_FORM_ID) : null;
+  const fleetSheet = sees("fleetsheet") ? sheetEmbed(process.env.FLEET_SHEET_ID, process.env.FLEET_SHEET_GID, "fleet") : null;
+  const roadDays = sees("roaddays") ? formEmbed(process.env.ROAD_DAYS_FORM_ID) : null;
 
   const shellProps = {
     email: email ?? "Signed in",
