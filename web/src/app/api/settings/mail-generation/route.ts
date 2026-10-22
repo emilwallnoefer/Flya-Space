@@ -29,7 +29,11 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const held = forbidHeldAccount(user);
   if (held) return held;
-  return NextResponse.json({ mode: readModeFromMetadata(user.user_metadata) });
+  return NextResponse.json({
+    mode: readModeFromMetadata(user.user_metadata),
+    // The one-time AI brief cost note; set by POST /api/settings/brief-cost-notice.
+    briefCostNoticeSeen: user.user_metadata?.brief_cost_notice_seen === true,
+  });
 }
 
 export async function POST(request: Request) {

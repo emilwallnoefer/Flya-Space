@@ -36,6 +36,8 @@ export function MailComposerPanel({
     mailGenMode,
     mailGenSaving,
     handleSetMailGenMode,
+    showBriefCostNotice,
+    dismissBriefCostNotice,
     briefText,
     setBriefText,
     briefContent,
@@ -98,6 +100,21 @@ export function MailComposerPanel({
           </div>
           {mailGenMode === "brief" ? (
             <div className="mt-4 space-y-3">
+              {showBriefCostNotice ? (
+                <div role="note" className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-xs leading-5 text-ink-2">
+                  <p>
+                    Heads-up: AI brief runs on our paid Claude API key, and each mail costs about 5–10 cents. Use it
+                    when it helps, just don&apos;t overdo it 😉
+                  </p>
+                  <button
+                    type="button"
+                    onClick={dismissBriefCostNotice}
+                    className="mt-1 font-medium text-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/90"
+                  >
+                    Got it
+                  </button>
+                </div>
+              ) : null}
               <div className="space-y-1">
                 <label className="block text-xs font-medium text-ink-3/80">Recipient name(s)</label>
                 <Input
