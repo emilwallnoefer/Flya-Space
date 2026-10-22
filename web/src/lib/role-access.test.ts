@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { availableModulesFor } from "./role-access";
+import { availableModulesFor, canUseModule } from "./role-access";
 
 const ALL_EMBEDS = { planning: true, fleetsheet: true, roaddays: true };
 const NO_EMBEDS = { planning: false, fleetsheet: false, roaddays: false };
@@ -60,5 +60,24 @@ describe("availableModulesFor", () => {
 
   it("no role: nothing but settings", () => {
     expect(availableModulesFor(null, false, ALL_EMBEDS)).toEqual(["settings"]);
+  });
+});
+
+describe("canUseModule", () => {
+  const cases: Array<[Parameters<typeof canUseModule>[0], boolean, { mail: boolean; time: boolean; fleet: boolean }]> = [
+    ["sales", false, { mail: false, time: false, fleet: true }],
+    ["eu_pilot", false, { mail: true, time: true, fleet: true }],
+    ["us_pilot", false, { mail: true, time: true, fleet: false }],
+    ["hr", false, { mail: false, time: false, fleet: false }],
+    [null, false, { mail: false, time: false, fleet: false }],
+    ["hr", true, { mail: true, time: true, fleet: true }],
+    [null, true, { mail: true, time: true, fleet: true }],
+  ];
+  it.each(cases)("%s (admin: %s)", (role, isAdmin, expected) => {
+    expect({
+      mail: canUseModule(role, isAdmin, "mail"),
+      time: canUseModule(role, isAdmin, "time"),
+      fleet: canUseModule(role, isAdmin, "fleet"),
+    }).toEqual(expected);
   });
 });

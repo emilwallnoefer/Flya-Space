@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { sanitizeColumnLetter } from "@/lib/security/input-sanitize";
 import { z } from "zod";
-import { forbidHeldAccount } from "@/lib/app-access";
+import { forbidHeldAccount, forbidWithoutModule } from "@/lib/app-access";
 
 type TravelMapping = {
   clientColumn: string;
@@ -42,6 +42,8 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const held = forbidHeldAccount(user);
   if (held) return held;
+  const noModule = forbidWithoutModule(user, "time");
+  if (noModule) return noModule;
   return NextResponse.json(readMappingFromUserMetadata(user.user_metadata));
 }
 
@@ -54,6 +56,8 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const held = forbidHeldAccount(user);
   if (held) return held;
+  const noModule = forbidWithoutModule(user, "time");
+  if (noModule) return noModule;
 
   const payload = await request.json();
   const parsed = travelMappingSchema.safeParse(payload);
@@ -115,6 +119,8 @@ export async function DELETE() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const held = forbidHeldAccount(user);
   if (held) return held;
+  const noModule = forbidWithoutModule(user, "time");
+  if (noModule) return noModule;
 
   // updateUser merges metadata shallowly, so overwrite the key with null —
   // the travel fetch treats a non-object mapping as "no personal mapping".

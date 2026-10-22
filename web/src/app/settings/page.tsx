@@ -54,6 +54,10 @@ export default async function SettingsPage({
   }
 
   return (
-    <SettingsShell email={user.email ?? "Signed in"} userRole={userRole} initialSection={initialSection} />
+    <SettingsShell
+      email={user.email ?? "Signed in"}
+      userRole={userRole}
+      isAdmin={isAdminEmail(user.email)}
+      initialSection={initialSection} />
   );
 }

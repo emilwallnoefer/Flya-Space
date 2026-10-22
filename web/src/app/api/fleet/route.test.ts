@@ -4,6 +4,7 @@ import {
   ASSET_ID,
   get,
   HELD,
+  HR,
   MEMBER,
   OTHER,
   pooledAsset,
@@ -11,6 +12,7 @@ import {
   reservation,
   RESERVATION_ID,
   TODAY,
+  US_PILOT,
 } from "@/test/fleet-harness";
 
 /**
@@ -39,6 +41,20 @@ describe("who is allowed in at all", () => {
     const held = { viewer: HELD, tables: { fleet_assets: assets() } };
     expect((await get(held)).status).toBe(403);
     expect((await post(held, { action: "confirm_location", asset_id: ASSET_ID })).status).toBe(403);
+  });
+
+  it("refuses the roles without Fleet: US pilots and HR", async () => {
+    for (const viewer of [US_PILOT, HR]) {
+      const options = { viewer, tables: { fleet_assets: assets() } };
+      const read = await get(options);
+      expect(read.status).toBe(403);
+      expect(read.body).toEqual({ error: "Your role does not include Fleet." });
+      expect((await post(options, { action: "confirm_location", asset_id: ASSET_ID })).status).toBe(403);
+    }
+  });
+
+  it("lets sales in", async () => {
+    expect((await get({ viewer: OTHER, tables: { fleet_assets: assets() } })).status).toBe(200);
   });
 
   it("rejects an unknown action and a malformed payload", async () => {

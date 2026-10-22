@@ -34,7 +34,8 @@ export const dynamic = "force-dynamic";
 /**
  * Fleet API.
  *
- * Reads are open to any signed-in user (the fleet is shared property). Writes
+ * Reads are open to every role with Fleet (lib/role-access.ts: EU pilots,
+ * sales, admins) — the fleet is shared property. Writes
  * run on the service-role client, because the rules that make the module work
  * cannot be expressed as RLS:
  *
@@ -55,6 +56,9 @@ export async function GET(request: Request) {
   if (!viewer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!viewer.hasAccess) {
     return NextResponse.json({ error: "Your account is waiting for an admin to assign a role." }, { status: 403 });
+  }
+  if (!viewer.canUseFleet) {
+    return NextResponse.json({ error: "Your role does not include Fleet." }, { status: 403 });
   }
 
   const boardWindow = parseBoardWindow(request, DEFAULT_WINDOW_DAYS);
@@ -93,6 +97,9 @@ export async function POST(request: Request) {
   if (!viewer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!viewer.hasAccess) {
     return NextResponse.json({ error: "Your account is waiting for an admin to assign a role." }, { status: 403 });
+  }
+  if (!viewer.canUseFleet) {
+    return NextResponse.json({ error: "Your role does not include Fleet." }, { status: 403 });
   }
 
   const clientIp = getClientIp(request);

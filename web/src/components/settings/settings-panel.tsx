@@ -17,10 +17,11 @@ export function SettingsPanel({
   showStandaloneActions = false,
   autoOpenProgramReadmeToken = 0,
   userRole = "eu_pilot",
+  isAdmin = false,
   initialData = null,
   initialSection = null,
 }: SettingsPanelProps) {
-  const s = useSettings(userRole, autoOpenProgramReadmeToken, initialData, initialSection);
+  const s = useSettings(userRole, isAdmin, autoOpenProgramReadmeToken, initialData, initialSection);
 
   return (
     <section className="underwater-panel relative overflow-hidden rounded-2xl">
@@ -43,11 +44,11 @@ export function SettingsPanel({
                   {SETTINGS_NAV.find((n) => n.id === s.activeSection)?.label ?? "Settings"}
                 </h2>
 
-                {!s.isSalesOnly && s.activeSection === "gmail" ? (
+                {s.access.mail && s.activeSection === "gmail" ? (
                   <GmailSection status={s.gmailStatus} onDisconnect={() => void s.handleDisconnectGmail()} />
                 ) : null}
 
-                {!s.isSalesOnly && s.activeSection === "travel_mapping" ? (
+                {s.access.time && s.activeSection === "travel_mapping" ? (
                   <TravelMappingSection
                     mapping={s.travelMapping}
                     setMapping={s.setTravelMapping}
@@ -57,7 +58,7 @@ export function SettingsPanel({
                   />
                 ) : null}
 
-                {s.activeSection === "time_data" ? (
+                {s.access.time && s.activeSection === "time_data" ? (
                   <TimeDataSection
                     importing={s.importing}
                     exporting={s.exporting}
@@ -70,7 +71,7 @@ export function SettingsPanel({
 
                 {s.activeSection === "interface_sounds" ? <InterfaceSoundsSection /> : null}
 
-                {s.activeSection === "notifications" ? <NotificationsSection /> : null}
+                {s.activeSection === "notifications" ? <NotificationsSection access={s.access} /> : null}
 
                 {s.activeSection === "security" ? (
                   <SecuritySection
@@ -82,7 +83,7 @@ export function SettingsPanel({
                 ) : null}
 
                 {s.activeSection === "readme" ? (
-                  <ReadmeSection isSalesOnly={s.isSalesOnly} openReadme={s.openReadme} onToggle={s.toggleReadme} />
+                  <ReadmeSection access={s.access} openReadme={s.openReadme} onToggle={s.toggleReadme} />
                 ) : null}
 
                 {s.message ? <p className="mt-8 text-sm text-positive">{s.message}</p> : null}

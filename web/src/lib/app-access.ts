@@ -2,7 +2,8 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { isAdminEmail } from "@/lib/admin";
-import { normalizeUserRole } from "@/lib/user-role";
+import { canUseModule, GATED_MODULE_LABELS, type GatedModule } from "@/lib/role-access";
+import { normalizeUserRole, type UserRole } from "@/lib/user-role";
 
 /**
  * Who may use the app's modules: an admin (`ADMIN_EMAILS`), or anyone an admin
@@ -27,11 +28,7 @@ export function hasAppAccess(
 ): boolean {
   if (!user) return false;
   if (isAdminEmail(user.email)) return true;
-  const metadata =
-    user.app_metadata && typeof user.app_metadata === "object" && !Array.isArray(user.app_metadata)
-      ? (user.app_metadata as Record<string, unknown>)
-      : {};
-  return normalizeUserRole(metadata.role) !== null;
+  return roleOf(user) !== null;
 }
 
 /**
@@ -46,6 +43,36 @@ export function forbidHeldAccount(
     { error: "Your account is waiting for an admin to assign a role." },
     { status: 403 },
   );
+}
+
+/**
+ * For a Mail, Time Tracker or Fleet route, after `forbidHeldAccount()`:
+ * returns a 403 if the account's role does not include that module
+ * (lib/role-access.ts), or null to carry on. The dashboard hides the module
+ * for those roles; this is what stops a direct call.
+ */
+export function forbidWithoutModule(
+  user: { email?: string | null; app_metadata?: unknown },
+  module: GatedModule,
+): NextResponse | null {
+  if (userCanUseModule(user, module)) return null;
+  return NextResponse.json({ error: `Your role does not include ${GATED_MODULE_LABELS[module]}.` }, { status: 403 });
+}
+
+/** The same question as `forbidWithoutModule`, as a boolean. */
+export function userCanUseModule(
+  user: { email?: string | null; app_metadata?: unknown },
+  module: GatedModule,
+): boolean {
+  return canUseModule(roleOf(user), isAdminEmail(user.email), module);
+}
+
+function roleOf(user: { app_metadata?: unknown }): UserRole | null {
+  const metadata =
+    user.app_metadata && typeof user.app_metadata === "object" && !Array.isArray(user.app_metadata)
+      ? (user.app_metadata as Record<string, unknown>)
+      : {};
+  return normalizeUserRole(metadata.role);
 }
 
 /**

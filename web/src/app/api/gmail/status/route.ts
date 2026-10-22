@@ -1,7 +1,7 @@
 import { readGmailRefreshToken } from "@/lib/gmail-tokens";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { forbidHeldAccount } from "@/lib/app-access";
+import { forbidHeldAccount, forbidWithoutModule } from "@/lib/app-access";
 
 export async function GET() {
   const supabase = await createClient();
@@ -12,6 +12,8 @@ export async function GET() {
   if (!user) return NextResponse.json({ connected: false }, { status: 401 });
   const held = forbidHeldAccount(user);
   if (held) return held;
+  const noModule = forbidWithoutModule(user, "mail");
+  if (noModule) return noModule;
 
   const metadata = user.user_metadata ?? {};
   const refreshToken = await readGmailRefreshToken(user.id);

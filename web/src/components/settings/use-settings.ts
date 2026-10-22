@@ -5,6 +5,8 @@ import type { UserRole } from "@/lib/user-role";
 import { useViewParam } from "@/lib/view-params";
 import {
   filterSettingsNav,
+  settingsAccessFor,
+  visibleSettingsNav,
   SETTINGS_SECTION_IDS,
   type GmailStatus,
   type InitialSettings,
@@ -15,16 +17,17 @@ import {
 
 export function useSettings(
   userRole: UserRole,
+  isAdmin: boolean,
   autoOpenProgramReadmeToken: number,
   initialData?: InitialSettings | null,
   initialSection?: SettingsSectionId | null,
 ) {
-  const isSalesOnly = userRole === "sales" || userRole === "hr";
+  const access = useMemo(() => settingsAccessFor(userRole, isAdmin), [userRole, isAdmin]);
   // Mirrored into `?section=` so a reload reopens the same settings section.
   const [activeSection, setActiveSection] = useViewParam<SettingsSectionId>(
     "section",
     SETTINGS_SECTION_IDS,
-    userRole === "sales" ? "time_data" : "gmail",
+    visibleSettingsNav(access)[0].id,
     initialSection,
   );
   const [navFilter, setNavFilter] = useState("");
@@ -54,20 +57,20 @@ export function useSettings(
 
   useEffect(() => {
     (async () => {
-      if (isSalesOnly) return;
+      if (!access.mail && !access.time) return;
       if (seededRef.current) {
         seededRef.current = false;
         return;
       }
       const [gmailResponse, mappingResponse] = await Promise.all([
-        fetch("/api/gmail/status"),
-        fetch("/api/settings/travel-mapping"),
+        access.mail ? fetch("/api/gmail/status") : null,
+        access.time ? fetch("/api/settings/travel-mapping") : null,
       ]);
-      if (gmailResponse.ok) {
+      if (gmailResponse?.ok) {
         const data = (await gmailResponse.json()) as GmailStatus;
         setGmailStatus(data);
       }
-      if (mappingResponse.ok) {
+      if (mappingResponse?.ok) {
         const mapping = (await mappingResponse.json()) as Partial<Record<keyof TravelMapping, string>>;
         setTravelMapping({
           clientColumn: String(mapping.clientColumn ?? ""),
@@ -76,7 +79,7 @@ export function useSettings(
         });
       }
     })();
-  }, [isSalesOnly]);
+  }, [access]);
 
   async function handleSaveTravelMapping() {
     setMappingSaving(true);
@@ -227,8 +230,8 @@ export function useSettings(
   }, [autoOpenProgramReadmeToken, setActiveSection]);
 
   const filteredNavItems = useMemo(
-    () => filterSettingsNav(isSalesOnly, navFilter),
-    [isSalesOnly, navFilter],
+    () => filterSettingsNav(access, navFilter),
+    [access, navFilter],
   );
 
   useEffect(() => {
@@ -239,7 +242,7 @@ export function useSettings(
   }, [filteredNavItems, activeSection, setActiveSection]);
 
   return {
-    isSalesOnly,
+    access,
     activeSection,
     setActiveSection,
     navFilter,

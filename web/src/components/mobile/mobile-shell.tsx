@@ -341,7 +341,7 @@ export function MobileShell({
         </div>
       ) : activeModule === "settings" ? (
         <div className="m-screen">
-          <MobileSettingsScreen userRole={userRole} initialData={initialSettings} onBack={goHome} />
+          <MobileSettingsScreen userRole={userRole} isAdmin={isAdmin} initialData={initialSettings} onBack={goHome} />
         </div>
       ) : (
         <div className="m-screen">

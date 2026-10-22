@@ -9,6 +9,7 @@ import {
   unsubscribeThisDevice,
   type PushSupport,
 } from "@/lib/push/client";
+import type { SettingsAccess } from "../types";
 
 type State = "checking" | "off" | "on" | "busy";
 
@@ -18,7 +19,7 @@ type State = "checking" | "off" | "on" | "busy";
  * copy says so. What gets sent is listed underneath, so switching it on is an
  * informed choice rather than a blank cheque.
  */
-export function NotificationsSection() {
+export function NotificationsSection({ access }: { access: SettingsAccess }) {
   const [support, setSupport] = useState<PushSupport | null>(null);
   const [state, setState] = useState<State>("checking");
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +28,8 @@ export function NotificationsSection() {
   const [fleetBusy, setFleetBusy] = useState(false);
 
   useEffect(() => {
+    // A role without Fleet has no Fleet notices (and the route refuses it).
+    if (!access.fleet) return;
     let cancelled = false;
     void fetch("/api/settings/fleet-notices")
       .then((r) => (r.ok ? r.json() : null))
@@ -39,7 +42,7 @@ export function NotificationsSection() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [access.fleet]);
 
   async function toggleFleet() {
     if (fleet === null || fleetBusy) return;
@@ -134,6 +137,7 @@ export function NotificationsSection() {
         {error ? <p className="mt-3 text-[12px] leading-snug text-danger">{error}</p> : null}
       </div>
 
+      {access.fleet ? (
       <div className="rounded-xl border border-glass/15 bg-overlay/40 p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 pr-1">
@@ -167,20 +171,27 @@ export function NotificationsSection() {
           </button>
         </div>
       </div>
+      ) : null}
 
+      {access.time || access.fleet ? (
       <div className="rounded-xl border border-glass/15 bg-overlay/40 p-4">
         <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-ink-4/90">What you will receive</p>
         <ul className="mt-2 space-y-1.5 text-[13px] leading-snug text-ink-2">
+          {access.time ? (
           <li>
             <span className="font-medium text-ink">Friday, 19:00</span> — a reminder when none of this week&apos;s days has been logged
             in the Time Tracker yet.
           </li>
+          ) : null}
+          {access.fleet ? (
           <li>
             <span className="font-medium text-ink">Fleet</span> — when a unit you booked has not come back, when someone asks to keep a
             unit into your days or answers your request, when a waitlist spot becomes yours, and when a unit comes back early.
           </li>
+          ) : null}
         </ul>
       </div>
+      ) : null}
     </div>
   );
 }

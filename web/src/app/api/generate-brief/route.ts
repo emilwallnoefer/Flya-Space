@@ -8,7 +8,7 @@ import { checkRateLimit, createRateLimitHeaders, getClientIp } from "@/lib/secur
 import { displayNameFor } from "@/lib/fleet-queries";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { forbidHeldAccount } from "@/lib/app-access";
+import { forbidHeldAccount, forbidWithoutModule } from "@/lib/app-access";
 
 /**
  * Brief mode endpoint. Mirrors /api/generate but generates the email with Claude (Opus 4.8)
@@ -48,6 +48,8 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const held = forbidHeldAccount(user);
   if (held) return held;
+  const noModule = forbidWithoutModule(user, "mail");
+  if (noModule) return noModule;
 
   // Brief mode calls a paid LLM, so each person gets a budget of their own,
   // tighter than the deterministic generator.
