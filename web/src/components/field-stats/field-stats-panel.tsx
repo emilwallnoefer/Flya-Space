@@ -6,7 +6,7 @@ import { InfoTooltip } from "@/components/info-tooltip";
 import { HoverTooltip, type HoverPos } from "@/components/mail-tracking/stat-tile";
 import { fmtRelative } from "@/lib/admin-format";
 import type { FieldEvent, FieldStats, FieldStatsBucket, FieldTravelDay } from "@/lib/field-stats";
-import { runningBalance, teamShare } from "@/lib/field-stats-share";
+import { DAILY_WINDOW_WORKDAYS, dailyTravel, teamShare } from "@/lib/field-stats-share";
 
 type Loaded = { stats: FieldStats; fetchedAt: string; stale: boolean };
 
@@ -446,6 +446,119 @@ function BarCard({
   );
 }
 
+/**
+ * Team totals per month; a column opens that month. In % mode a column is the
+ * team's travel days over the team's workdays that month, so short months and
+ * holiday months compare fairly.
+ */
+function MonthlyCard({
+  stats,
+  onPick,
+  percent,
+  toggle,
+}: {
+  stats: FieldStats;
+  onPick: (month: string) => void;
+  percent: boolean;
+  toggle: ReactNode;
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [hover, setHover] = useState<HoverPos>(null);
+  const months = useMemo(
+    () =>
+      stats.months.map((m) => {
+        const bucket = stats.byMonth[m];
+        const sum = (field: "poc" | "training" | "travelDays") =>
+          bucket.pilots.reduce((acc, p) => acc + p[field], 0);
+        const share = teamShare(bucket.workdays, "travelDays");
+        return {
+          month: m,
+          value: percent ? share.percent : sum("travelDays"),
+          travelDays: sum("travelDays"),
+          share,
+          poc: sum("poc"),
+          training: sum("training"),
+        };
+      }),
+    [stats, percent],
+  );
+  const max = Math.max(1, ...months.map((m) => m.value));
+  const title = percent ? "Team travel, % of workdays per month" : "Team travel days per month";
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative rounded-xl border border-glass/10 bg-overlay/30 p-3"
+      onMouseLeave={() => setHover(null)}
+    >
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <h3 className="text-xs font-semibold text-ink">{title}</h3>
+          <InfoTooltip label={`About ${title.toLowerCase()}`}>
+            {percent
+              ? "All pilots' travel workdays over all pilots' workdays, per month (Monday to Friday, minus red off days)."
+              : "All pilots' travel days added up per month."}{" "}
+            Click a month to see its breakdown.
+          </InfoTooltip>
+        </div>
+        {toggle}
+      </div>
+      <div className="flex h-36 items-end gap-1.5">
+        {months.map((m) => (
+          <button
+            key={m.month}
+            type="button"
+            onClick={() => onPick(m.month)}
+            aria-label={`${monthLabel(m.month)}: ${percent ? `${m.value}% of workdays travelling` : plural(m.travelDays, "travel day")}`}
+            className="group flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1"
+            onMouseEnter={(event) => {
+              const parent = containerRef.current;
+              if (!parent) return;
+              const rect = event.currentTarget.getBoundingClientRect();
+              const parentRect = parent.getBoundingClientRect();
+              setHover({
+                x: rect.left - parentRect.left + rect.width / 2,
+                y: rect.top - parentRect.top + rect.height * (1 - m.value / max),
+                width: parentRect.width,
+                content: (
+                  <div className="min-w-[140px]">
+                    <div className="font-semibold text-ink">{monthLabel(m.month)}</div>
+                    {percent ? (
+                      <>
+                        <div className="text-ink-2">{m.value}% of workdays travelling</div>
+                        <div className="text-ink-4">
+                          {plural(m.share.days, "day")} of {plural(m.share.workDays, "workday")}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-ink-2">{plural(m.travelDays, "travel day")}</div>
+                    )}
+                    <div className="text-ink-4">
+                      {plural(m.poc, "POC")} · {plural(m.training, "training")}
+                    </div>
+                  </div>
+                ),
+              });
+            }}
+          >
+            <span className="text-[10px] tabular-nums text-ink-4">
+              {m.value ? (percent ? `${m.value}%` : m.value) : ""}
+            </span>
+            <span className="flex min-h-0 w-full flex-1 items-end justify-center">
+              <span
+                className="w-full max-w-10 rounded-t bg-accent/80 transition group-hover:bg-accent"
+                style={{ height: `${(m.value / max) * 100}%`, minHeight: m.value > 0 ? 2 : 0 }}
+              />
+            </span>
+            <span className="text-[10px] text-ink-4">{monthLabel(m.month, MONTH_SHORT)}</span>
+          </button>
+        ))}
+      </div>
+      <HoverTooltip hover={hover} />
+    </div>
+  );
+}
+
 type Trend = "month" | "day";
 const TRENDS: { value: Trend; label: string }[] = [
   { value: "month", label: "Per month" },
@@ -454,26 +567,7 @@ const TRENDS: { value: Trend; label: string }[] = [
 
 const WEEKDAY_FORMAT = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 
-type TrendPoint = {
-  key: string;
-  value: number;
-  /** Shown under each point per month; day points get month ticks instead. */
-  label: string;
-  /** The month a click opens. */
-  month: string;
-  tooltip: ReactNode;
-};
-
-function signed(n: number) {
-  return n > 0 ? `+${n}` : String(n);
-}
-
-/**
- * Team travel over time, as a line. "Per month" follows the Count / % toggle;
- * "Day by day" is a running balance: every pilot on the road that workday adds
- * one, every pilot at home takes one away, so the line climbs through busy
- * stretches and sinks through quiet ones. Clicking opens that month.
- */
+/** The team chart: monthly bars, or the same travel as a line with a point for every workday. */
 function TrendCard({
   stats,
   onPick,
@@ -483,90 +577,71 @@ function TrendCard({
   onPick: (month: string) => void;
   percent: boolean;
 }) {
+  const [trend, setTrend] = useState<Trend>("month");
+  const toggle = (
+    <div role="group" aria-label="Chart" className="inline-flex rounded-lg border border-glass/15 bg-glass/5 p-0.5 text-[11px]">
+      {TRENDS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => setTrend(option.value)}
+          aria-pressed={trend === option.value}
+          className={`rounded-md px-2.5 py-1 font-medium transition ${
+            trend === option.value ? "bg-glass/15 text-ink shadow-sm" : "text-ink-3 hover:text-ink"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+  return trend === "month" ? (
+    <MonthlyCard stats={stats} onPick={onPick} percent={percent} toggle={toggle} />
+  ) : (
+    <DailyCard stats={stats} onPick={onPick} percent={percent} toggle={toggle} />
+  );
+}
+
+/**
+ * Team travel for every workday, as a line: pilots on the road (or the share of
+ * workdays on the road) averaged over the last working week, so it climbs on
+ * travel days and dips on days at home. Clicking opens that day's month.
+ */
+function DailyCard({
+  stats,
+  onPick,
+  percent,
+  toggle,
+}: {
+  stats: FieldStats;
+  onPick: (month: string) => void;
+  percent: boolean;
+  toggle: ReactNode;
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const plotRef = useRef<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<HoverPos>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const [trend, setTrend] = useState<Trend>("month");
+  const points = useMemo(() => dailyTravel(stats.days, percent), [stats, percent]);
 
-  const points = useMemo<TrendPoint[]>(() => {
-    if (trend === "day") {
-      return runningBalance(stats.days).map((d) => ({
-        key: d.date,
-        value: d.balance,
-        label: "",
-        month: d.date.slice(0, 7),
-        tooltip: (
-          <div className="min-w-[150px]">
-            <div className="font-semibold text-ink">{WEEKDAY_FORMAT.format(new Date(`${d.date}T00:00:00Z`))}</div>
-            <div className="text-ink-2">Balance {signed(d.balance)}</div>
-            <div className="text-ink-4">
-              {d.travel} on the road · {d.home} at home
-            </div>
-          </div>
-        ),
-      }));
-    }
-    return stats.months.map((m) => {
-      const bucket = stats.byMonth[m];
-      const sum = (field: "poc" | "training" | "travelDays") => bucket.pilots.reduce((acc, p) => acc + p[field], 0);
-      const share = teamShare(bucket.workdays, "travelDays");
-      return {
-        key: m,
-        value: percent ? share.percent : sum("travelDays"),
-        label: monthLabel(m, MONTH_SHORT),
-        month: m,
-        tooltip: (
-          <div className="min-w-[140px]">
-            <div className="font-semibold text-ink">{monthLabel(m)}</div>
-            {percent ? (
-              <>
-                <div className="text-ink-2">{share.percent}% of workdays travelling</div>
-                <div className="text-ink-4">
-                  {plural(share.days, "day")} of {plural(share.workDays, "workday")}
-                </div>
-              </>
-            ) : (
-              <div className="text-ink-2">{plural(sum("travelDays"), "travel day")}</div>
-            )}
-            <div className="text-ink-4">
-              {plural(sum("poc"), "POC")} · {plural(sum("training"), "training")}
-            </div>
-          </div>
-        ),
-      };
-    });
-  }, [stats, percent, trend]);
-
-  // Per month the line starts at zero and its highest month touches the top; the
-  // balance can go below zero, so its range always takes zero in.
-  const values = points.map((p) => p.value);
-  const top = Math.max(trend === "day" ? 0 : 1, ...values);
-  const bottom = trend === "day" ? Math.min(0, ...values) : 0;
-  const range = top - bottom || 1;
+  // Zero at the bottom; the busiest stretch touches the top.
+  const top = Math.max(percent ? 1 : 0.1, ...points.map((p) => p.value));
   const xAt = (i: number) => (points.length > 1 ? (i / (points.length - 1)) * 100 : 50);
-  const yAt = (value: number) => ((top - value) / range) * 100;
+  const yAt = (value: number) => ((top - value) / top) * 100;
   const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${xAt(i)},${yAt(p.value)}`).join(" ");
-  const zero = yAt(0);
-  const area = points.length ? `${path} L${xAt(points.length - 1)},${zero} L${xAt(0)},${zero} Z` : "";
-  const monthStarts =
-    trend === "day"
-      ? points.flatMap((p, i) => (i === 0 || points[i - 1].month !== p.month ? [{ index: i, month: p.month }] : []))
-      : [];
-
-  const title =
-    trend === "day"
-      ? "Team travel balance, day by day"
-      : percent
-        ? "Team travel, % of workdays per month"
-        : "Team travel days per month";
+  const area = points.length ? `${path} L${xAt(points.length - 1)},100 L${xAt(0)},100 Z` : "";
+  const monthStarts = points.flatMap((p, i) =>
+    i === 0 || points[i - 1].date.slice(0, 7) !== p.date.slice(0, 7) ? [{ index: i, month: p.date.slice(0, 7) }] : [],
+  );
+  const show = (value: number) => (percent ? `${value}%` : String(value));
+  const title = percent ? "Team travel, % of workdays day by day" : "Team travel day by day";
+  const active = hoverIndex !== null && hoverIndex < points.length ? points[hoverIndex] : null;
 
   function indexAt(clientX: number): number | null {
     const plot = plotRef.current;
     if (!plot || points.length === 0) return null;
     const rect = plot.getBoundingClientRect();
-    const fraction = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    return Math.round(fraction * (points.length - 1));
+    return Math.round(Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)) * (points.length - 1));
   }
 
   function showAt(index: number) {
@@ -575,16 +650,25 @@ function TrendCard({
     if (!plot || !parent) return;
     const rect = plot.getBoundingClientRect();
     const parentRect = parent.getBoundingClientRect();
+    const point = points[index];
     setHoverIndex(index);
     setHover({
       x: rect.left - parentRect.left + (xAt(index) / 100) * rect.width,
-      y: rect.top - parentRect.top + (yAt(points[index].value) / 100) * rect.height,
+      y: rect.top - parentRect.top + (yAt(point.value) / 100) * rect.height,
       width: parentRect.width,
-      content: points[index].tooltip,
+      content: (
+        <div className="min-w-[160px]">
+          <div className="font-semibold text-ink">{WEEKDAY_FORMAT.format(new Date(`${point.date}T00:00:00Z`))}</div>
+          <div className="text-ink-2">
+            {point.travel} on the road · {point.home} at home
+          </div>
+          <div className="text-ink-4">
+            Week average: {percent ? `${point.value}% of workdays` : `${point.value} on the road`}
+          </div>
+        </div>
+      ),
     });
   }
-
-  const active = hoverIndex !== null && hoverIndex < points.length ? points[hoverIndex] : null;
 
   return (
     <div
@@ -595,72 +679,42 @@ function TrendCard({
         setHoverIndex(null);
       }}
     >
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <h3 className="text-xs font-semibold text-ink">{title}</h3>
           <InfoTooltip label={`About ${title.toLowerCase()}`}>
-            {trend === "day"
-              ? "A running balance for the whole team. Every workday a pilot is on the road adds one; every workday a pilot is at home takes one away. Red off days, weekends and days before a pilot's first day don't move it. Rising means the team is travelling more than it is home."
-              : percent
-                ? "All pilots' travel workdays over all pilots' workdays, per month (Monday to Friday, minus red off days)."
-                : "All pilots' travel days added up per month."}{" "}
-            Click the chart to open that month.
+            {percent
+              ? "The team's travel days over its workdays (Monday to Friday, minus red off days), for every workday."
+              : "How many pilots were on the road, for every workday."}{" "}
+            Each point averages the last {DAILY_WINDOW_WORKDAYS} workdays, so the line climbs on travel days and dips
+            on days at home without jumping around. Hover a day for its own numbers; click to open that month.
           </InfoTooltip>
         </div>
-        <div role="group" aria-label="Chart" className="inline-flex rounded-lg border border-glass/15 bg-glass/5 p-0.5 text-[11px]">
-          {TRENDS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => {
-                setTrend(option.value);
-                setHover(null);
-                setHoverIndex(null);
-              }}
-              aria-pressed={trend === option.value}
-              className={`rounded-md px-2.5 py-1 font-medium transition ${
-                trend === option.value ? "bg-glass/15 text-ink shadow-sm" : "text-ink-3 hover:text-ink"
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        {toggle}
       </div>
-
-      <div className="px-4 pt-4">
+      <div className="pl-6 pr-1 pt-2">
         <div
           ref={plotRef}
           role="img"
-          aria-label={`${title}: ${points
-            .filter((_, i) => trend === "month" || monthStarts.some((s) => s.index === i))
-            .map((p) => `${monthLabel(p.month, MONTH_SHORT)} ${trend === "day" ? signed(p.value) : percent ? `${p.value}%` : p.value}`)
+          aria-label={`${title}: ${monthStarts
+            .map((s) => `${monthLabel(s.month, MONTH_SHORT)} ${show(points[s.index].value)}`)
             .join(", ")}`}
-          className="relative h-40 cursor-pointer"
+          className="relative h-36 cursor-pointer"
           onMouseMove={(event) => {
             const index = indexAt(event.clientX);
             if (index !== null && index !== hoverIndex) showAt(index);
           }}
           onClick={(event) => {
             const index = indexAt(event.clientX);
-            if (index !== null) onPick(points[index].month);
+            if (index !== null) onPick(points[index].date.slice(0, 7));
           }}
         >
-          {trend === "day" && bottom < 0 ? (
-            <div className="pointer-events-none absolute inset-x-0 border-t border-dashed border-glass/30" style={{ top: `${zero}%` }}>
-              <span className="absolute -left-4 -top-2 text-[10px] text-ink-5">0</span>
-            </div>
-          ) : null}
-          {trend === "day" && bottom < 0 ? (
-            <span className="pointer-events-none absolute -left-4 bottom-0 translate-y-1/2 text-[10px] tabular-nums text-ink-5">
-              {bottom}
-            </span>
-          ) : null}
-          {trend === "day" && top > 0 ? (
-            <span className="pointer-events-none absolute -left-4 top-0 -translate-y-1/2 text-[10px] tabular-nums text-ink-5">
-              {signed(top)}
-            </span>
-          ) : null}
+          <span className="pointer-events-none absolute -left-6 top-0 -translate-y-1/2 text-[10px] tabular-nums text-ink-5">
+            {show(Math.round(top * 10) / 10)}
+          </span>
+          <span className="pointer-events-none absolute -left-6 bottom-0 translate-y-1/2 text-[10px] tabular-nums text-ink-5">
+            0
+          </span>
           <svg
             viewBox="0 0 100 100"
             preserveAspectRatio="none"
@@ -677,22 +731,6 @@ function TrendCard({
               vectorEffect="non-scaling-stroke"
             />
           </svg>
-          {trend === "month"
-            ? points.map((p, i) => (
-                <span key={p.key}>
-                  <span
-                    className="pointer-events-none absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent"
-                    style={{ left: `${xAt(i)}%`, top: `${yAt(p.value)}%` }}
-                  />
-                  <span
-                    className="pointer-events-none absolute -translate-x-1/2 -translate-y-full pb-1.5 text-[10px] tabular-nums text-ink-4"
-                    style={{ left: `${xAt(i)}%`, top: `${yAt(p.value)}%` }}
-                  >
-                    {p.value ? (percent ? `${p.value}%` : p.value) : ""}
-                  </span>
-                </span>
-              ))
-            : null}
           {active && hoverIndex !== null ? (
             <>
               <span className="pointer-events-none absolute inset-y-0 w-px bg-glass/30" style={{ left: `${xAt(hoverIndex)}%` }} />
@@ -704,16 +742,9 @@ function TrendCard({
           ) : null}
         </div>
         <div className="relative mt-1.5 h-4">
-          {(trend === "month"
-            ? points.map((p, i) => ({ key: p.key, index: i, text: p.label }))
-            : monthStarts.map((s) => ({ key: s.month, index: s.index, text: monthLabel(s.month, MONTH_SHORT) }))
-          ).map((tick) => (
-            <span
-              key={tick.key}
-              className="absolute -translate-x-1/2 text-[10px] text-ink-4"
-              style={{ left: `${xAt(tick.index)}%` }}
-            >
-              {tick.text}
+          {monthStarts.map((s) => (
+            <span key={s.month} className="absolute text-[10px] text-ink-4" style={{ left: `${xAt(s.index)}%` }}>
+              {monthLabel(s.month, MONTH_SHORT)}
             </span>
           ))}
         </div>
@@ -722,4 +753,3 @@ function TrendCard({
     </div>
   );
 }
-

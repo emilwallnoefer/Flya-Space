@@ -1,14 +1,29 @@
 import type { FieldDay, PilotWorkdays } from "@/lib/field-stats";
 
+/** How many workdays the day-by-day line averages over: one working week. */
+export const DAILY_WINDOW_WORKDAYS = 5;
+
 /**
- * The team's running balance, day by day: each pilot on the road that day adds
- * one, each pilot at home takes one away. Rising means more travel than home.
+ * Team travel for every workday, averaged over the last `window` workdays so
+ * the line moves every day without jumping 0–5 from one day to the next: it
+ * rises on travel days and falls on days at home. Count mode is pilots on the
+ * road per day; % mode is the window's travel days over its workdays.
  */
-export function runningBalance(days: readonly FieldDay[]): (FieldDay & { balance: number })[] {
-  let balance = 0;
-  return days.map((day) => {
-    balance += day.travel - day.home;
-    return { ...day, balance };
+export function dailyTravel(
+  days: readonly FieldDay[],
+  percent: boolean,
+  window = DAILY_WINDOW_WORKDAYS,
+): (FieldDay & { value: number })[] {
+  return days.map((day, i) => {
+    const recent = days.slice(Math.max(0, i - window + 1), i + 1);
+    const travel = recent.reduce((acc, d) => acc + d.travel, 0);
+    const workDays = recent.reduce((acc, d) => acc + d.travel + d.home, 0);
+    const value = percent
+      ? workDays > 0
+        ? Math.round((travel / workDays) * 100)
+        : 0
+      : Math.round((travel / recent.length) * 10) / 10;
+    return { ...day, value };
   });
 }
 
