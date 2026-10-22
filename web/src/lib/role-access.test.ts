@@ -21,8 +21,8 @@ describe("availableModulesFor", () => {
     ]);
   });
 
-  it("US pilot: Mail and Time only, even when the sheets are configured", () => {
-    expect(availableModulesFor("us_pilot", false, ALL_EMBEDS)).toEqual(["mail", "time", "settings"]);
+  it("US pilot: Mail only, even when the sheets are configured", () => {
+    expect(availableModulesFor("us_pilot", false, ALL_EMBEDS)).toEqual(["mail", "settings"]);
   });
 
   it("HR: the team time view only, no own Time Tracker or Fleet", () => {
@@ -93,8 +93,8 @@ describe("canUseModule", () => {
   const cases: Array<[Parameters<typeof canUseModule>[0], boolean, Access]> = [
     ["sales", false, { mail: false, time: false, fleet: true, travel: false }],
     ["eu_pilot", false, { mail: true, time: true, fleet: true, travel: true }],
-    // US pilots log time but have no travel sheet: no Travel mapping, no Time data.
-    ["us_pilot", false, { mail: true, time: true, fleet: false, travel: false }],
+    // US pilots: the Mail Composer only (owner decision 2026-10-22).
+    ["us_pilot", false, { mail: true, time: false, fleet: false, travel: false }],
     ["hr", false, { mail: false, time: false, fleet: false, travel: false }],
     [null, false, { mail: false, time: false, fleet: false, travel: false }],
     ["hr", true, { mail: true, time: true, fleet: true, travel: true }],

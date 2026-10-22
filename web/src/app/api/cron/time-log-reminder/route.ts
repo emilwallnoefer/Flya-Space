@@ -10,6 +10,7 @@ import {
   toDateString,
 } from "@/lib/time-tracker-queries";
 import { normalizeUserRole, type UserRole } from "@/lib/user-role";
+import { canUseModule } from "@/lib/role-access";
 import {
   isResendConfigured,
   sendEmailViaResend,
@@ -23,11 +24,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const TIMEZONE = "Europe/Zurich";
-// The roles with a Time Tracker (lib/role-access.ts); sales and HR have none.
-const REMINDER_ROLES: ReadonlySet<UserRole> = new Set<UserRole>([
-  "eu_pilot",
-  "us_pilot",
-]);
 
 type SkipReason =
   | "not_monday"
@@ -456,7 +452,8 @@ export async function GET(request: Request) {
     const pageUsers = data?.users ?? [];
     for (const user of pageUsers) {
       const role = extractRole(user.app_metadata);
-      if (!role || !REMINDER_ROLES.has(role)) continue;
+      // Only the roles with a Time Tracker (lib/role-access.ts).
+      if (!role || !canUseModule(role, false, "time")) continue;
       if (!user.email) continue;
       candidates.push({
         user_id: user.id,
