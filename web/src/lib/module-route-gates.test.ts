@@ -19,6 +19,7 @@ const GATED: Array<{ file: string; module: "mail" | "time" | "fleet"; checks: nu
   { file: "app/api/gmail/create-draft/route.ts", module: "mail", checks: 1 },
   { file: "app/api/gmail/status/route.ts", module: "mail", checks: 1 },
   { file: "app/api/settings/mail-generation/route.ts", module: "mail", checks: 2 },
+  { file: "app/api/settings/brief-cost-notice/route.ts", module: "mail", checks: 1 },
   { file: "app/api/time-tracker/route.ts", module: "time", checks: 1 },
   { file: "app/api/time-tracker/handlers/get-week.ts", module: "time", checks: 1 },
   { file: "app/api/settings/travel-mapping/route.ts", module: "time", checks: 3 },

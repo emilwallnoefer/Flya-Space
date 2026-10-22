@@ -28,6 +28,8 @@ export function MobileMailScreen({ composer, userRole, gmailConnected }: { compo
     mailGenMode,
     mailGenSaving,
     handleSetMailGenMode,
+    showBriefCostNotice,
+    dismissBriefCostNotice,
     briefText,
     setBriefText,
     briefContent,
@@ -70,6 +72,14 @@ export function MobileMailScreen({ composer, userRole, gmailConnected }: { compo
 
       {mailGenMode === "brief" ? (
         <div className="space-y-4">
+          {showBriefCostNotice ? (
+            <div role="note" className="rounded-xl border border-accent/30 bg-accent/10 px-4 py-3 text-sm leading-5 text-ink-2">
+              <p>Heads-up: AI brief runs on our paid Claude API key, and each mail costs about 5–10 cents. Use it when it helps, just don&apos;t overdo it 😉</p>
+              <button type="button" onClick={dismissBriefCostNotice} className="mt-2 min-h-11 font-medium text-accent">
+                Got it
+              </button>
+            </div>
+          ) : null}
           <Field label="Recipient name(s)">
             <input value={form.recipient_name} onChange={(e) => setForm({ ...form, recipient_name: e.target.value })} placeholder="e.g. Marco, or Marco and Hans" className={INPUT} />
           </Field>

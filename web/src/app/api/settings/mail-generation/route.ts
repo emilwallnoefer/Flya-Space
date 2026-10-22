@@ -31,7 +31,11 @@ export async function GET() {
   if (held) return held;
   const noModule = forbidWithoutModule(user, "mail");
   if (noModule) return noModule;
-  return NextResponse.json({ mode: readModeFromMetadata(user.user_metadata) });
+  return NextResponse.json({
+    mode: readModeFromMetadata(user.user_metadata),
+    // The one-time AI brief cost note; set by POST /api/settings/brief-cost-notice.
+    briefCostNoticeSeen: user.user_metadata?.brief_cost_notice_seen === true,
+  });
 }
 
 export async function POST(request: Request) {

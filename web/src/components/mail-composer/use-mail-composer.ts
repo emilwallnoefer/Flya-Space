@@ -38,6 +38,8 @@ export function useMailComposer(userRole: UserRole | null) {
   const [changesTouched, setChangesTouched] = useState(false);
   /** Which mail generator the composer uses; switched at the top of the composer. */
   const [mailGenMode, setMailGenMode] = useState<"guided" | "brief">("guided");
+  /** The one-time AI brief cost note. Hidden until the stored flag loads, so it never flashes for someone who dismissed it. */
+  const [briefCostNoticeSeen, setBriefCostNoticeSeen] = useState(true);
   const [mailGenSaving, setMailGenSaving] = useState(false);
   /** Free-text brief for the AI ("brief") generator. */
   const [briefText, setBriefText] = useState("");
@@ -188,8 +190,9 @@ export function useMailComposer(userRole: UserRole | null) {
       if (userRole === "sales" || userRole === "hr") return;
       const response = await fetch("/api/settings/mail-generation");
       if (!response.ok) return;
-      const data = (await response.json()) as { mode?: string };
+      const data = (await response.json()) as { mode?: string; briefCostNoticeSeen?: boolean };
       setMailGenMode(data.mode === "brief" ? "brief" : "guided");
+      setBriefCostNoticeSeen(data.briefCostNoticeSeen === true);
     })();
   }, [userRole]);
 
@@ -211,6 +214,14 @@ export function useMailComposer(userRole: UserRole | null) {
     } finally {
       setMailGenSaving(false);
     }
+  }
+
+  // Hide the cost note now and remember it on the account, so it never shows again on any device.
+  function dismissBriefCostNotice() {
+    setBriefCostNoticeSeen(true);
+    void fetch("/api/settings/brief-cost-notice", { method: "POST" }).catch(() => {
+      // Not saved: the note shows once more next visit, which is harmless.
+    });
   }
 
   // Live-preview typing animation.
@@ -473,6 +484,8 @@ export function useMailComposer(userRole: UserRole | null) {
     mailGenMode,
     mailGenSaving,
     handleSetMailGenMode,
+    showBriefCostNotice: !briefCostNoticeSeen,
+    dismissBriefCostNotice,
     briefText,
     setBriefText,
     briefContent,
