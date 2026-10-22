@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DAILY_WINDOW_WORKDAYS, dailyTravel, teamShare } from "./field-stats-share";
+import { DAILY_WINDOW_WORKDAYS, dailyTravel, smoothPath, teamShare } from "./field-stats-share";
 
 describe("teamShare", () => {
   it("adds the team's days and workdays up before dividing", () => {
@@ -50,7 +50,43 @@ describe("dailyTravel", () => {
     expect(dailyTravel(days, false, 2)[1]).toEqual({ date: "2026-01-06", travel: 0, home: 4, value: 2 });
   });
 
-  it("averages a working week by default", () => {
-    expect(DAILY_WINDOW_WORKDAYS).toBe(5);
+  it("averages two working weeks by default", () => {
+    expect(DAILY_WINDOW_WORKDAYS).toBe(10);
+  });
+});
+
+describe("smoothPath", () => {
+  const numbers = (path: string) => (path.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+
+  it("is empty for no points and a single move for one", () => {
+    expect(smoothPath([])).toBe("");
+    expect(smoothPath([{ x: 5, y: 7 }])).toBe("M5,7");
+  });
+
+  it("runs through every point with curves", () => {
+    const path = smoothPath([
+      { x: 0, y: 50 },
+      { x: 50, y: 10 },
+      { x: 100, y: 60 },
+    ]);
+    expect(path.startsWith("M0,50 C")).toBe(true);
+    expect(path.match(/C/g)).toHaveLength(2);
+    expect(path).toContain("50,10 C");
+    expect(path.endsWith("100,60")).toBe(true);
+  });
+
+  it("never overshoots: a flat stretch stays flat and nothing leaves the data's range", () => {
+    const path = smoothPath([
+      { x: 0, y: 100 },
+      { x: 25, y: 100 },
+      { x: 50, y: 0 },
+      { x: 75, y: 0 },
+      { x: 100, y: 100 },
+    ]);
+    const ys = numbers(path).filter((_, i) => i % 2 === 1);
+    expect(Math.min(...ys)).toBe(0);
+    expect(Math.max(...ys)).toBe(100);
+    // The flat stretch between 50 and 75 is drawn flat.
+    expect(path).toContain("C58.333,0 66.667,0 75,0");
   });
 });

@@ -6,7 +6,7 @@ import { InfoTooltip } from "@/components/info-tooltip";
 import { HoverTooltip, type HoverPos } from "@/components/mail-tracking/stat-tile";
 import { fmtRelative } from "@/lib/admin-format";
 import type { FieldEvent, FieldStats, FieldStatsBucket, FieldTravelDay } from "@/lib/field-stats";
-import { DAILY_WINDOW_WORKDAYS, dailyTravel, teamShare } from "@/lib/field-stats-share";
+import { DAILY_WINDOW_WORKDAYS, dailyTravel, smoothPath, teamShare } from "@/lib/field-stats-share";
 
 type Loaded = { stats: FieldStats; fetchedAt: string; stale: boolean };
 
@@ -604,7 +604,7 @@ function TrendCard({
 
 /**
  * Team travel for every workday, as a line: pilots on the road (or the share of
- * workdays on the road) averaged over the last working week, so it climbs on
+ * workdays on the road) averaged over the last two working weeks, so it climbs on
  * travel days and dips on days at home. Clicking opens that day's month.
  */
 function DailyCard({
@@ -628,7 +628,7 @@ function DailyCard({
   const top = Math.max(percent ? 1 : 0.1, ...points.map((p) => p.value));
   const xAt = (i: number) => (points.length > 1 ? (i / (points.length - 1)) * 100 : 50);
   const yAt = (value: number) => ((top - value) / top) * 100;
-  const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${xAt(i)},${yAt(p.value)}`).join(" ");
+  const path = smoothPath(points.map((p, i) => ({ x: xAt(i), y: yAt(p.value) })));
   const area = points.length ? `${path} L${xAt(points.length - 1)},100 L${xAt(0)},100 Z` : "";
   const monthStarts = points.flatMap((p, i) =>
     i === 0 || points[i - 1].date.slice(0, 7) !== p.date.slice(0, 7) ? [{ index: i, month: p.date.slice(0, 7) }] : [],
@@ -663,7 +663,7 @@ function DailyCard({
             {point.travel} on the road · {point.home} at home
           </div>
           <div className="text-ink-4">
-            Week average: {percent ? `${point.value}% of workdays` : `${point.value} on the road`}
+            2-week average: {percent ? `${point.value}% of workdays` : `${point.value} on the road`}
           </div>
         </div>
       ),
