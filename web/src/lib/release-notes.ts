@@ -20,6 +20,15 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "2026-10-22-field-stats-workdays",
+    date: "Oct 22, 2026",
+    title: "Field stats: % of workdays",
+    highlights: [
+      "New toggle in Field stats: see travel, POC and training days as a share of each pilot's workdays",
+      "Workdays are Monday to Friday, minus red (off) days in the planning sheet, from each pilot's first day",
+    ],
+  },
+  {
     version: "2026-10-20-day-logger-24h",
     date: "Oct 20, 2026",
     title: "Time Tracker: 24-hour times everywhere",

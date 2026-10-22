@@ -16,6 +16,12 @@ import type { UserRole } from "@/lib/user-role";
 /** Stats start here: the sheet goes back to 2018, the team cares about 2026 on. */
 export const FIELD_STATS_FROM = "2026-01-01";
 
+/**
+ * Pilots who joined after `FIELD_STATS_FROM`: their workdays start on their
+ * first day, so their shares measure the time they were here.
+ */
+export const PILOT_FIRST_DAYS: Record<string, string> = { Tiago: "2026-05-04" };
+
 /** Shown for an event whose "Reporting to" cell is empty. */
 export const UNASSIGNED_REGION = "Unassigned";
 
@@ -46,7 +52,21 @@ export type RegionStats = {
   training: number;
 };
 
-export type FieldStatsBucket = { pilots: PilotStats[]; regions: RegionStats[] };
+/**
+ * One pilot's days measured against their workdays: Monday to Friday, from the
+ * later of `from` and their first day, minus the days their cell is red in the
+ * sheet (off, bank holiday, compensation). A day only counts here when it is
+ * such a workday, so every share stays between 0 and 100%.
+ */
+export type PilotWorkdays = {
+  pilot: string;
+  workDays: number;
+  pocDays: number;
+  trainingDays: number;
+  travelDays: number;
+};
+
+export type FieldStatsBucket = { pilots: PilotStats[]; regions: RegionStats[]; workdays: PilotWorkdays[] };
 
 /** One POC or training, as counted: the rows behind a bar in the POC/training/region charts. */
 export type FieldEvent = {
@@ -273,11 +293,48 @@ function newTally(pilotNames: string[]): Tally {
   };
 }
 
-function finishTally(tally: Tally): FieldStatsBucket {
+function finishTally(tally: Tally): Omit<FieldStatsBucket, "workdays"> {
   return {
     pilots: [...tally.pilots.values()],
     regions: [...tally.regions.values()].sort((a, b) => b.events - a.events || a.region.localeCompare(b.region)),
   };
+}
+
+/**
+ * The date of every row (YYYY-MM-DD, or null for a row without one). The
+ * month/year cell is carried down because the sheet merges it.
+ */
+export function rowDates(rows: readonly (readonly unknown[])[]): (string | null)[] {
+  let activeMonthYear = "";
+  return rows.map((row) => {
+    const monthYear = cell(row, 0);
+    const fullDate = parseFullDate(monthYear);
+    if (!fullDate && monthYear) activeMonthYear = monthYear;
+    return fullDate ?? parseDateFromMonthYearDay(activeMonthYear, cell(row, 2));
+  });
+}
+
+/** Key of a cell in `offCells`: the row's index in `rows`, and the column index. */
+export function offCellKey(rowIndex: number, column: number): string {
+  return `${rowIndex}:${column}`;
+}
+
+/** Whether a sheet background is the "OFF / Bank holiday / Compensation" red (channels 0–1, missing = 0). */
+export function isOffRed(color: { red?: number | null; green?: number | null; blue?: number | null } | null | undefined): boolean {
+  if (!color) return false;
+  return (color.red ?? 0) >= 0.8 && (color.green ?? 0) <= 0.35 && (color.blue ?? 0) <= 0.35;
+}
+
+/** Used only when the cell colours could not be read: the words the red cells usually carry. */
+const OFF_TEXT = /^(off|day off|holiday|holidays|bank holiday|public holiday|vacation|vacances|sick|compensation)\b/i;
+
+function isWeekday(date: string): boolean {
+  const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return day !== 0 && day !== 6;
+}
+
+function nextDay(date: string): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 }
 
 /**
@@ -292,12 +349,18 @@ export function computeFieldStats({
   today,
   salesRegions = {},
   from = FIELD_STATS_FROM,
+  offCells,
+  firstDays = PILOT_FIRST_DAYS,
 }: {
   header: readonly unknown[];
   rows: readonly (readonly unknown[])[];
   today: string;
   salesRegions?: Record<string, string>;
   from?: string;
+  /** Pilot activity cells painted red (`offCellKey`); without them, the cell text decides. */
+  offCells?: ReadonlySet<string>;
+  /** Pilot name → first day (YYYY-MM-DD), for pilots who joined after `from`. */
+  firstDays?: Record<string, string>;
 }): FieldStats {
   const pilots = findPilotColumns(header);
   const pilotNames = pilots.map((p) => p.name);
@@ -312,20 +375,37 @@ export function computeFieldStats({
   // Open event per pilot: the last POC/training day seen, to merge multi-day events.
   const open = new Map<string, { kind: DayKind; activity: string; lastDate: string; event: FieldEvent }>();
 
-  let activeMonthYear = "";
-  for (const row of rows) {
-    const monthYear = cell(row, 0);
-    const fullDate = parseFullDate(monthYear);
-    if (!fullDate && monthYear) activeMonthYear = monthYear;
-    const date = fullDate ?? parseDateFromMonthYearDay(activeMonthYear, cell(row, 2));
-    if (!date || date < from || date >= today) continue;
+  const firstDayOf = (pilot: string) => {
+    const first = firstDays[pilot];
+    return first && first > from ? first : from;
+  };
+  // Days that count against workdays, per month, and the dates each pilot was off (red).
+  const shares = new Map(
+    months.map((m) => [m, new Map(pilotNames.map((p) => [p, { pocDays: 0, trainingDays: 0, travelDays: 0 }]))]),
+  );
+  const offDates = new Map(pilotNames.map((p) => [p, new Set<string>()]));
+
+  const dates = rowDates(rows);
+  rows.forEach((row, rowIndex) => {
+    const date = dates[rowIndex];
+    if (!date || date < from || date >= today) return;
     const month = byMonth.get(date.slice(0, 7));
-    if (!month) continue;
+    if (!month) return;
 
     for (const pilot of pilots) {
       const activity = cell(row, pilot.activity);
       const status = cell(row, pilot.status);
       const { kind, travel } = classifyDay(activity, status);
+
+      const off = offCells ? offCells.has(offCellKey(rowIndex, pilot.activity)) : OFF_TEXT.test(activity);
+      const workday = isWeekday(date) && date >= firstDayOf(pilot.name);
+      if (workday && off) offDates.get(pilot.name)!.add(date);
+      if (workday && !off && kind) {
+        const counts = shares.get(date.slice(0, 7))!.get(pilot.name)!;
+        if (kind === "poc") counts.pocDays += 1;
+        if (kind === "training") counts.trainingDays += 1;
+        if (travel) counts.travelDays += 1;
+      }
       if (!kind) continue;
 
       if (travel) {
@@ -364,14 +444,38 @@ export function computeFieldStats({
         tally.regions.set(region, entry);
       }
     }
+  });
+
+  // Workdays come from the calendar, not the rows: a weekday the sheet skips is still a workday.
+  const workDays = new Map(months.map((m) => [m, new Map(pilotNames.map((p) => [p, 0]))]));
+  for (let date = from; date < today; date = nextDay(date)) {
+    const perPilot = workDays.get(date.slice(0, 7));
+    if (!perPilot || !isWeekday(date)) continue;
+    for (const pilot of pilotNames) {
+      if (date >= firstDayOf(pilot) && !offDates.get(pilot)!.has(date)) perPilot.set(pilot, perPilot.get(pilot)! + 1);
+    }
   }
+  const workdaysOver = (selected: string[]): PilotWorkdays[] =>
+    pilotNames.map((pilot) => {
+      const entry: PilotWorkdays = { pilot, workDays: 0, pocDays: 0, trainingDays: 0, travelDays: 0 };
+      for (const m of selected) {
+        const counts = shares.get(m)!.get(pilot)!;
+        entry.workDays += workDays.get(m)!.get(pilot)!;
+        entry.pocDays += counts.pocDays;
+        entry.trainingDays += counts.trainingDays;
+        entry.travelDays += counts.travelDays;
+      }
+      return entry;
+    });
 
   return {
     from,
     to: today,
     months,
-    all: finishTally(all),
-    byMonth: Object.fromEntries([...byMonth].map(([m, tally]) => [m, finishTally(tally)])),
+    all: { ...finishTally(all), workdays: workdaysOver(months) },
+    byMonth: Object.fromEntries(
+      [...byMonth].map(([m, tally]) => [m, { ...finishTally(tally), workdays: workdaysOver([m]) }]),
+    ),
     events,
     travel: travelDays,
     salesNames: [...salesNames].sort((a, b) => a.localeCompare(b)),

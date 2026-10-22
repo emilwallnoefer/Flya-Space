@@ -4,7 +4,15 @@ import { sheets as sheetsApi } from "@googleapis/sheets";
 import { getOAuthClient } from "@/lib/gmail";
 import { readGmailRefreshToken } from "@/lib/gmail-tokens";
 import { classifyTravelFetchError, type TravelFetchErrorReason } from "@/lib/google-sheets";
-import { computeFieldStats, type FieldStats } from "@/lib/field-stats";
+import {
+  computeFieldStats,
+  FIELD_STATS_FROM,
+  findPilotColumns,
+  isOffRed,
+  offCellKey,
+  rowDates,
+  type FieldStats,
+} from "@/lib/field-stats";
 import { todayInZurich } from "@/lib/fleet-queries";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAdminEmail } from "@/lib/admin";
@@ -155,10 +163,50 @@ async function readTab(refreshToken: string) {
     ranges: [`${quoted}!A1:BZ1`, `${quoted}!A2:BZ`],
   });
   const [headerRange, bodyRange] = response.data.valueRanges ?? [];
-  return {
-    header: (headerRange?.values?.[0] ?? []) as unknown[],
-    rows: (bodyRange?.values ?? []) as unknown[][],
-  };
+  const header = (headerRange?.values?.[0] ?? []) as unknown[];
+  const rows = (bodyRange?.values ?? []) as unknown[][];
+  return { header, rows, offCells: await readOffCells(sheets, spreadsheetId, quoted, header, rows) };
+}
+
+/**
+ * The pilot cells painted red ("OFF / Bank holiday / Compensation" in the
+ * sheet's Color codes tab), from FIELD_STATS_FROM on — the values API carries
+ * no colours, so this is a second, narrower read. Undefined when it fails:
+ * the stats then fall back to the cell text rather than going missing.
+ */
+async function readOffCells(
+  sheets: ReturnType<typeof sheetsApi>,
+  spreadsheetId: string,
+  quoted: string,
+  header: unknown[],
+  rows: unknown[][],
+): Promise<Set<string> | undefined> {
+  const first = rowDates(rows).findIndex((date) => date !== null && date >= FIELD_STATS_FROM);
+  const pilots = findPilotColumns(header);
+  if (first < 0 || pilots.length === 0) return new Set();
+  try {
+    // Row i of `rows` is sheet row i + 2 (the header is row 1).
+    const response = await sheets.spreadsheets.get({
+      spreadsheetId,
+      ranges: [`${quoted}!A${first + 2}:BZ${rows.length + 1}`],
+      fields: "sheets(data(startRow,rowData(values(effectiveFormat(backgroundColor,backgroundColorStyle)))))",
+    });
+    const grid = response.data.sheets?.[0]?.data?.[0];
+    const offset = (grid?.startRow ?? first + 1) - 1;
+    const offCells = new Set<string>();
+    (grid?.rowData ?? []).forEach((row, i) => {
+      for (const pilot of pilots) {
+        const format = row.values?.[pilot.activity]?.effectiveFormat;
+        if (isOffRed(format?.backgroundColorStyle?.rgbColor ?? format?.backgroundColor)) {
+          offCells.add(offCellKey(offset + i, pilot.activity));
+        }
+      }
+    });
+    return offCells;
+  } catch (error) {
+    console.warn("[field-stats] cell colours unreadable, using the cell text for off days", (error as Error)?.message);
+    return undefined;
+  }
 }
 
 async function refresh(): Promise<FieldStatsResult> {
@@ -187,11 +235,12 @@ async function refresh(): Promise<FieldStatsResult> {
   }
 
   try {
-    const { header, rows } = await readTab(refreshToken);
+    const { header, rows, offCells } = await readTab(refreshToken);
     const now = new Date();
     const stats = computeFieldStats({
       header,
       rows,
+      offCells,
       today: todayInZurich(now),
       salesRegions: settings.sales_regions,
     });
