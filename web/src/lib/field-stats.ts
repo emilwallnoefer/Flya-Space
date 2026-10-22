@@ -119,7 +119,15 @@ export type FieldStats = {
   travel: FieldTravelDay[];
   /** Every salesperson name seen, so admins can map each one to a region. */
   salesNames: string[];
+  /** Every weekday in range, oldest first: how many pilots were on the road and how many at home. */
+  days: FieldDay[];
 };
+
+/**
+ * One weekday for the whole team, counting only pilots for whom it was a
+ * workday (not red, not before their first day). Counts only, no cell text.
+ */
+export type FieldDay = { date: string; travel: number; home: number };
 
 const NON_PILOT_HEADER = /^(status|reporting|deadline|logged|date|w|d)\b/i;
 
@@ -391,6 +399,7 @@ export function computeFieldStats({
     months.map((m) => [m, new Map(pilotNames.map((p) => [p, { pocDays: 0, trainingDays: 0, travelDays: 0 }]))]),
   );
   const offDates = new Map(pilotNames.map((p) => [p, new Set<string>()]));
+  const travelDates = new Map(pilotNames.map((p) => [p, new Set<string>()]));
 
   const dates = rowDates(rows);
   rows.forEach((row, rowIndex) => {
@@ -411,7 +420,10 @@ export function computeFieldStats({
         const counts = shares.get(date.slice(0, 7))!.get(pilot.name)!;
         if (kind === "poc") counts.pocDays += 1;
         if (kind === "training") counts.trainingDays += 1;
-        if (travel) counts.travelDays += 1;
+        if (travel) {
+          counts.travelDays += 1;
+          travelDates.get(pilot.name)!.add(date);
+        }
       }
       if (!kind) continue;
 
@@ -455,12 +467,18 @@ export function computeFieldStats({
 
   // Workdays come from the calendar, not the rows: a weekday the sheet skips is still a workday.
   const workDays = new Map(months.map((m) => [m, new Map(pilotNames.map((p) => [p, 0]))]));
+  const days: FieldDay[] = [];
   for (let date = from; date < today; date = nextDay(date)) {
     const perPilot = workDays.get(date.slice(0, 7));
     if (!perPilot || !isWeekday(date)) continue;
+    const day: FieldDay = { date, travel: 0, home: 0 };
     for (const pilot of pilotNames) {
-      if (date >= firstDayOf(pilot) && !offDates.get(pilot)!.has(date)) perPilot.set(pilot, perPilot.get(pilot)! + 1);
+      if (date < firstDayOf(pilot) || offDates.get(pilot)!.has(date)) continue;
+      perPilot.set(pilot, perPilot.get(pilot)! + 1);
+      if (travelDates.get(pilot)!.has(date)) day.travel += 1;
+      else day.home += 1;
     }
+    days.push(day);
   }
   const workdaysOver = (selected: string[]): PilotWorkdays[] =>
     pilotNames.map((pilot) => {
@@ -486,5 +504,6 @@ export function computeFieldStats({
     events,
     travel: travelDays,
     salesNames: [...salesNames].sort((a, b) => a.localeCompare(b)),
+    days,
   };
 }
