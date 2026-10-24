@@ -19,6 +19,19 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  // eslint-plugin-react-hooks 7.1 (pulled in by eslint-config-next 16.4, which
+  // requires it) turned these React Compiler rules into errors. They flag 38
+  // existing patterns, many in the core hooks (use-chat, use-time-tracker), and
+  // the bump that brought them was an urgent security fix. Warn until they are
+  // fixed on their own; do not add new violations.
+  {
+    rules: {
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/refs": "warn",
+      "react-hooks/purity": "warn",
+      "react-hooks/immutability": "warn",
+    },
+  },
   // The role must come from `app_metadata` (service-role writable only), never
   // `user_metadata`, which the user rewrites themselves with the anon key via
   // supabase.auth.updateUser(). See SECURITY.md T0.1, and the AST-level
