@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -99,7 +100,7 @@ export function useChat({ isAdmin = false, onClose, pillHidden = false }: ChatWi
   // under the caret, and which candidate the arrow keys point at.
   const [members, setMembers] = useState<ChatMember[]>([]);
   const [mentionToken, setMentionToken] = useState<MentionToken | null>(null);
-  const [mentionIndex, setMentionIndex] = useState(0);
+  const [rawMentionIndex, setMentionIndex] = useState(0);
   // The message the next send answers (the "Replying to" strip).
   const [replyTarget, setReplyTarget] = useState<ChatMessageRow | null>(null);
 
@@ -110,12 +111,16 @@ export function useChat({ isAdmin = false, onClose, pillHidden = false }: ChatWi
   // latest message while images and attachments finish laying out.
   const contentRef = useRef<HTMLDivElement | null>(null);
   const openRef = useRef(open);
-  openRef.current = open;
-  // Refs to keep handlers stable while reflecting latest values.
+  // Refs to keep handlers stable while reflecting latest values. Synced in a
+  // layout effect (right after commit, before any handler can run) because
+  // React forbids writing refs during render.
   const isAtBottomRef = useRef(true);
-  isAtBottomRef.current = isAtBottom;
   const messagesRef = useRef<ChatMessageRow[]>([]);
-  messagesRef.current = messages;
+  useLayoutEffect(() => {
+    openRef.current = open;
+    isAtBottomRef.current = isAtBottom;
+    messagesRef.current = messages;
+  });
 
   // Stable error sink shared with the extracted hooks.
   const reportError = useCallback((message: string) => setError(message), []);
@@ -155,11 +160,17 @@ export function useChat({ isAdmin = false, onClose, pillHidden = false }: ChatWi
   // Opening always lands on the newest message, wherever the reader was last
   // time, so "at bottom" is asserted here rather than left to the scroll
   // handler (which only fires once something scrolls).
+  const [seenOpen, setSeenOpen] = useState(open);
+  if (seenOpen !== open) {
+    setSeenOpen(open);
+    if (open) {
+      setUnread(0);
+      setPendingNew(0);
+      setIsAtBottom(true);
+    }
+  }
   useEffect(() => {
     if (!open) return;
-    setUnread(0);
-    setPendingNew(0);
-    setIsAtBottom(true);
     isAtBottomRef.current = true;
     // Now (the list is already in the DOM when the history was loaded before
     // opening), and again on the next frame for anything laid out after.
@@ -235,6 +246,11 @@ export function useChat({ isAdmin = false, onClose, pillHidden = false }: ChatWi
   }, [messages.length, open]);
 
   // Filter change is an explicit user action — always snap to bottom.
+  const [seenFilter, setSeenFilter] = useState(filter);
+  if (seenFilter !== filter) {
+    setSeenFilter(filter);
+    if (open) setPendingNew(0);
+  }
   useEffect(() => {
     if (!open) return;
     requestAnimationFrame(() => {
@@ -242,7 +258,6 @@ export function useChat({ isAdmin = false, onClose, pillHidden = false }: ChatWi
       if (!el) return;
       el.scrollTop = el.scrollHeight;
     });
-    setPendingNew(0);
   }, [filter, open]);
 
   useEffect(() => {
@@ -379,9 +394,7 @@ export function useChat({ isAdmin = false, onClose, pillHidden = false }: ChatWi
   }, [mentionToken, members, currentUserId]);
 
   // Keep the highlighted row inside the list as it shrinks.
-  useEffect(() => {
-    if (mentionIndex >= mentionCandidates.length) setMentionIndex(0);
-  }, [mentionCandidates.length, mentionIndex]);
+  const mentionIndex = rawMentionIndex >= mentionCandidates.length ? 0 : rawMentionIndex;
 
   const pickMention = useCallback(
     (member: ChatMember) => {
@@ -604,12 +617,12 @@ export function useChat({ isAdmin = false, onClose, pillHidden = false }: ChatWi
       if (mentionCandidates.length > 0) {
         if (e.key === "ArrowDown") {
           e.preventDefault();
-          setMentionIndex((i) => (i + 1) % mentionCandidates.length);
+          setMentionIndex((mentionIndex + 1) % mentionCandidates.length);
           return;
         }
         if (e.key === "ArrowUp") {
           e.preventDefault();
-          setMentionIndex((i) => (i - 1 + mentionCandidates.length) % mentionCandidates.length);
+          setMentionIndex((mentionIndex - 1 + mentionCandidates.length) % mentionCandidates.length);
           return;
         }
         if (e.key === "Enter" || e.key === "Tab") {

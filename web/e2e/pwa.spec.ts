@@ -12,7 +12,8 @@ test("manifest describes a standalone app with its icons", async ({ request }) =
   expect(manifest.short_name).toBe("Flya Space");
   expect(manifest.display).toBe("standalone");
   expect(manifest.scope).toBe("/");
-  expect(manifest.start_url).toBe("/dashboard");
+  // The launch page (public/launch.html), not the dashboard: see app/manifest.ts.
+  expect(manifest.start_url).toBe("/");
   expect(Array.isArray(manifest.icons) && manifest.icons.length >= 3).toBe(true);
   for (const icon of manifest.icons as { src: string }[]) {
     const image = await request.get(icon.src);

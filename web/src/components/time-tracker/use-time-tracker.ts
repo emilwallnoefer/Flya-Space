@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { playUiSound, stopUiSound } from "@/lib/ui-sounds";
 import {
   bankDeltaForDay,
@@ -24,6 +24,11 @@ import { useWeekCalendar } from "./hooks/use-week-calendar";
  * the day editor form live in `./hooks/`; this orchestrator owns week
  * navigation, the reveal cascade, and the optimistic writes with debounced
  * reconcile, and wires the pieces together. */
+// useSyncExternalStore needs a subscribe; the hydration flag never changes.
+function subscribeNothing() {
+  return () => {};
+}
+
 export function useTimeTracker({
   readOnly = false,
   apiBase,
@@ -54,11 +59,17 @@ export function useTimeTracker({
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
-  const [revealedDayCount, setRevealedDayCount] = useState(7);
-  const [showUpToDateSweep, setShowUpToDateSweep] = useState(false);
+  // Day-card reveal cascade, keyed by the week load it belongs to. Counts kept
+  // for an older key read as "not started", so a new week hides its cards on
+  // the render that brings it instead of one frame later.
+  const [reveal, setReveal] = useState<{ key: string | null; count: number }>({ key: null, count: 0 });
+  const [sweep, setSweep] = useState<{ key: string | null; on: boolean }>({ key: null, on: false });
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [editorPortalReady, setEditorPortalReady] = useState(false);
+  // False for the server render and the hydration pass, true afterwards: the
+  // editor portal needs `document`, and the server HTML shows every day card.
+  const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false);
+  const editorPortalReady = hydrated;
   const [dayDetailsLoading, setDayDetailsLoading] = useState(false);
   const previousEditorOpenRef = useRef<boolean | null>(null);
   // Monotonic counter so a slow background refresh can't overwrite the result
@@ -71,6 +82,9 @@ export function useTimeTracker({
   // Set below once scheduleReconcile exists; lets refreshWeek re-arm the
   // debounce without a circular useCallback dependency.
   const scheduleReconcileRef = useRef<(() => void) | null>(null);
+  // Writes still waiting on the server, and the pending reconcile timer.
+  const pendingWritesRef = useRef(0);
+  const reconcileTimerRef = useRef<number | null>(null);
 
   const { weekCacheRef, fetchWeekData, prefetchNearbyWeeks, clearWeekCaches } = useWeekCache(
     apiBase,
@@ -174,24 +188,26 @@ export function useTimeTracker({
     };
   }, [applyWeekData, fetchWeekData, prefetchNearbyWeeks, weekStart, weekCacheRef]);
 
+  const dayTotal = data?.days?.length ?? 0;
+  const revealKey = dayTotal > 0 ? `${weekLoadTick}:${dayTotal}` : null;
+  const revealedDayCount = reveal.key === revealKey ? reveal.count : hydrated ? 0 : 7;
+  const showUpToDateSweep = sweep.on && sweep.key === revealKey;
+
   useEffect(() => {
-    const total = data?.days?.length ?? 0;
-    if (total === 0) return;
+    if (revealKey === null) return;
     playUiSound("daysAppearStart");
-    setRevealedDayCount(0);
-    setShowUpToDateSweep(false);
     let current = 0;
     const intervalId = window.setInterval(() => {
       current += 1;
-      setRevealedDayCount(current);
-      if (current >= total) {
+      setReveal({ key: revealKey, count: current });
+      if (current >= dayTotal) {
         window.clearInterval(intervalId);
-        setShowUpToDateSweep(true);
-        window.setTimeout(() => setShowUpToDateSweep(false), 980);
+        setSweep({ key: revealKey, on: true });
+        window.setTimeout(() => setSweep({ key: revealKey, on: false }), 980);
       }
     }, 85);
     return () => window.clearInterval(intervalId);
-  }, [weekLoadTick, data?.days?.length]);
+  }, [revealKey, dayTotal]);
 
   useEffect(() => {
     if (showUpToDateSweep) {
@@ -201,10 +217,6 @@ export function useTimeTracker({
     stopUiSound("weekReadyGlow");
     return undefined;
   }, [showUpToDateSweep]);
-
-  useEffect(() => {
-    setEditorPortalReady(true);
-  }, []);
 
   useEffect(() => {
     const previous = previousEditorOpenRef.current;
@@ -250,16 +262,13 @@ export function useTimeTracker({
     prefetchNearbyWeeks(targetWeek);
   }, [fetchWeekData, prefetchNearbyWeeks, weekStart, weekCacheRef]);
 
-  // Debounced, coalesced background reconcile. A burst of compensate / save
-  // clicks schedules at most one server refetch once writes have settled,
-  // instead of the old "force-refresh after every click" which fought the
-  // optimistic UI and caused the bars to snap back mid-entry.
-  const pendingWritesRef = useRef(0);
-  const reconcileTimerRef = useRef<number | null>(null);
-
-  const runReconcile = useCallback(() => {
+  // Debounced, coalesced background reconcile (refs declared above). A burst
+  // of compensate / save clicks schedules at most one server refetch once
+  // writes have settled, instead of the old "force-refresh after every click"
+  // which fought the optimistic UI and caused the bars to snap back mid-entry.
+  const runReconcile = useCallback(function run() {
     if (pendingWritesRef.current > 0) {
-      reconcileTimerRef.current = window.setTimeout(runReconcile, RECONCILE_DEBOUNCE_MS);
+      reconcileTimerRef.current = window.setTimeout(run, RECONCILE_DEBOUNCE_MS);
       return;
     }
     reconcileTimerRef.current = null;
@@ -273,7 +282,9 @@ export function useTimeTracker({
     reconcileTimerRef.current = window.setTimeout(runReconcile, RECONCILE_DEBOUNCE_MS);
   }, [runReconcile]);
 
-  scheduleReconcileRef.current = scheduleReconcile;
+  useEffect(() => {
+    scheduleReconcileRef.current = scheduleReconcile;
+  }, [scheduleReconcile]);
 
   useEffect(() => {
     return () => {

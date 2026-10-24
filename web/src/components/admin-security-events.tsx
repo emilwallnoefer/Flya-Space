@@ -49,6 +49,13 @@ function describeDetail(entry: SecurityEvent): string {
   return keys.map((k) => `${k}: ${String(detail[k])}`).join(", ");
 }
 
+async function requestSecurityEvents(): Promise<FeedResponse> {
+  const response = await fetch("/api/admin/security-events", { cache: "no-store" });
+  const payload = (await response.json()) as FeedResponse | { error: string };
+  if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load security events.");
+  return payload as FeedResponse;
+}
+
 export function AdminSecurityEvents() {
   const [entries, setEntries] = useState<SecurityEvent[]>([]);
   const [alerts, setAlerts] = useState<AlertConfig | null>(null);
@@ -57,26 +64,32 @@ export function AdminSecurityEvents() {
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const [savingAlerts, setSavingAlerts] = useState(false);
 
-  const load = useCallback(async () => {
+  // State changes only in the promise callbacks, so the mount effect can start
+  // it; `load` adds the synchronous "loading" reset for later reloads.
+  const fetchEvents = useCallback(
+    () =>
+      requestSecurityEvents()
+        .then(
+          (feed) => {
+            setEntries(feed.entries);
+            setAlerts(feed.alerts);
+            setUpdatedAt(Date.now());
+          },
+          (err: Error) => setError(err.message || "Failed to load security events."),
+        )
+        .finally(() => setLoading(false)),
+    [],
+  );
+
+  const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    try {
-      const response = await fetch("/api/admin/security-events", { cache: "no-store" });
-      const payload = (await response.json()) as FeedResponse | { error: string };
-      if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load security events.");
-      setEntries((payload as FeedResponse).entries);
-      setAlerts((payload as FeedResponse).alerts);
-      setUpdatedAt(Date.now());
-    } catch (err) {
-      setError((err as Error).message || "Failed to load security events.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    return fetchEvents();
+  }, [fetchEvents]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void fetchEvents();
+  }, [fetchEvents]);
 
   const patchAlerts = useCallback(
     async (patch: { security_alerts_enabled?: boolean; security_alert_threshold?: number }) => {

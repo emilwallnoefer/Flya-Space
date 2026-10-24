@@ -5,26 +5,34 @@ import { useCallback, useEffect, useState } from "react";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { DEFAULT_MAIL_BRIEF_MODEL, MAIL_BRIEF_MODELS } from "@/lib/mail-brief-model";
 
+async function requestMailBriefModel(): Promise<string | null> {
+  const response = await fetch("/api/admin/workspace-settings", { cache: "no-store" });
+  const payload = (await response.json()) as
+    | { settings: { mail_brief_model: string | null } }
+    | { error: string };
+  if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load settings.");
+  return (payload as { settings: { mail_brief_model: string | null } }).settings.mail_brief_model;
+}
+
 export function AdminMailSettings() {
   const [model, setModel] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const response = await fetch("/api/admin/workspace-settings", { cache: "no-store" });
-      const payload = (await response.json()) as
-        | { settings: { mail_brief_model: string | null } }
-        | { error: string };
-      if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load settings.");
-      setModel((payload as { settings: { mail_brief_model: string | null } }).settings.mail_brief_model);
-      setLoaded(true);
-    } catch (err) {
-      setError((err as Error).message || "Failed to load settings.");
-    }
-  }, []);
+  // State changes only in the promise callbacks, so the mount effect can start
+  // it; `error` already starts out null.
+  const load = useCallback(
+    () =>
+      requestMailBriefModel().then(
+        (next) => {
+          setModel(next);
+          setLoaded(true);
+        },
+        (err: Error) => setError(err.message || "Failed to load settings."),
+      ),
+    [],
+  );
 
   useEffect(() => {
     void load();

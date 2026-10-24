@@ -14,52 +14,78 @@ const LATEST_RANGE_OPTIONS = [
   { label: "90d", days: 90 },
 ];
 
+async function requestClicks(days: number, showBots: boolean, offset: number): Promise<LatestClicksResponse> {
+  const params = new URLSearchParams({
+    days: String(days),
+    offset: String(offset),
+    limit: String(LATEST_PAGE_SIZE),
+  });
+  if (showBots) params.set("include_bots", "1");
+  const response = await fetch(`/api/admin/mail-tracking/clicks?${params.toString()}`);
+  const payload = (await response.json()) as LatestClicksResponse | { error: string };
+  if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load clicks.");
+  return payload as LatestClicksResponse;
+}
+
 export function LatestClicksTab({ showBots }: { showBots: boolean }) {
   const [days, setDays] = useState(7);
   const [clicks, setClicks] = useState<LatestClick[]>([]);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const requestIdRef = useRef(0);
 
-  const fetchPage = useCallback(
-    async (opts: { append: boolean; offset: number }) => {
+  // A new range or bot filter starts its first page in the loading state. This
+  // happens during render because the effect below may not set state itself.
+  const query = `${days}:${showBots}`;
+  const [shownQuery, setShownQuery] = useState(query);
+  if (shownQuery !== query) {
+    setShownQuery(query);
+    setLoading(true);
+    setError(null);
+  }
+
+  const runPage = useCallback(
+    (opts: { append: boolean; offset: number }) => {
       const requestId = ++requestIdRef.current;
-      if (opts.append) setLoadingMore(true);
-      else setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams({
-          days: String(days),
-          offset: String(opts.offset),
-          limit: String(LATEST_PAGE_SIZE),
+      const current = () => requestId === requestIdRef.current;
+      return requestClicks(days, showBots, opts.offset)
+        .then(
+          (data) => {
+            if (!current()) return;
+            setClicks((prev) => (opts.append ? [...prev, ...data.clicks] : data.clicks));
+            setTotal(data.total);
+            setUpdatedAt(Date.now());
+          },
+          (err: Error) => {
+            if (!current()) return;
+            setError(err.message || "Failed to load clicks.");
+          },
+        )
+        .finally(() => {
+          if (!current()) return;
+          if (opts.append) setLoadingMore(false);
+          else setLoading(false);
         });
-        if (showBots) params.set("include_bots", "1");
-        const response = await fetch(`/api/admin/mail-tracking/clicks?${params.toString()}`);
-        const payload = (await response.json()) as LatestClicksResponse | { error: string };
-        if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load clicks.");
-        if (requestId !== requestIdRef.current) return;
-        const data = payload as LatestClicksResponse;
-        setClicks((prev) => (opts.append ? [...prev, ...data.clicks] : data.clicks));
-        setTotal(data.total);
-        setUpdatedAt(Date.now());
-      } catch (err) {
-        if (requestId !== requestIdRef.current) return;
-        setError((err as Error).message || "Failed to load clicks.");
-      } finally {
-        if (requestId !== requestIdRef.current) return;
-        if (opts.append) setLoadingMore(false);
-        else setLoading(false);
-      }
     },
     [days, showBots],
   );
 
+  const fetchPage = useCallback(
+    (opts: { append: boolean; offset: number }) => {
+      if (opts.append) setLoadingMore(true);
+      else setLoading(true);
+      setError(null);
+      return runPage(opts);
+    },
+    [runPage],
+  );
+
   useEffect(() => {
-    void fetchPage({ append: false, offset: 0 });
-  }, [fetchPage]);
+    void runPage({ append: false, offset: 0 });
+  }, [runPage]);
 
   const hasMore = clicks.length < total;
   const csvParams = new URLSearchParams({ days: String(days), format: "csv" });

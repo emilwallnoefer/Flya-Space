@@ -51,6 +51,13 @@ function travelItem(day: FieldTravelDay): DetailItem {
   };
 }
 
+async function requestFieldStats(): Promise<Loaded> {
+  const response = await fetch("/api/field-stats", { cache: "no-store" });
+  const payload = (await response.json().catch(() => ({}))) as Partial<Loaded> & { error?: string };
+  if (!response.ok || !payload.stats) throw new Error(payload.error || "Could not load the field stats.");
+  return payload as Loaded;
+}
+
 /**
  * Field stats: POCs, trainings, travel days and regions, computed server-side
  * from the "Mission planning" sheet (`lib/field-stats.ts`). The server caches
@@ -63,24 +70,25 @@ export function FieldStatsPanel() {
   const [month, setMonth] = useState<string>("all");
   const [measure, setMeasure] = useState<Measure>("count");
 
-  const load = useCallback(async () => {
+  // State changes only in the promise callbacks, so the mount effect can start
+  // it; `load` adds the synchronous "loading" reset for the Refresh button.
+  const fetchStats = useCallback(
+    () =>
+      requestFieldStats()
+        .then(setData, (err: Error) => setError(err.message || "Could not load the field stats."))
+        .finally(() => setLoading(false)),
+    [],
+  );
+
+  const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    try {
-      const response = await fetch("/api/field-stats", { cache: "no-store" });
-      const payload = (await response.json().catch(() => ({}))) as Partial<Loaded> & { error?: string };
-      if (!response.ok || !payload.stats) throw new Error(payload.error || "Could not load the field stats.");
-      setData(payload as Loaded);
-    } catch (err) {
-      setError((err as Error).message || "Could not load the field stats.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    return fetchStats();
+  }, [fetchStats]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void fetchStats();
+  }, [fetchStats]);
 
   const stats = data?.stats ?? null;
   const bucket: FieldStatsBucket | null = stats ? (month === "all" ? stats.all : stats.byMonth[month] ?? null) : null;

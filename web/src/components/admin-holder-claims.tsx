@@ -42,6 +42,15 @@ function personLabel(person: Person | null): string {
   return person.email ? `${person.name} (${person.email})` : person.name;
 }
 
+async function requestHolderClaims(): Promise<FeedResponse> {
+  const response = await fetch("/api/admin/fleet-holder-claims", { cache: "no-store" });
+  const payload = (await response.json()) as FeedResponse | { error: string };
+  if (!response.ok) {
+    throw new Error((payload as { error: string }).error || "Failed to load holder claims.");
+  }
+  return payload as FeedResponse;
+}
+
 export function AdminHolderClaims() {
   const [claims, setClaims] = useState<HolderClaimRow[]>([]);
   const [users, setUsers] = useState<Person[]>([]);
@@ -53,28 +62,32 @@ export function AdminHolderClaims() {
   const [pending, setPending] = useState<Record<string, string>>({});
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  // State changes only in the promise callbacks, so the mount effect can start
+  // it; `load` adds the synchronous "loading" reset for later reloads.
+  const fetchClaims = useCallback(
+    () =>
+      requestHolderClaims()
+        .then(
+          (feed) => {
+            setClaims(feed.claims);
+            setUsers(feed.users);
+            setUpdatedAt(Date.now());
+          },
+          (err: Error) => setError(err.message || "Failed to load holder claims."),
+        )
+        .finally(() => setLoading(false)),
+    [],
+  );
+
+  const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    try {
-      const response = await fetch("/api/admin/fleet-holder-claims", { cache: "no-store" });
-      const payload = (await response.json()) as FeedResponse | { error: string };
-      if (!response.ok) {
-        throw new Error((payload as { error: string }).error || "Failed to load holder claims.");
-      }
-      setClaims((payload as FeedResponse).claims);
-      setUsers((payload as FeedResponse).users);
-      setUpdatedAt(Date.now());
-    } catch (err) {
-      setError((err as Error).message || "Failed to load holder claims.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    return fetchClaims();
+  }, [fetchClaims]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void fetchClaims();
+  }, [fetchClaims]);
 
   const act = useCallback(
     async (body: { action: "reassign"; label: string; user_id: string } | { action: "release"; label: string }) => {

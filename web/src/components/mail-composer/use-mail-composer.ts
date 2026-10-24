@@ -29,6 +29,33 @@ const BODY_WRITE_INTERVAL_MS = 17;
 
 /** All Mail Composer state: the guided form's progressive-reveal flow, Brief
  * mode, generation/draft calls, and the live-preview typing animation. */
+/**
+ * Reveals `text` `step` characters at a time. The first chunk shows on the
+ * render that brings a new text; timers reveal the rest. Only "how far into
+ * which text" is state, so the visible slice is derived during render.
+ */
+function useTypewriter(text: string, step: number, intervalMs: number): string {
+  const [typed, setTyped] = useState({ text: "", length: 0 });
+
+  useEffect(() => {
+    if (!text) return;
+    let cursor = Math.min(text.length, step);
+    let timeoutId: number | null = null;
+    const advance = () => {
+      cursor = Math.min(text.length, cursor + step);
+      setTyped({ text, length: cursor });
+      if (cursor < text.length) timeoutId = window.setTimeout(advance, intervalMs);
+    };
+    if (cursor < text.length) timeoutId = window.setTimeout(advance, intervalMs);
+    return () => {
+      if (timeoutId != null) window.clearTimeout(timeoutId);
+    };
+  }, [text, step, intervalMs]);
+
+  if (!text) return "";
+  return text.slice(0, typed.text === text ? typed.length : step);
+}
+
 export function useMailComposer(userRole: UserRole | null) {
   const [form, setForm] = useState<FormState>(INITIAL_FORM_STATE);
   const [loading, setLoading] = useState(false);
@@ -48,8 +75,6 @@ export function useMailComposer(userRole: UserRole | null) {
   /** Whether the Brief-mode asset editor is open, and whether a re-render is in flight. */
   const [editingAssets, setEditingAssets] = useState(false);
   const [savingAssets, setSavingAssets] = useState(false);
-  const [animatedPreviewSubject, setAnimatedPreviewSubject] = useState("");
-  const [animatedPreviewBody, setAnimatedPreviewBody] = useState("");
   const [draftInfo, setDraftInfo] = useState<{ draftId: string; messageId: string } | null>(null);
   const previousPreviewWritingRef = useRef(false);
 
@@ -225,43 +250,8 @@ export function useMailComposer(userRole: UserRole | null) {
   }
 
   // Live-preview typing animation.
-  useEffect(() => {
-    if (!result?.subject) {
-      setAnimatedPreviewSubject("");
-      return;
-    }
-    const text = result.subject;
-    let cursor = 0;
-    let timeoutId: number | null = null;
-    const step = () => {
-      cursor = Math.min(text.length, cursor + SUBJECT_WRITE_STEP);
-      setAnimatedPreviewSubject(text.slice(0, cursor));
-      if (cursor < text.length) timeoutId = window.setTimeout(step, SUBJECT_WRITE_INTERVAL_MS);
-    };
-    step();
-    return () => {
-      if (timeoutId != null) window.clearTimeout(timeoutId);
-    };
-  }, [result?.subject]);
-
-  useEffect(() => {
-    if (!result?.body) {
-      setAnimatedPreviewBody("");
-      return;
-    }
-    const text = result.body;
-    let cursor = 0;
-    let timeoutId: number | null = null;
-    const step = () => {
-      cursor = Math.min(text.length, cursor + BODY_WRITE_STEP);
-      setAnimatedPreviewBody(text.slice(0, cursor));
-      if (cursor < text.length) timeoutId = window.setTimeout(step, BODY_WRITE_INTERVAL_MS);
-    };
-    step();
-    return () => {
-      if (timeoutId != null) window.clearTimeout(timeoutId);
-    };
-  }, [result?.body]);
+  const animatedPreviewSubject = useTypewriter(result?.subject ?? "", SUBJECT_WRITE_STEP, SUBJECT_WRITE_INTERVAL_MS);
+  const animatedPreviewBody = useTypewriter(result?.body ?? "", BODY_WRITE_STEP, BODY_WRITE_INTERVAL_MS);
 
   const previewIsWriting = Boolean(result) && (
     animatedPreviewSubject.length < (result?.subject.length ?? 0) ||

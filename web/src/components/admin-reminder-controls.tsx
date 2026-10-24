@@ -16,6 +16,13 @@ type WorkspaceSettings = {
   updated_at: string;
 };
 
+async function requestWorkspaceSettings(): Promise<WorkspaceSettings> {
+  const response = await fetch("/api/admin/workspace-settings", { cache: "no-store" });
+  const payload = (await response.json()) as { settings: WorkspaceSettings } | { error: string };
+  if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load settings.");
+  return (payload as { settings: WorkspaceSettings }).settings;
+}
+
 export function AdminReminderControls() {
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -24,17 +31,15 @@ export function AdminReminderControls() {
   const [actionResult, setActionResult] = useState<string | null>(null);
   const [testEmail, setTestEmail] = useState("");
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const response = await fetch("/api/admin/workspace-settings", { cache: "no-store" });
-      const payload = (await response.json()) as { settings: WorkspaceSettings } | { error: string };
-      if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load settings.");
-      setSettings((payload as { settings: WorkspaceSettings }).settings);
-    } catch (err) {
-      setError((err as Error).message || "Failed to load settings.");
-    }
-  }, []);
+  // State changes only in the promise callbacks, so the mount effect can start
+  // it; `error` already starts out null.
+  const load = useCallback(
+    () =>
+      requestWorkspaceSettings().then(setSettings, (err: Error) =>
+        setError(err.message || "Failed to load settings."),
+      ),
+    [],
+  );
 
   useEffect(() => {
     void load();

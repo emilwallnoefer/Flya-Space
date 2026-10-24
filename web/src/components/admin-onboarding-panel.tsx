@@ -43,28 +43,35 @@ function progressBarColor(percent: number) {
   return "bg-glass/20";
 }
 
+async function requestOnboarding(): Promise<OnboardingResponse> {
+  const response = await fetch("/api/admin/onboarding");
+  const payload = (await response.json()) as OnboardingResponse | { error: string };
+  if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load onboarding progress.");
+  return payload as OnboardingResponse;
+}
+
 export function AdminOnboardingPanel() {
   const [data, setData] = useState<OnboardingResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/admin/onboarding");
-      const payload = (await response.json()) as OnboardingResponse | { error: string };
-      if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load onboarding progress.");
-      setData(payload as OnboardingResponse);
-      setUpdatedAt(Date.now());
-    } catch (err) {
-      setError((err as Error).message || "Failed to load onboarding progress.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // State changes only in the promise callbacks, so the mount effect can start
+  // it; `loading` starts out true instead of being set here.
+  const load = useCallback(
+    () =>
+      requestOnboarding()
+        .then(
+          (next) => {
+            setData(next);
+            setUpdatedAt(Date.now());
+          },
+          (err: Error) => setError(err.message || "Failed to load onboarding progress."),
+        )
+        .finally(() => setLoading(false)),
+    [],
+  );
 
   useEffect(() => {
     void load();

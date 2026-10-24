@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   addDays,
   getMonday,
@@ -17,14 +17,12 @@ import {
  * mapping change) — single-day edits keep their caches in step instead.
  */
 export function useWeekCache(apiBase: string | undefined, initialWeek?: WeekResponse | null) {
-  const weekCacheRef = useRef<Map<string, WeekResponse>>(new Map());
+  // Seeded once with the server-prefetched week, on the first render only.
+  const [seededCache] = useState(
+    () => new Map<string, WeekResponse>(initialWeek ? [[initialWeek.week_start, initialWeek]] : []),
+  );
+  const weekCacheRef = useRef<Map<string, WeekResponse>>(seededCache);
   const weekInflightRef = useRef<Map<string, Promise<WeekResponse>>>(new Map());
-  const seededRef = useRef(false);
-
-  if (!seededRef.current) {
-    seededRef.current = true;
-    if (initialWeek) weekCacheRef.current.set(initialWeek.week_start, initialWeek);
-  }
 
   const fetchWeekData = useCallback(
     async (
