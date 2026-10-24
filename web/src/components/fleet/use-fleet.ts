@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { NoticeTone } from "@/components/ui";
 import { subscribeToFleetChanges } from "@/lib/fleet-live";
 import { addDays, isBookable, mondayOf, toDateKey } from "@/lib/fleet-rules";
@@ -57,6 +57,42 @@ export const HOLDER_ANY = "__any__";
 /** Holder filter: the units nobody is holding. */
 export const HOLDER_NOBODY = "__nobody__";
 
+async function requestBoard(start: string): Promise<FleetBoardResponse> {
+  const response = await fetch(`/api/fleet?start=${encodeURIComponent(start)}&days=${WINDOW_DAYS}`);
+  if (!response.ok) {
+    throw new Error((await response.json().catch(() => null))?.error ?? "Request failed");
+  }
+  return (await response.json()) as FleetBoardResponse;
+}
+
+/** "Show finished bookings": remembered per browser, kept in memory when storage is blocked. */
+const showPastListeners = new Set<() => void>();
+let showPastInMemory: boolean | null = null;
+function subscribeShowPast(listener: () => void) {
+  showPastListeners.add(listener);
+  return () => {
+    showPastListeners.delete(listener);
+  };
+}
+function readShowPast(): boolean {
+  if (showPastInMemory !== null) return showPastInMemory;
+  try {
+    return window.localStorage.getItem(SHOW_PAST_KEY) !== "0";
+  } catch {
+    // Private window, or storage blocked. The default stands.
+    return true;
+  }
+}
+function writeShowPast(next: boolean) {
+  showPastInMemory = next;
+  try {
+    window.localStorage.setItem(SHOW_PAST_KEY, next ? "1" : "0");
+  } catch {
+    // Not being able to remember it is not a reason to refuse the toggle.
+  }
+  for (const listener of showPastListeners) listener();
+}
+
 export function useFleet(initialBoard: FleetBoardResponse | null) {
   const [board, setBoard] = useState<FleetBoardResponse | null>(initialBoard);
   const [loading, setLoading] = useState(!initialBoard);
@@ -86,7 +122,9 @@ export function useFleet(initialBoard: FleetBoardResponse | null) {
   // this in March" is deliberate. The preference is remembered per browser
   // because re-hiding them on every visit is the kind of small friction that
   // makes people stop using a filter.
-  const [showPast, setShowPast] = useState(true);
+  // Read through useSyncExternalStore: the server (and the first client render)
+  // use the default, so this panel can be server-rendered without a mismatch.
+  const showPast = useSyncExternalStore(subscribeShowPast, readShowPast, () => true);
 
   // Guards against a slow response for an earlier window overwriting a newer one
   // (the same staleness rule the Time Tracker follows for its week fetches).
@@ -100,27 +138,32 @@ export function useFleet(initialBoard: FleetBoardResponse | null) {
     windowStartRef.current = windowStart;
   }, [windowStart]);
 
-  const load = useCallback(async (start: string) => {
+  // State changes only in the promise callbacks, so the window effect below can
+  // start it; `load` adds the synchronous loading reset for everyone else.
+  const fetchBoard = useCallback((start: string) => {
     const seq = ++requestSeq.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(
-        `/api/fleet?start=${encodeURIComponent(start)}&days=${WINDOW_DAYS}`,
-      );
-      if (!response.ok) {
-        throw new Error((await response.json().catch(() => null))?.error ?? "Request failed");
-      }
-      const data = (await response.json()) as FleetBoardResponse;
-      if (seq !== requestSeq.current) return;
-      setBoard(data);
-    } catch (err) {
-      if (seq !== requestSeq.current) return;
-      setError((err as Error).message || "Could not load the fleet.");
-    } finally {
-      if (seq === requestSeq.current) setLoading(false);
-    }
+    return requestBoard(start)
+      .then(
+        (data) => {
+          if (seq === requestSeq.current) setBoard(data);
+        },
+        (err: Error) => {
+          if (seq === requestSeq.current) setError(err.message || "Could not load the fleet.");
+        },
+      )
+      .finally(() => {
+        if (seq === requestSeq.current) setLoading(false);
+      });
   }, []);
+
+  const load = useCallback(
+    (start: string) => {
+      setLoading(true);
+      setError(null);
+      return fetchBoard(start);
+    },
+    [fetchBoard],
+  );
 
   /**
    * Refetch the board someone else just changed, without the loading state:
@@ -170,30 +213,23 @@ export function useFleet(initialBoard: FleetBoardResponse | null) {
     };
   }, [isDemo, refreshQuietly]);
 
-  useEffect(() => {
-    // Read after mount rather than in the initial state: this panel can be
-    // server-rendered, where localStorage does not exist, and seeding state
-    // from it directly would mismatch the first client render.
-    try {
-      if (window.localStorage.getItem(SHOW_PAST_KEY) === "0") setShowPast(false);
-    } catch {
-      // Private window, or storage blocked. The default stands.
-    }
-  }, []);
+  const toggleShowPast = useCallback((next: boolean) => writeShowPast(next), []);
 
-  const toggleShowPast = useCallback((next: boolean) => {
-    setShowPast(next);
-    try {
-      window.localStorage.setItem(SHOW_PAST_KEY, next ? "1" : "0");
-    } catch {
-      // Not being able to remember it is not a reason to refuse the toggle.
+  // A new window shows the loading state from its first render; the effect
+  // then fetches it. The server-prefetched window is never refetched.
+  const isPrefetchedWindow = Boolean(initialBoard && initialBoard.window_start === windowStart);
+  const [seenWindowStart, setSeenWindowStart] = useState(windowStart);
+  if (seenWindowStart !== windowStart) {
+    setSeenWindowStart(windowStart);
+    if (!isPrefetchedWindow) {
+      setLoading(true);
+      setError(null);
     }
-  }, []);
-
+  }
   useEffect(() => {
-    if (initialBoard && initialBoard.window_start === windowStart) return;
-    void load(windowStart);
-  }, [windowStart, load, initialBoard]);
+    if (isPrefetchedWindow) return;
+    void fetchBoard(windowStart);
+  }, [windowStart, fetchBoard, isPrefetchedWindow]);
 
   /**
    * Every write goes through here, so the staleness rule and the board handed

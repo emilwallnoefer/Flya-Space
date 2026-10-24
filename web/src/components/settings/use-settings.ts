@@ -228,11 +228,15 @@ export function useSettings(
     setOpenReadme((prev) => (prev === key ? null : key));
   }
 
-  useEffect(() => {
-    if (autoOpenProgramReadmeToken <= 0) return;
-    setActiveSection("readme");
-    setOpenReadme("program");
-  }, [autoOpenProgramReadmeToken, setActiveSection]);
+  // Each new token (including one present on mount) opens the program readme.
+  const [seenReadmeToken, setSeenReadmeToken] = useState(0);
+  if (seenReadmeToken !== autoOpenProgramReadmeToken) {
+    setSeenReadmeToken(autoOpenProgramReadmeToken);
+    if (autoOpenProgramReadmeToken > 0) {
+      setActiveSection("readme");
+      setOpenReadme("program");
+    }
+  }
 
   const filteredNavItems = useMemo(
     () => filterSettingsNav(access, navFilter),

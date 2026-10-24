@@ -130,9 +130,8 @@ function PhoneMock({
 
   // The screen for this step is in the DOM in the same commit (no exit
   // animation to wait for), so this reads the right boxes every time. A
-  // layout measurement has to happen after commit, so the rule against
-  // setState in an effect is suppressed for this one effect only.
-  /* eslint-disable react-hooks/set-state-in-effect */
+  // layout measurement has to happen after commit; the lint rule allows
+  // setState here because the values come from refs.
   useLayoutEffect(() => {
     const screen = screenRef.current;
     const targets = screen ? Array.from(screen.querySelectorAll<HTMLElement>(`[data-spot="${step.spot}"]`)) : [];
@@ -150,7 +149,6 @@ function PhoneMock({
     }
     setCardH(cardRef.current?.offsetHeight ?? 0);
   }, [step]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   // The card goes on the same side as the spot, level with
   // its centre, kept within the phone's height.

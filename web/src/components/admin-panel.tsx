@@ -172,8 +172,8 @@ export function AdminPanel({ canManageUsers = true, initialUsers = null, initial
   const [overview, setOverview] = useState<TimeOverviewResponse | null>(initialOverview ?? null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState<string | null>(null);
-  const [overviewUpdatedAt, setOverviewUpdatedAt] = useState<number | null>(initialOverview ? Date.now() : null);
-  const [usersUpdatedAt, setUsersUpdatedAt] = useState<number | null>(initialUsers ? Date.now() : null);
+  const [overviewUpdatedAt, setOverviewUpdatedAt] = useState<number | null>(() => (initialOverview ? Date.now() : null));
+  const [usersUpdatedAt, setUsersUpdatedAt] = useState<number | null>(() => (initialUsers ? Date.now() : null));
 
   const [drilldownUserId, setDrilldownUserId] = useState<string | null>(null);
   const [drilldownEmail, setDrilldownEmail] = useState<string>("");

@@ -7,33 +7,39 @@ import { StatTile } from "../stat-tile";
 import { fmtAbsolute, fmtRelative, pickTrustedHost } from "../format";
 import type { LinkLeaderboardResponse, LinkLeaderboardRow } from "../types";
 
+async function requestLinks(): Promise<LinkLeaderboardResponse> {
+  const response = await fetch("/api/admin/mail-tracking/links");
+  const payload = (await response.json()) as LinkLeaderboardResponse | { error: string };
+  if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load links.");
+  return payload as LinkLeaderboardResponse;
+}
+
 export function LinksTab({ showBots }: { showBots: boolean }) {
   const [search, setSearch] = useState("");
   const [linkData, setLinkData] = useState<LinkLeaderboardResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/admin/mail-tracking/links");
-      const payload = (await response.json()) as LinkLeaderboardResponse | { error: string };
-      if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load links.");
-      setLinkData(payload as LinkLeaderboardResponse);
-      setUpdatedAt(Date.now());
-    } catch (err) {
-      setError((err as Error).message || "Failed to load links.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Loads once on mount; state changes only in the promise callbacks, and
+  // `loading` starts out true instead of being set here.
+  const load = useCallback(
+    () =>
+      requestLinks()
+        .then(
+          (data) => {
+            setLinkData(data);
+            setUpdatedAt(Date.now());
+          },
+          (err: Error) => setError(err.message || "Failed to load links."),
+        )
+        .finally(() => setLoading(false)),
+    [],
+  );
 
   useEffect(() => {
-    if (linkData || loading) return;
     void load();
-  }, [linkData, loading, load]);
+  }, [load]);
 
   const linkSearch = search.trim().toLowerCase();
   const filteredLinks = useMemo(() => {

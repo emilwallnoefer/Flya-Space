@@ -15,6 +15,13 @@ type AdminView = {
   sheet_error: string | null;
 };
 
+async function requestFieldStatsSettings(init?: RequestInit): Promise<AdminView> {
+  const response = await fetch("/api/admin/field-stats-settings", { cache: "no-store", ...init });
+  const payload = (await response.json().catch(() => ({}))) as AdminView & { error?: string };
+  if (!response.ok) throw new Error(payload.error || "Request failed.");
+  return payload;
+}
+
 /**
  * Admin → Field stats: which Google connection reads the planning sheet, and
  * which region each salesperson stands for.
@@ -23,7 +30,7 @@ export function AdminFieldStatsSettings() {
   const [view, setView] = useState<AdminView | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [newName, setNewName] = useState("");
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -32,30 +39,38 @@ export function AdminFieldStatsSettings() {
     setDraft(next.sales_regions);
   }, []);
 
-  const request = useCallback(
-    async (init?: RequestInit) => {
-      setPending(true);
-      setError(null);
-      setSaved(false);
-      try {
-        const response = await fetch("/api/admin/field-stats-settings", { cache: "no-store", ...init });
-        const payload = (await response.json().catch(() => ({}))) as AdminView & { error?: string };
-        if (!response.ok) throw new Error(payload.error || "Request failed.");
-        apply(payload);
-        return true;
-      } catch (err) {
-        setError((err as Error).message || "Request failed.");
-        return false;
-      } finally {
-        setPending(false);
-      }
-    },
+  // State changes only in the promise callbacks, so the mount effect can start
+  // it; `request` adds the synchronous resets for later saves.
+  const send = useCallback(
+    (init?: RequestInit) =>
+      requestFieldStatsSettings(init)
+        .then(
+          (next) => {
+            apply(next);
+            return true;
+          },
+          (err: Error) => {
+            setError(err.message || "Request failed.");
+            return false;
+          },
+        )
+        .finally(() => setPending(false)),
     [apply],
   );
 
+  const request = useCallback(
+    (init?: RequestInit) => {
+      setPending(true);
+      setError(null);
+      setSaved(false);
+      return send(init);
+    },
+    [send],
+  );
+
   useEffect(() => {
-    void request();
-  }, [request]);
+    void send();
+  }, [send]);
 
   const patch = useCallback(
     (body: Record<string, unknown>) =>

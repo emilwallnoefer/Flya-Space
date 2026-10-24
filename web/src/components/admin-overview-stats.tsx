@@ -55,6 +55,18 @@ function StatCard({
   );
 }
 
+async function requestInsights(): Promise<{ insights: Insights; mailRes: Response }> {
+  const [insightsRes, mailRes] = await Promise.all([
+    fetch("/api/admin/insights", { cache: "no-store" }),
+    fetch("/api/admin/mail-tracking/overview-stats?days=90", { cache: "no-store" }),
+  ]);
+  const payload = (await insightsRes.json()) as Insights | { error: string };
+  if (!insightsRes.ok) {
+    throw new Error((payload as { error: string }).error || "Failed to load insights.");
+  }
+  return { insights: payload as Insights, mailRes };
+}
+
 export function AdminOverviewStats() {
   const [data, setData] = useState<Insights | null>(null);
   const [mailTotals, setMailTotals] = useState<MailTotals | null>(null);
@@ -62,38 +74,37 @@ export function AdminOverviewStats() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
 
-  const load = useCallback(async () => {
+  // State changes only in the promise callbacks, so the mount effect can start
+  // it; `load` adds the synchronous "loading" reset for the Refresh button.
+  const fetchStats = useCallback(
+    () =>
+      requestInsights()
+        .then(async ({ insights, mailRes }) => {
+          setData(insights);
+          // Mail totals are a nice-to-have headline; a failure here shouldn't blank
+          // the whole overview, so swallow and leave the CTR card showing "—".
+          if (mailRes.ok) {
+            const mail = (await mailRes.json()) as { totals?: MailTotals };
+            setMailTotals(mail.totals ?? null);
+          } else {
+            setMailTotals(null);
+          }
+          setLastUpdatedAt(Date.now());
+        })
+        .catch((err: Error) => setError(err.message || "Failed to load insights."))
+        .finally(() => setLoading(false)),
+    [],
+  );
+
+  const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    try {
-      const [insightsRes, mailRes] = await Promise.all([
-        fetch("/api/admin/insights", { cache: "no-store" }),
-        fetch("/api/admin/mail-tracking/overview-stats?days=90", { cache: "no-store" }),
-      ]);
-      const payload = (await insightsRes.json()) as Insights | { error: string };
-      if (!insightsRes.ok) {
-        throw new Error((payload as { error: string }).error || "Failed to load insights.");
-      }
-      setData(payload as Insights);
-      // Mail totals are a nice-to-have headline; a failure here shouldn't blank
-      // the whole overview, so swallow and leave the CTR card showing "—".
-      if (mailRes.ok) {
-        const mail = (await mailRes.json()) as { totals?: MailTotals };
-        setMailTotals(mail.totals ?? null);
-      } else {
-        setMailTotals(null);
-      }
-      setLastUpdatedAt(Date.now());
-    } catch (err) {
-      setError((err as Error).message || "Failed to load insights.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    return fetchStats();
+  }, [fetchStats]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void fetchStats();
+  }, [fetchStats]);
 
   const usersByRole = useMemo(() => {
     if (!data) return [] as Array<{ role: UserRole | "none"; count: number }>;

@@ -19,53 +19,79 @@ import {
 } from "../format";
 import { STATS_RANGE_OPTIONS, type OverviewStatsResponse, type TimelinePeriod, type TimelineResponse } from "../types";
 
+async function requestTimeline(period: TimelinePeriod, anchor: string): Promise<TimelineResponse> {
+  const params = new URLSearchParams({ period, anchor });
+  const response = await fetch(`/api/admin/mail-tracking/timeline?${params.toString()}`);
+  const payload = (await response.json()) as TimelineResponse | { error: string };
+  if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load timeline.");
+  return payload as TimelineResponse;
+}
+
+async function requestOverviewStats(days: number): Promise<OverviewStatsResponse> {
+  const params = new URLSearchParams({ days: String(days) });
+  const response = await fetch(`/api/admin/mail-tracking/overview-stats?${params.toString()}`);
+  const payload = (await response.json()) as OverviewStatsResponse | { error: string };
+  if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load stats.");
+  return payload as OverviewStatsResponse;
+}
+
 export function OverviewTab({ showBots }: { showBots: boolean }) {
   const [timelinePeriod, setTimelinePeriod] = useState<TimelinePeriod>("week");
   const [timelineAnchor, setTimelineAnchor] = useState<string>(toDateKey(startOfPeriod(new Date(), "week")));
   const [timelineData, setTimelineData] = useState<TimelineResponse | null>(null);
-  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineLoading, setTimelineLoading] = useState(true);
   const [timelineError, setTimelineError] = useState<string | null>(null);
   const [timelineUpdatedAt, setTimelineUpdatedAt] = useState<number | null>(null);
 
   const [statsDays, setStatsDays] = useState(90);
   const [stats, setStats] = useState<OverviewStatsResponse | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [statsUpdatedAt, setStatsUpdatedAt] = useState<number | null>(null);
 
-  const loadTimeline = useCallback(async (period: TimelinePeriod, anchor: string) => {
+  // A new period, anchor or range starts in the loading state. This happens
+  // during render because the effects below may not set state themselves.
+  const timelineKey = `${timelinePeriod}:${timelineAnchor}`;
+  const [shownTimelineKey, setShownTimelineKey] = useState(timelineKey);
+  if (shownTimelineKey !== timelineKey) {
+    setShownTimelineKey(timelineKey);
     setTimelineLoading(true);
     setTimelineError(null);
-    try {
-      const params = new URLSearchParams({ period, anchor });
-      const response = await fetch(`/api/admin/mail-tracking/timeline?${params.toString()}`);
-      const payload = (await response.json()) as TimelineResponse | { error: string };
-      if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load timeline.");
-      setTimelineData(payload as TimelineResponse);
-      setTimelineUpdatedAt(Date.now());
-    } catch (err) {
-      setTimelineError((err as Error).message || "Failed to load timeline.");
-    } finally {
-      setTimelineLoading(false);
-    }
-  }, []);
-
-  const loadStats = useCallback(async (days: number) => {
+  }
+  const [shownStatsDays, setShownStatsDays] = useState(statsDays);
+  if (shownStatsDays !== statsDays) {
+    setShownStatsDays(statsDays);
     setStatsLoading(true);
     setStatsError(null);
-    try {
-      const params = new URLSearchParams({ days: String(days) });
-      const response = await fetch(`/api/admin/mail-tracking/overview-stats?${params.toString()}`);
-      const payload = (await response.json()) as OverviewStatsResponse | { error: string };
-      if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load stats.");
-      setStats(payload as OverviewStatsResponse);
-      setStatsUpdatedAt(Date.now());
-    } catch (err) {
-      setStatsError((err as Error).message || "Failed to load stats.");
-    } finally {
-      setStatsLoading(false);
-    }
-  }, []);
+  }
+
+  const loadTimeline = useCallback(
+    (period: TimelinePeriod, anchor: string) =>
+      requestTimeline(period, anchor)
+        .then(
+          (data) => {
+            setTimelineData(data);
+            setTimelineUpdatedAt(Date.now());
+          },
+          (err: Error) => setTimelineError(err.message || "Failed to load timeline."),
+        )
+        .finally(() => setTimelineLoading(false)),
+    [],
+  );
+
+  const loadStats = useCallback(
+    (days: number) =>
+      requestOverviewStats(days)
+        .then(
+          (data) => {
+            setStats(data);
+            setStatsUpdatedAt(Date.now());
+          },
+          (err: Error) => setStatsError(err.message || "Failed to load stats."),
+        )
+        .finally(() => setStatsLoading(false)),
+    [],
+  );
 
   useEffect(() => {
     void loadTimeline(timelinePeriod, timelineAnchor);

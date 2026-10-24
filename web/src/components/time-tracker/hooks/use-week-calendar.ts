@@ -19,18 +19,24 @@ export function useWeekCalendar(weekStart: string) {
   const [calendarTodayKey] = useState(() => toDateKey(new Date()));
 
   // When the picker opens it starts on the year view, synced to the active
-  // week's year. While open, dismiss it on Escape.
+  // week's year (read only on open, not tracked).
+  const [seenCalendarOpen, setSeenCalendarOpen] = useState(calendarOpen);
+  if (seenCalendarOpen !== calendarOpen) {
+    setSeenCalendarOpen(calendarOpen);
+    if (calendarOpen) {
+      setCalendarView("year");
+      setCalendarYear(fromDateKey(weekStart).getFullYear());
+    }
+  }
+
+  // While open, dismiss it on Escape.
   useEffect(() => {
     if (!calendarOpen) return;
-    setCalendarView("year");
-    setCalendarYear(fromDateKey(weekStart).getFullYear());
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setCalendarOpen(false);
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-    // weekStart is intentionally only read on open, not tracked.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendarOpen]);
 
   const calendarMonthWeeks = useMemo(() => buildMonthWeeks(calendarMonth), [calendarMonth]);

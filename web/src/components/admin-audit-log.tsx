@@ -57,31 +57,44 @@ function describeDetail(entry: AuditEntry): string | null {
   return null;
 }
 
+async function requestAuditLog(): Promise<AuditEntry[]> {
+  const response = await fetch("/api/admin/audit", { cache: "no-store" });
+  const payload = (await response.json()) as { entries: AuditEntry[] } | { error: string };
+  if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load audit log.");
+  return (payload as { entries: AuditEntry[] }).entries;
+}
+
 export function AdminAuditLog() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
 
-  const load = useCallback(async () => {
+  // State changes only in the promise callbacks, so the mount effect can start
+  // it; `load` adds the synchronous "loading" reset for the Refresh button.
+  const fetchEntries = useCallback(
+    () =>
+      requestAuditLog()
+        .then(
+          (rows) => {
+            setEntries(rows);
+            setUpdatedAt(Date.now());
+          },
+          (err: Error) => setError(err.message || "Failed to load audit log."),
+        )
+        .finally(() => setLoading(false)),
+    [],
+  );
+
+  const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    try {
-      const response = await fetch("/api/admin/audit", { cache: "no-store" });
-      const payload = (await response.json()) as { entries: AuditEntry[] } | { error: string };
-      if (!response.ok) throw new Error((payload as { error: string }).error || "Failed to load audit log.");
-      setEntries((payload as { entries: AuditEntry[] }).entries);
-      setUpdatedAt(Date.now());
-    } catch (err) {
-      setError((err as Error).message || "Failed to load audit log.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    return fetchEntries();
+  }, [fetchEntries]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void fetchEntries();
+  }, [fetchEntries]);
 
   return (
     <div className="mt-5 space-y-4">
